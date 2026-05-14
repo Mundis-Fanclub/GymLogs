@@ -9,6 +9,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import {
+  LOCALE_FLAGS,
   LOCALES,
   useAppPreferences,
 } from "@/components/providers/AppPreferencesProvider";
@@ -64,9 +65,7 @@ export function TopBar() {
           title={t("common.openLanguageMenu")}
           className="rounded-full font-heading text-[0.65rem]"
         >
-          <span aria-hidden="true">
-            {locale === "de" ? "\uD83C\uDDE9\uD83C\uDDEA" : "\uD83C\uDDEC\uD83C\uDDE7"}
-          </span>
+          <span aria-hidden="true">{LOCALE_FLAGS[locale]}</span>
         </Button>
         <Button
           type="button"

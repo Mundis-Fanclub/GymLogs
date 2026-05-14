@@ -14,7 +14,7 @@ const BODY_LABELS: Record<BodyPart, string> = {
   core: "Core",
   legs: "Beine",
   shoulders: "Schultern",
-  other: "Lower Back",
+  other: "Sonstiges",
 };
 
 const rect = (left: number, top: number, right: number, bottom: number) =>
@@ -29,13 +29,9 @@ const legend = {
   other: rect(41.2, 50.1, 61.5, 55.1),
   legs: [
     rect(41.2, 57.6, 61.5, 61.1),
-    rect(41.2, 66.3, 61.5, 69.8),
-    rect(41.2, 75.2, 61.5, 78.7),
   ],
   shoulders: [
     rect(41.2, 62.2, 64, 65.7),
-    rect(41.2, 70.8, 64, 74.3),
-    rect(41.2, 79.8, 64, 83.3),
   ],
 };
 

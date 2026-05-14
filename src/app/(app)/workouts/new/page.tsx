@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { ActiveWorkout } from "@/components/workout/ActiveWorkout";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,13 +18,23 @@ export default function NewWorkoutPage() {
   const router = useRouter();
   const { userId, isLoaded, isSignedIn } = useConvexUser();
   const { t } = useAppPreferences();
+  const [finishedWorkoutId, setFinishedWorkoutId] =
+    useState<Id<"workouts"> | null>(null);
+  const [canceledWorkoutId, setCanceledWorkoutId] =
+    useState<Id<"workouts"> | null>(null);
+  const [resettingWorkoutId, setResettingWorkoutId] =
+    useState<Id<"workouts"> | null>(null);
+  const resetAttemptedRef = useRef<Id<"workouts"> | null>(null);
   const createWorkout = useMutation(api.workouts.create);
+  const resetEmptyWorkoutStart = useMutation(api.workouts.resetEmptyStart);
   const incompleteWorkout = useQuery(
     api.workouts.getIncomplete,
     userId ? { userId } : "skip"
   );
 
   useEffect(() => {
+    if (finishedWorkoutId) return;
+    if (canceledWorkoutId) return;
     if (!isLoaded || !userId) return;
     if (incompleteWorkout === undefined) return; // still loading
 
@@ -31,8 +42,28 @@ export default function NewWorkoutPage() {
       createWorkout({ userId }).then((id) => {
         router.replace(`/workouts/new?id=${id}`);
       });
+      return;
     }
-  }, [isLoaded, userId, incompleteWorkout, createWorkout, router]);
+
+    if (resetAttemptedRef.current !== incompleteWorkout._id) {
+      resetAttemptedRef.current = incompleteWorkout._id;
+      setResettingWorkoutId(incompleteWorkout._id);
+      resetEmptyWorkoutStart({ workoutId: incompleteWorkout._id }).finally(() => {
+        setResettingWorkoutId((current) =>
+          current === incompleteWorkout._id ? null : current
+        );
+      });
+    }
+  }, [
+    finishedWorkoutId,
+    canceledWorkoutId,
+    isLoaded,
+    userId,
+    incompleteWorkout,
+    createWorkout,
+    resetEmptyWorkoutStart,
+    router,
+  ]);
 
   if (isLoaded && !isSignedIn) {
     return (
@@ -51,7 +82,29 @@ export default function NewWorkoutPage() {
     );
   }
 
-  if (!isLoaded || incompleteWorkout === undefined) {
+  if (finishedWorkoutId) {
+    return (
+      <div>
+        <h1 className="text-xl font-semibold mb-6">Workout abgeschlossen</h1>
+        <ActiveWorkout workoutId={finishedWorkoutId} isFinished />
+      </div>
+    );
+  }
+
+  if (canceledWorkoutId) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  if (
+    !isLoaded ||
+    incompleteWorkout === undefined ||
+    resettingWorkoutId === incompleteWorkout?._id
+  ) {
     return (
       <div className="max-w-2xl mx-auto space-y-4">
         <Skeleton className="h-10 w-full" />
@@ -71,7 +124,11 @@ export default function NewWorkoutPage() {
   return (
     <div>
       <h1 className="text-xl font-semibold mb-6">{t("workouts.newTitle")}</h1>
-      <ActiveWorkout workoutId={incompleteWorkout._id} />
+      <ActiveWorkout
+        workoutId={incompleteWorkout._id}
+        onFinished={setFinishedWorkoutId}
+        onCanceled={setCanceledWorkoutId}
+      />
     </div>
   );
 }

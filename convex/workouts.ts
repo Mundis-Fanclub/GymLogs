@@ -2,6 +2,10 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 
+function estimated1RM(weight: number, reps: number): number {
+  return weight * (1 + reps / 30);
+}
+
 function toBodyPart(muscleGroup: string): string {
   if (
     muscleGroup === "quads" ||
@@ -94,7 +98,16 @@ export const get = query({
     // Group sets by exercise
     const exerciseMap = new Map<
       Id<"exercises">,
-      { exerciseId: Id<"exercises">; exercise: { name: string; muscleGroup: string; category: string } | null; sets: typeof sets }
+      {
+        exerciseId: Id<"exercises">;
+        exercise: { name: string; muscleGroup: string; category: string } | null;
+        sets: Array<
+          typeof sets[number] & {
+            previous?: { weight: number; reps: number };
+            isPr: boolean;
+          }
+        >;
+      }
     >();
 
     for (const set of sets) {
@@ -109,7 +122,32 @@ export const get = query({
           sets: [],
         });
       }
-      exerciseMap.get(eid)?.sets.push(set);
+      const previousSets = await ctx.db
+        .query("sets")
+        .withIndex("by_user_exercise", (q) =>
+          q.eq("userId", set.userId).eq("exerciseId", set.exerciseId)
+        )
+        .order("desc")
+        .take(100);
+
+      const previous = previousSets.find(
+        (previousSet) =>
+          previousSet.workoutId !== args.workoutId &&
+          previousSet.setOrder === set.setOrder
+      );
+      const isPr =
+        !previous ||
+        set.weight * set.reps > previous.weight * previous.reps ||
+        estimated1RM(set.weight, set.reps) >
+          estimated1RM(previous.weight, previous.reps);
+
+      exerciseMap.get(eid)?.sets.push({
+        ...set,
+        previous: previous
+          ? { weight: previous.weight, reps: previous.reps }
+          : undefined,
+        isPr,
+      });
     }
 
     const exercises = Array.from(exerciseMap.values());
@@ -143,6 +181,24 @@ export const create = mutation({
       date: Date.now(),
       isCompleted: false,
     });
+  },
+});
+
+export const resetEmptyStart = mutation({
+  args: { workoutId: v.id("workouts") },
+  handler: async (ctx, args) => {
+    const workout = await ctx.db.get(args.workoutId);
+    if (!workout || workout.isCompleted) return null;
+
+    const existingSet = await ctx.db
+      .query("sets")
+      .withIndex("by_workout", (q) => q.eq("workoutId", args.workoutId))
+      .first();
+
+    if (existingSet) return workout._id;
+
+    await ctx.db.patch(args.workoutId, { date: Date.now() });
+    return workout._id;
   },
 });
 

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart2,
@@ -11,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { cn } from "@/lib/utils";
+import { AppNavLink } from "./AppNavLink";
 
 const NAV_ITEMS = [
   { href: "/dashboard", labelKey: "common.dashboard", icon: LayoutDashboard },
@@ -30,12 +30,13 @@ export function BottomNav() {
         {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
-            <Link
+            <AppNavLink
               key={href}
               href={href}
+              active={active}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-[0.68rem] font-medium transition-colors",
+                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-[0.68rem] font-medium transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97]",
                 active
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -43,7 +44,7 @@ export function BottomNav() {
             >
               <Icon className="h-4 w-4" />
               <span className="max-w-full truncate">{t(labelKey)}</span>
-            </Link>
+            </AppNavLink>
           );
         })}
       </div>

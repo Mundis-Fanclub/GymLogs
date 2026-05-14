@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "doctor": "node scripts/local-doctor.mjs",
-    "dev:check": "node scripts/local-doctor.mjs && next dev --turbopack",
+    "dev:check": "node scripts/local-doctor.mjs && next dev",
     "convex:dev": "convex dev",
     "convex:seed": "convex run seed:seedExercises && convex run seed:seedLogBrackets",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },

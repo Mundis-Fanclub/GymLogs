@@ -123,12 +123,23 @@ export default defineSchema({
     weight: v.number(),
     reps: v.number(),
     rir: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    restSeconds: v.optional(v.number()),
     setOrder: v.number(),
     createdAt: v.number(),
   })
     .index("by_workout", ["workoutId"])
     .index("by_user_exercise", ["userId", "exerciseId"])
     .index("by_user_created", ["userId", "createdAt"]),
+
+  rest_preferences: defineTable({
+    userId: v.id("users"),
+    exerciseId: v.id("exercises"),
+    restSeconds: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_and_exercise", ["userId", "exerciseId"]),
 
   log_brackets: defineTable({
     liftType: v.union(

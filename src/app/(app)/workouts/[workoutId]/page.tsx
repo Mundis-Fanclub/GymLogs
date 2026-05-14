@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import { de, enUS } from "date-fns/locale";
@@ -20,21 +20,25 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { formatVolume } from "@/lib/pr-utils";
-import { WorkoutMuscleAvatar } from "@/components/workout/WorkoutMuscleAvatar";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
+import { ActiveWorkout } from "@/components/workout/ActiveWorkout";
 import { toBodyPart } from "@/lib/muscle-groups";
-import { BookmarkPlus } from "lucide-react";
+import { BookmarkPlus, Pencil, Trash2 } from "lucide-react";
 
 export default function WorkoutDetailPage() {
   const { workoutId } = useParams();
+  const router = useRouter();
   const { locale, t } = useAppPreferences();
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [savedTemplate, setSavedTemplate] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const workout = useQuery(api.workouts.get, {
     workoutId: workoutId as Id<"workouts">,
   });
   const saveAsTemplate = useMutation(api.workouts.saveAsTemplate);
+  const removeWorkout = useMutation(api.workouts.remove);
 
   if (workout === undefined) {
     return (
@@ -69,39 +73,83 @@ export default function WorkoutDetailPage() {
     setShowTemplateDialog(false);
   }
 
+  async function handleDeleteWorkout() {
+    if (!workout) return;
+    await removeWorkout({ workoutId: workout._id });
+    router.replace("/workouts");
+  }
+
+  if (isEditing) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold">Workout bearbeiten</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsEditing(false)}
+          >
+            Abbrechen
+          </Button>
+        </div>
+        <ActiveWorkout
+          workoutId={workout._id}
+          onFinished={() => setIsEditing(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <WorkoutMuscleAvatar muscleGroups={muscleGroups} />
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold">
-              {format(workout.date, "EEEE, MMMM d", {
-                locale: locale === "de" ? de : enUS,
-              })}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {t("common.totalVolume")}: {formatVolume(workout.totalVolume)}{" "}
-              {t("common.kg")}
-            </p>
-          </div>
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold">
+            {format(workout.date, "EEEE, MMMM d", {
+              locale: locale === "de" ? de : enUS,
+            })}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {t("common.totalVolume")}: {formatVolume(workout.totalVolume)}{" "}
+            {t("common.kg")}
+          </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="shrink-0 gap-2"
-          onClick={() => {
-            setTemplateName(
-              format(workout.date, "EEEE, MMMM d", {
-                locale: locale === "de" ? de : enUS,
-              })
-            );
-            setShowTemplateDialog(true);
-          }}
-        >
-          <BookmarkPlus className="h-4 w-4" />
-          {savedTemplate ? t("workouts.templateSaved") : t("workouts.saveTemplate")}
-        </Button>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => setIsEditing(true)}
+          >
+            <Pencil className="h-4 w-4" />
+            Bearbeiten
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => {
+              setTemplateName(
+                format(workout.date, "EEEE, MMMM d", {
+                  locale: locale === "de" ? de : enUS,
+                })
+              );
+              setShowTemplateDialog(true);
+            }}
+          >
+            <BookmarkPlus className="h-4 w-4" />
+            {savedTemplate ? t("workouts.templateSaved") : t("workouts.saveTemplate")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+            Löschen
+          </Button>
+        </div>
       </div>
 
       {workout.notes && (
@@ -174,6 +222,33 @@ export default function WorkoutDetailPage() {
             >
               {t("workouts.saveTemplate")}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Workout löschen?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Dieses Workout und alle zugehörigen Sets werden dauerhaft gelöscht.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteDialog(false)}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleDeleteWorkout}
+              >
+                Löschen
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

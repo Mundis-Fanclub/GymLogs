@@ -8,8 +8,8 @@ export const LOCALE_LABELS: Record<Locale, string> = {
 };
 
 export const LOCALE_FLAGS: Record<Locale, string> = {
-  de: "🇩🇪",
-  en: "🇬🇧",
+  de: "DE",
+  en: "EN",
 };
 
 export const dictionaries = {

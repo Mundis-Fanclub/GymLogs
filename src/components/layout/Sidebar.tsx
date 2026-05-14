@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
+import { AppNavLink } from "./AppNavLink";
 
 const NAV_ITEMS = [
   { href: "/dashboard", labelKey: "common.dashboard", icon: LayoutDashboard },
@@ -45,12 +46,13 @@ export function Sidebar() {
         {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
-            <Link
+            <AppNavLink
               key={href}
               href={href}
+              active={active}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors",
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.99]",
                 active
                   ? "bg-primary text-primary-foreground font-medium shadow-sm"
                   : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -58,7 +60,7 @@ export function Sidebar() {
             >
               <Icon className="w-4 h-4 shrink-0" />
               {t(labelKey)}
-            </Link>
+            </AppNavLink>
           );
         })}
       </nav>
