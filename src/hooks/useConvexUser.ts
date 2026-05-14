@@ -7,7 +7,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
 export function useConvexUser() {
-  const { user, isLoaded } = useUser();
+  const { user, isLoaded, isSignedIn } = useUser();
   const getOrCreate = useMutation(api.users.getOrCreate);
 
   const convexUser = useQuery(
@@ -27,6 +27,7 @@ export function useConvexUser() {
   return {
     userId: convexUser?._id as Id<"users"> | undefined,
     convexUser,
+    isSignedIn: Boolean(isSignedIn),
     isLoaded: isLoaded && (!user || convexUser !== undefined),
   };
 }

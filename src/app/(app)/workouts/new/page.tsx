@@ -8,10 +8,14 @@ import { useConvexUser } from "@/hooks/useConvexUser";
 import { ActiveWorkout } from "@/components/workout/ActiveWorkout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { User } from "lucide-react";
 
 export default function NewWorkoutPage() {
   const router = useRouter();
-  const { userId, isLoaded } = useConvexUser();
+  const { userId, isLoaded, isSignedIn } = useConvexUser();
   const { t } = useAppPreferences();
   const createWorkout = useMutation(api.workouts.create);
   const incompleteWorkout = useQuery(
@@ -29,6 +33,23 @@ export default function NewWorkoutPage() {
       });
     }
   }, [isLoaded, userId, incompleteWorkout, createWorkout, router]);
+
+  if (isLoaded && !isSignedIn) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <EmptyState
+          icon={User}
+          title={t("dashboard.signedOutTitle")}
+          description={t("dashboard.signedOutCopy")}
+          action={
+            <Link href="/sign-in">
+              <Button>{t("common.signIn")}</Button>
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   if (!isLoaded || incompleteWorkout === undefined) {
     return (

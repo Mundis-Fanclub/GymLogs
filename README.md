@@ -10,6 +10,29 @@ Install dependencies:
 npm install
 ```
 
+Run the local doctor before starting the app:
+
+```powershell
+npm.cmd run doctor
+```
+
+If it reports missing setup, follow the printed steps. The normal local flow is:
+
+Terminal 1:
+
+```powershell
+cd C:\Users\Buki\Documents\GymLogs
+npm.cmd run convex:dev
+```
+
+Terminal 2:
+
+```powershell
+cd C:\Users\Buki\Documents\GymLogs
+npm.cmd run convex:seed
+npm.cmd run dev
+```
+
 Create `.env.local` from `.env.example`, then start Convex in one terminal:
 
 ```powershell
