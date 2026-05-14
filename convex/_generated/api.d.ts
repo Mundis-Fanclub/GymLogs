@@ -11,6 +11,7 @@
 import type * as analytics from "../analytics.js";
 import type * as exercises from "../exercises.js";
 import type * as logs from "../logs.js";
+import type * as messages from "../messages.js";
 import type * as prs from "../prs.js";
 import type * as restPreferences from "../restPreferences.js";
 import type * as seed from "../seed.js";
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   exercises: typeof exercises;
   logs: typeof logs;
+  messages: typeof messages;
   prs: typeof prs;
   restPreferences: typeof restPreferences;
   seed: typeof seed;

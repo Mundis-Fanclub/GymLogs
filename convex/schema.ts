@@ -42,7 +42,24 @@ export default defineSchema({
     clerkId: v.string(),
     name: v.string(),
     email: v.string(),
-  }).index("by_clerk_id", ["clerkId"]),
+    username: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    heightCm: v.optional(v.number()),
+    weightKg: v.optional(v.number()),
+    birthDate: v.optional(v.string()),
+    isPublic: v.optional(v.boolean()),
+    allowMessages: v.optional(v.boolean()),
+    publicFields: v.optional(
+      v.object({
+        heightCm: v.boolean(),
+        weightKg: v.boolean(),
+        birthDate: v.boolean(),
+      })
+    ),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_clerk_id", ["clerkId"])
+    .index("by_username", ["username"]),
 
   exercises: defineTable({
     name: v.string(),
@@ -140,6 +157,17 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_and_exercise", ["userId", "exerciseId"]),
+
+  messages: defineTable({
+    senderId: v.id("users"),
+    recipientId: v.id("users"),
+    body: v.string(),
+    createdAt: v.number(),
+    readAt: v.optional(v.number()),
+  })
+    .index("by_sender", ["senderId", "createdAt"])
+    .index("by_recipient", ["recipientId", "createdAt"])
+    .index("by_conversation", ["senderId", "recipientId", "createdAt"]),
 
   log_brackets: defineTable({
     liftType: v.union(

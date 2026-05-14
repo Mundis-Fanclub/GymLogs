@@ -3,10 +3,8 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Crown, Dumbbell, Moon, Plus, Sun } from "lucide-react";
+import { Crown, Dumbbell, Moon, Plus, Sun, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import {
   LOCALE_FLAGS,
@@ -18,19 +16,9 @@ export function TopBar() {
   const router = useRouter();
   const { userId } = useConvexUser();
   const { locale, setLocale, theme, toggleTheme, t } = useAppPreferences();
-  const createWorkout = useMutation(api.workouts.create);
-  const incompleteWorkout = useQuery(
-    api.workouts.getIncomplete,
-    userId ? { userId } : "skip"
-  );
 
-  async function handleNewWorkout() {
+  function handleNewWorkout() {
     if (!userId) return;
-    if (incompleteWorkout) {
-      router.push(`/workouts/new`);
-      return;
-    }
-    await createWorkout({ userId });
     router.push("/workouts/new");
   }
 
@@ -106,6 +94,18 @@ export function TopBar() {
           <Plus className="w-4 h-4" />
           <span>{t("common.newWorkout")}</span>
         </Button>
+        <Link href="/profile">
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="outline"
+            aria-label="Profil öffnen"
+            title="Profil öffnen"
+            className="rounded-full"
+          >
+            <User className="h-4 w-4" />
+          </Button>
+        </Link>
         <UserButton />
       </div>
     </header>

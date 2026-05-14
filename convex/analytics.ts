@@ -36,6 +36,25 @@ function toBodyPart(muscleGroup: string): string {
   return "other";
 }
 
+const BODY_PARTS = [
+  "chest",
+  "back",
+  "biceps",
+  "triceps",
+  "core",
+  "legs",
+  "shoulders",
+  "other",
+] as const;
+
+type BodyPart = (typeof BODY_PARTS)[number];
+
+function emptyMuscleTotals(): Record<BodyPart, { sets: number; volume: number; exercises: string[] }> {
+  return Object.fromEntries(
+    BODY_PARTS.map((part) => [part, { sets: 0, volume: 0, exercises: [] }])
+  ) as unknown as Record<BodyPart, { sets: number; volume: number; exercises: string[] }>;
+}
+
 export const getWeeklyVolume = query({
   args: {
     userId: v.id("users"),
@@ -50,7 +69,7 @@ export const getWeeklyVolume = query({
       .withIndex("by_user_created", (q) =>
         q.eq("userId", args.userId).gte("createdAt", since)
       )
-      .collect();
+      .take(500);
 
     const weekMap = new Map<
       number,
@@ -91,7 +110,7 @@ export const getWorkoutsPerWeek = query({
         q.eq("userId", args.userId).gte("date", since)
       )
       .filter((q) => q.eq(q.field("isCompleted"), true))
-      .collect();
+      .take(200);
 
     const weekMap = new Map<number, number>();
 
@@ -140,7 +159,7 @@ export const getWorkoutFrequency = query({
         q.eq("userId", args.userId).gte("date", start)
       )
       .filter((q) => q.eq(q.field("isCompleted"), true))
-      .collect();
+      .take(200);
 
     if (args.period === "week") {
       const buckets = Array.from({ length: 7 }, (_, index) => {
@@ -200,6 +219,91 @@ export const getWorkoutFrequency = query({
   },
 });
 
+export const getMuscleAnalytics = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const currentStart = startOfWeek(now);
+    const previousStart = currentStart - 7 * 24 * 60 * 60 * 1000;
+
+    const sets = await ctx.db
+      .query("sets")
+      .withIndex("by_user_created", (q) =>
+        q.eq("userId", args.userId).gte("createdAt", previousStart)
+      )
+      .take(500);
+
+    const current = emptyMuscleTotals();
+    const previous = emptyMuscleTotals();
+
+    const workoutCompletionCache = new Map<string, boolean>();
+    const exerciseCache = new Map<string, { name: string; muscleGroup: string } | null>();
+
+    for (const set of sets) {
+      let isCompleted = workoutCompletionCache.get(set.workoutId);
+      if (isCompleted === undefined) {
+        const workout = await ctx.db.get(set.workoutId);
+        isCompleted = workout?.isCompleted === true;
+        workoutCompletionCache.set(set.workoutId, isCompleted);
+      }
+      if (!isCompleted) continue;
+
+      let exercise = exerciseCache.get(set.exerciseId);
+      if (exercise === undefined) {
+        const exerciseDoc = await ctx.db.get(set.exerciseId);
+        exercise = exerciseDoc
+          ? { name: exerciseDoc.name, muscleGroup: exerciseDoc.muscleGroup }
+          : null;
+        exerciseCache.set(set.exerciseId, exercise);
+      }
+      const bodyPart = toBodyPart(exercise?.muscleGroup ?? "other") as BodyPart;
+      const target = set.createdAt >= currentStart ? current : previous;
+      target[bodyPart].sets += 1;
+      target[bodyPart].volume += set.weight * set.reps;
+      if (exercise && !target[bodyPart].exercises.includes(exercise.name)) {
+        target[bodyPart].exercises.push(exercise.name);
+      }
+    }
+
+    const bodyParts = BODY_PARTS.map((part) => {
+      const currentSets = current[part].sets;
+      const previousSets = previous[part].sets;
+      const targetMin = part === "other" ? 0 : 6;
+      const targetMax = part === "other" ? 6 : 14;
+      const status =
+        currentSets === 0
+          ? "missing"
+          : currentSets < targetMin
+            ? "low"
+            : currentSets > targetMax
+              ? "high"
+              : "balanced";
+
+      return {
+        part,
+        sets: currentSets,
+        volume: current[part].volume,
+        exercises: current[part].exercises.slice(0, 5),
+        previousSets,
+        setDelta: currentSets - previousSets,
+        targetMin,
+        targetMax,
+        status,
+      };
+    });
+
+    return {
+      weekStart: currentStart,
+      previousWeekStart: previousStart,
+      bodyParts,
+      totalSets: bodyParts.reduce((sum, part) => sum + part.sets, 0),
+      totalVolume: bodyParts.reduce((sum, part) => sum + part.volume, 0),
+    };
+  },
+});
+
 export const getTotalStats = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -207,12 +311,13 @@ export const getTotalStats = query({
       .query("workouts")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .filter((q) => q.eq(q.field("isCompleted"), true))
-      .collect();
+      .take(500);
 
     const sets = await ctx.db
       .query("sets")
       .withIndex("by_user_created", (q) => q.eq("userId", args.userId))
-      .collect();
+      .order("desc")
+      .take(1000);
 
     const totalVolume = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
 

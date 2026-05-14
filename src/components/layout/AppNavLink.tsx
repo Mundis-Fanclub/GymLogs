@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  startTransition,
   type AnchorHTMLAttributes,
   type MouseEvent,
   type ReactNode,
@@ -49,22 +48,14 @@ export function AppNavLink({
       return;
     }
 
-    event.preventDefault();
-
-    if (document.startViewTransition) {
-      document.startViewTransition(() => {
-        startTransition(() => router.push(href));
-      });
-      return;
-    }
-
-    startTransition(() => router.push(href));
+    // Let Next.js handle the navigation. Manual router.push plus view
+    // transitions made route changes feel slower on heavier pages.
   }
 
   return (
     <Link
       href={href}
-      prefetch
+      prefetch={false}
       onClick={handleClick}
       onMouseEnter={(event) => {
         prefetchRoute();

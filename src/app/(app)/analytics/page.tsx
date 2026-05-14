@@ -2,23 +2,39 @@
 
 import { useState } from "react";
 import { useQuery } from "convex/react";
+import dynamic from "next/dynamic";
 import { api } from "../../../../convex/_generated/api";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { VolumeBarChart } from "@/components/charts/VolumeBarChart";
-import {
-  WorkoutsPerWeekChart,
-  type FrequencyPeriod,
-} from "@/components/charts/WorkoutsPerWeekChart";
+import type { FrequencyPeriod } from "@/components/charts/WorkoutsPerWeekChart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { BarChart3, Dumbbell, User } from "lucide-react";
+import { BarChart3, Dumbbell, TrendingDown, TrendingUp, User } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
-import { BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
+import { BODY_PARTS, type BodyPart } from "@/lib/muscle-groups";
+
+const VolumeBarChart = dynamic(
+  () => import("@/components/charts/VolumeBarChart").then((mod) => mod.VolumeBarChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[320px] w-full" />,
+  }
+);
+
+const WorkoutsPerWeekChart = dynamic(
+  () =>
+    import("@/components/charts/WorkoutsPerWeekChart").then(
+      (mod) => mod.WorkoutsPerWeekChart
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[180px] w-full" />,
+  }
+);
 
 export default function AnalyticsPage() {
   const { userId, isLoaded } = useConvexUser();
@@ -26,9 +42,9 @@ export default function AnalyticsPage() {
   const [frequencyPeriod, setFrequencyPeriod] =
     useState<FrequencyPeriod>("week");
 
-  const weeklyVolume = useQuery(
-    api.analytics.getWeeklyVolume,
-    userId ? { userId, weeks: 1 } : "skip"
+  const muscleAnalytics = useQuery(
+    api.analytics.getMuscleAnalytics,
+    userId ? { userId } : "skip"
   );
 
   const workoutFrequency = useQuery(
@@ -36,23 +52,33 @@ export default function AnalyticsPage() {
     userId ? { userId, period: frequencyPeriod } : "skip"
   );
 
-  const isLoading = !isLoaded || weeklyVolume === undefined || workoutFrequency === undefined;
+  const isLoading =
+    !isLoaded ||
+    workoutFrequency === undefined ||
+    muscleAnalytics === undefined;
   const hasData =
-    weeklyVolume !== undefined &&
     workoutFrequency !== undefined &&
-    (weeklyVolume.length > 0 || workoutFrequency.total > 0);
+    muscleAnalytics !== undefined &&
+    (muscleAnalytics.totalSets > 0 || workoutFrequency.total > 0);
   const muscleGroupSets =
-    weeklyVolume?.reduce((totals, week) => {
-      for (const [group, value] of Object.entries(week.volumes)) {
-        const sets = typeof value === "number" ? value : value.sets;
-        const bodyPart = toBodyPart(group);
-        if (BODY_PARTS.includes(bodyPart as BodyPart)) {
-          totals[bodyPart] += sets;
-        }
-      }
+    muscleAnalytics?.bodyParts.reduce((totals, part) => {
+      totals[part.part as BodyPart] = part.sets;
       return totals;
     }, Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<BodyPart, number>) ??
     (Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<BodyPart, number>);
+  const weeklyVolume = muscleAnalytics
+    ? [
+        {
+          weekStart: muscleAnalytics.weekStart,
+          volumes: Object.fromEntries(
+            muscleAnalytics.bodyParts.map((part) => [
+              part.part,
+              { sets: part.sets, volume: part.volume },
+            ])
+          ),
+        },
+      ]
+    : [];
 
   if (isLoaded && !userId) {
     return (
@@ -102,21 +128,37 @@ export default function AnalyticsPage() {
 
       <Card className="overflow-hidden">
         <CardHeader className="pb-2">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <CardTitle className="text-sm font-medium">
-            {t("analytics.weeklySets")}
+              Wochenanalyse pro Muskelgruppe
           </CardTitle>
+            {muscleAnalytics && (
+              <p className="text-xs text-muted-foreground">
+                {muscleAnalytics.totalSets} Sätze · {Math.round(muscleAnalytics.totalVolume).toLocaleString("de-DE")} kg Volumen
+              </p>
+            )}
+          </div>
         </CardHeader>
-        <CardContent className="grid gap-4 px-3 pb-4 sm:px-6 lg:grid-cols-[240px_1fr] lg:items-center">
-          {weeklyVolume === undefined ? (
+        <CardContent className="grid gap-4 px-3 pb-4 sm:px-6 xl:grid-cols-[minmax(240px,320px)_1fr] xl:items-start">
+          {muscleAnalytics === undefined ? (
             <Skeleton className="h-[220px] w-full" />
           ) : (
             <>
               <WorkoutMuscleMap
                 muscleGroups={[]}
                 muscleGroupSets={muscleGroupSets}
-                className="mx-auto w-full max-w-[220px]"
+                className="mx-auto w-full"
               />
-              <VolumeBarChart data={weeklyVolume} />
+              <div className="space-y-4">
+                <VolumeBarChart data={weeklyVolume} />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {muscleAnalytics.bodyParts
+                    .filter((part) => part.part !== "other")
+                    .map((part) => (
+                      <MuscleInsight key={part.part} part={part} />
+                    ))}
+                </div>
+              </div>
             </>
           )}
         </CardContent>
@@ -159,3 +201,81 @@ export default function AnalyticsPage() {
     </div>
   );
 }
+
+function MuscleInsight({
+  part,
+}: {
+  part: {
+    part: BodyPart;
+    sets: number;
+    volume: number;
+    previousSets: number;
+    setDelta: number;
+    targetMin: number;
+    targetMax: number;
+    status: string;
+    exercises: string[];
+  };
+}) {
+  const label = {
+    chest: "Brust",
+    back: "Rücken",
+    biceps: "Bizeps",
+    triceps: "Trizeps",
+    core: "Core",
+    legs: "Beine",
+    shoulders: "Schultern",
+    other: "Sonstiges",
+  }[part.part];
+  const statusText =
+    part.status === "missing"
+      ? "fehlt diese Woche"
+      : part.status === "low"
+        ? "unter Zielbereich"
+        : part.status === "high"
+          ? "sehr viel Volumen"
+          : "im Zielbereich";
+  const statusClass =
+    part.status === "balanced"
+      ? "border-emerald-500/30 bg-emerald-500/10"
+      : part.status === "high"
+        ? "border-amber-500/30 bg-amber-500/10"
+        : "border-border bg-muted/30";
+
+  return (
+    <div className={`rounded-lg border p-3 ${statusClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium">{label}</p>
+          <p className="text-xs text-muted-foreground">
+            Ziel: {part.targetMin}-{part.targetMax} Sätze
+          </p>
+        </div>
+        <div className="flex items-center gap-1 text-xs">
+          {part.setDelta >= 0 ? (
+            <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+          ) : (
+            <TrendingDown className="h-3.5 w-3.5 text-destructive" />
+          )}
+          {part.setDelta > 0 ? "+" : ""}
+          {part.setDelta}
+        </div>
+      </div>
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-2xl font-semibold">{part.sets}</p>
+          <p className="text-xs text-muted-foreground">{statusText}</p>
+        </div>
+        <p className="text-right text-xs text-muted-foreground">
+          {Math.round(part.volume).toLocaleString("de-DE")} kg
+        </p>
+      </div>
+      {part.exercises.length > 0 && (
+        <p className="mt-2 truncate text-xs text-muted-foreground">
+          {part.exercises.join(", ")}
+        </p>
+      )}
+    </div>
+  );
+}
+

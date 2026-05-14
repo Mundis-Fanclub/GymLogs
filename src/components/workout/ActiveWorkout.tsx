@@ -9,12 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ExerciseBlock } from "./ExerciseBlock";
 import { AddExerciseModal } from "./AddExerciseModal";
-import { Plus, CheckCircle, Clock, Trophy, XCircle } from "lucide-react";
+import { Plus, CheckCircle, Clock, Trophy, XCircle, AlertTriangle } from "lucide-react";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatVolume } from "@/lib/pr-utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface SelectedExercise {
   id: Id<"exercises">;
@@ -77,6 +85,7 @@ export function ActiveWorkout({
     useState<Id<"workouts"> | null>(isFinished ? workoutId : null);
   const [activeRest, setActiveRest] = useState<ActiveRest | null>(null);
   const [isCanceling, setIsCanceling] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const workout = useQuery(api.workouts.get, { workoutId });
   const completeWorkout = useMutation(api.workouts.complete);
@@ -142,12 +151,7 @@ export function ActiveWorkout({
     onFinished?.(workoutId);
   }
 
-  async function handleCancel() {
-    const shouldCancel = window.confirm(
-      "Workout abbrechen? Alle bisher eingetragenen Saetze in diesem Workout werden geloescht."
-    );
-    if (!shouldCancel) return;
-
+  async function confirmCancel() {
     setIsCanceling(true);
     setActiveRest(null);
     onCanceled?.(workoutId);
@@ -194,7 +198,7 @@ export function ActiveWorkout({
         <div className="flex items-center gap-2">
           <Button
             variant="destructive"
-            onClick={handleCancel}
+            onClick={() => setShowCancelDialog(true)}
             disabled={isCanceling}
             className="h-9 gap-1.5"
           >
@@ -276,6 +280,41 @@ export function ActiveWorkout({
         userId={userId}
         onSelect={handleAddExercise}
       />
+
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+              </span>
+              <DialogTitle>Workout abbrechen?</DialogTitle>
+            </div>
+            <DialogDescription>
+              Alle Sätze, Notizen und Pausen aus diesem Workout werden gelöscht.
+              Diese Aktion kann nicht rückgängig gemacht werden.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCancelDialog(false)}
+              disabled={isCanceling}
+            >
+              Weiter trainieren
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={confirmCancel}
+              disabled={isCanceling}
+            >
+              Workout verwerfen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -299,7 +338,7 @@ function WorkoutFinishedSummary({
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <p className="text-sm text-muted-foreground">Workout nicht gefunden.</p>
-        <Button onClick={onContinue}>Zur Workout-Uebersicht</Button>
+        <Button onClick={onContinue}>Zur Workout-Übersicht</Button>
       </div>
     );
   }
@@ -322,7 +361,7 @@ function WorkoutFinishedSummary({
         <CardContent className="grid gap-3 sm:grid-cols-3">
           <div>
             <p className="text-2xl font-semibold">{exerciseCount}</p>
-            <p className="text-xs text-muted-foreground">Uebungen</p>
+            <p className="text-xs text-muted-foreground">Übungen</p>
           </div>
           <div>
             <p className="text-2xl font-semibold">{setCount}</p>
@@ -342,7 +381,7 @@ function WorkoutFinishedSummary({
           <Card key={exercise.exerciseId}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">
-                {exercise.exercise?.name ?? "Uebung"}
+                {exercise.exercise?.name ?? "Übung"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -376,7 +415,7 @@ function WorkoutFinishedSummary({
       </div>
 
       <Button className="w-full" onClick={onContinue}>
-        Zur Workout-Uebersicht
+        Zur Workout-Übersicht
       </Button>
     </div>
   );

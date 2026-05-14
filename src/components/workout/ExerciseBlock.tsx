@@ -18,6 +18,7 @@ import { usePRCheck } from "@/hooks/usePRCheck";
 import { SetRow } from "./SetRow";
 
 interface LocalSet {
+  rowKey: string;
   id?: Id<"sets">;
   weight: number;
   reps: number;
@@ -69,10 +70,11 @@ export function ExerciseBlock({
 }: ExerciseBlockProps) {
   const { t } = useAppPreferences();
   const [sets, setSets] = useState<LocalSet[]>(() => {
-    if (!initialSets?.length) return [{ weight: 0, reps: 0 }];
+    if (!initialSets?.length) return [{ rowKey: "draft-0", weight: 0, reps: 0 }];
     return [...initialSets]
       .sort((a, b) => a.setOrder - b.setOrder)
       .map((set) => ({
+        rowKey: `saved-${set.id}`,
         id: set.id,
         weight: set.weight,
         reps: set.reps,
@@ -110,7 +112,11 @@ export function ExerciseBlock({
     const last = sets[sets.length - 1];
     setSets((prev) => [
       ...prev,
-      { weight: last?.weight ?? 0, reps: last?.reps ?? 0 },
+      {
+        rowKey: `draft-${Date.now()}-${prev.length}`,
+        weight: last?.weight ?? 0,
+        reps: last?.reps ?? 0,
+      },
     ]);
     setNewSetAutoFocus((n) => n + 1);
   }
@@ -193,7 +199,7 @@ export function ExerciseBlock({
             size="icon"
             className="h-7 w-7 text-muted-foreground"
             onClick={() => setShowRestMenu(true)}
-            aria-label={`Pausen fuer ${exerciseName} einstellen`}
+            aria-label={`Pausen für ${exerciseName} einstellen`}
           >
             <Menu className="w-3.5 h-3.5" />
           </Button>
@@ -248,7 +254,7 @@ export function ExerciseBlock({
         </div>
 
         {sets.map((set, index) => (
-          <div key={set.id ?? index}>
+          <div key={set.rowKey}>
             <SetRow
               setIndex={index}
               setId={set.id}
@@ -295,7 +301,7 @@ export function ExerciseBlock({
       <Dialog open={showRestMenu} onOpenChange={setShowRestMenu}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Pausen fuer {exerciseName}</DialogTitle>
+            <DialogTitle>Pausen für {exerciseName}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -317,7 +323,7 @@ export function ExerciseBlock({
                 Nur jetzt
               </Button>
               <Button onClick={applyRestForFutureWorkouts}>
-                Fuer kommende Workouts
+                Für kommende Workouts
               </Button>
             </div>
           </div>
@@ -376,7 +382,7 @@ function RestBreak({
           <Bell className="h-3.5 w-3.5 text-sky-400" />
           <span className="font-medium">{label}</span>
           <span className="text-muted-foreground">
-            {done ? "Pause ist um. Zurueck an die Arbeit." : display}
+            {done ? "Pause ist um. Zurück an die Arbeit." : display}
           </span>
         </div>
         {!done && (
@@ -403,7 +409,7 @@ function RestBreak({
       {showToast && (
         <div className="fixed bottom-20 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 rounded-lg border border-emerald-500/30 bg-background px-4 py-3 text-sm shadow-lg">
           <p className="font-semibold">Pause ist um</p>
-          <p className="text-muted-foreground">Zurueck an die Arbeit.</p>
+          <p className="text-muted-foreground">Zurück an die Arbeit.</p>
         </div>
       )}
     </>
@@ -412,7 +418,7 @@ function RestBreak({
 
 function notifyRestDone() {
   const title = "Pause ist um";
-  const body = "Zurueck an die Arbeit.";
+  const body = "Zurück an die Arbeit.";
 
   if ("Notification" in window && Notification.permission === "granted") {
     new Notification(title, { body });

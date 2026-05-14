@@ -58,6 +58,7 @@ export function SetRow({
   const [reps, setReps] = useState(initialReps);
   const [notes, setNotes] = useState(initialNotes ?? "");
   const [restSeconds, setRestSeconds] = useState(initialRestSeconds ?? defaultRestSeconds);
+  const [currentSetId, setCurrentSetId] = useState(setId);
   const [saved, setSaved] = useState(!!setId);
   const [completed, setCompleted] = useState(!!setId);
 
@@ -71,17 +72,23 @@ export function SetRow({
   }, [autoFocus]);
 
   useEffect(() => {
+    if (!setId) return;
+    setCurrentSetId(setId);
+    setSaved(true);
+  }, [setId]);
+
+  useEffect(() => {
     if (saved || initialRestSeconds !== undefined) return;
     setRestSeconds(defaultRestSeconds);
   }, [defaultRestSeconds, initialRestSeconds, saved]);
 
   async function save(): Promise<Id<"sets"> | undefined> {
-    if (weight <= 0 || reps <= 0) return setId;
+    if (weight <= 0 || reps <= 0) return currentSetId;
 
-    if (setId) {
-      await updateSet({ setId, weight, reps, notes, restSeconds });
-      onSaved?.(setId, { weight, reps, notes, restSeconds });
-      return setId;
+    if (currentSetId) {
+      await updateSet({ setId: currentSetId, weight, reps, notes, restSeconds });
+      onSaved?.(currentSetId, { weight, reps, notes, restSeconds });
+      return currentSetId;
     } else {
       const id = await addSet({
         workoutId,
@@ -93,6 +100,7 @@ export function SetRow({
         restSeconds,
         setOrder: setIndex,
       });
+      setCurrentSetId(id);
       setSaved(true);
       onSaved?.(id, { weight, reps, notes, restSeconds });
       return id;
@@ -102,19 +110,19 @@ export function SetRow({
   async function handleComplete() {
     if (completed) {
       setCompleted(false);
-      onComplete?.({ completed: false, setId, restSeconds });
+      onComplete?.({ completed: false, setId: currentSetId, restSeconds });
       return;
     }
 
     if (weight <= 0 || reps <= 0) return;
     setCompleted(true);
-    onComplete?.({ completed: true, setId, restSeconds });
+    onComplete?.({ completed: true, setId: currentSetId, restSeconds });
     const id = await save();
     onComplete?.({ completed: true, setId: id, restSeconds });
   }
 
   async function handleDelete() {
-    if (setId) await removeSet({ setId });
+    if (currentSetId) await removeSet({ setId: currentSetId });
     onDelete?.();
   }
 
@@ -183,7 +191,7 @@ export function SetRow({
             className="hidden h-7 w-7"
             onClick={() => adjust("weight", 2.5)}
             tabIndex={-1}
-            aria-label={`${t("workout.weight")} erhoehen`}
+            aria-label={`${t("workout.weight")} erhöhen`}
           >
             <Plus className="w-3 h-3" />
           </Button>
@@ -219,7 +227,7 @@ export function SetRow({
             className="hidden h-7 w-7"
             onClick={() => adjust("reps", 1)}
             tabIndex={-1}
-            aria-label={`${t("common.reps")} erhoehen`}
+            aria-label={`${t("common.reps")} erhöhen`}
           >
             <Plus className="w-3 h-3" />
           </Button>

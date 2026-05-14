@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
@@ -129,10 +129,34 @@ export function WorkoutMuscleMap({
         className
       )}
     >
+      {!compact && (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">Bodygraph</h3>
+            <p className="text-xs text-muted-foreground">
+              Sätze pro Muskelgruppe in dieser Woche
+            </p>
+          </div>
+          <div className="hidden items-center gap-2 text-[0.68rem] text-muted-foreground sm:flex">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+              niedrig
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#facc15]" />
+              mittel
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
+              hoch
+            </span>
+          </div>
+        </div>
+      )}
       <div
         className={cn(
           "relative mx-auto aspect-[2/3] w-full overflow-hidden rounded-lg bg-zinc-200 dark:bg-zinc-800",
-          compact ? "max-w-16" : "max-w-[420px]"
+          compact ? "max-w-16" : "max-w-[min(420px,82vw)]"
         )}
         role="img"
         aria-label={
@@ -171,7 +195,7 @@ export function WorkoutMuscleMap({
         <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-black/10 dark:ring-white/10" />
       </div>
       {!compact && (
-        <figcaption className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <figcaption className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
           {BODY_PARTS.map((part) => {
             const setCount = setCounts[part];
             const color = getIntensity(setCount);
@@ -179,13 +203,16 @@ export function WorkoutMuscleMap({
             return (
               <span
                 key={part}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2 py-1"
+                className="inline-flex min-w-0 items-center justify-between gap-1.5 rounded-lg border border-border bg-muted px-2 py-1.5"
               >
-                <span
-                  className="h-2 w-2 rounded-full border border-foreground/20"
-                  style={{ backgroundColor: color ?? "hsl(var(--muted-foreground) / 0.35)" }}
-                />
-                {BODY_LABELS[part]}: {setCount}
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full border border-foreground/20"
+                    style={{ backgroundColor: color ?? "hsl(var(--muted-foreground) / 0.35)" }}
+                  />
+                  <span className="truncate">{BODY_LABELS[part]}</span>
+                </span>
+                <span className="font-medium text-foreground">{setCount}</span>
               </span>
             );
           })}
