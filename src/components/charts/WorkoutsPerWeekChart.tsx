@@ -58,17 +58,17 @@ export function WorkoutsPerWeekChart({
       aria-label={t("analytics.workoutFrequency")}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={formatted} margin={{ top: 24, right: 12, left: 8, bottom: 12 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+        <BarChart data={formatted} margin={{ top: 24, right: 12, left: 8, bottom: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.55)" vertical={false} />
           <XAxis
             dataKey="label"
             interval={0}
-            tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
+            tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
-            tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
+            tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
             axisLine={false}
             tickLine={false}
             allowDecimals={false}
@@ -85,7 +85,7 @@ export function WorkoutsPerWeekChart({
             }}
             formatter={(value) => [value, t("analytics.workouts")]}
           />
-          <Bar dataKey="workouts" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} maxBarSize={72}>
+          <Bar dataKey="workouts" fill="#38bdf8" radius={[6, 6, 0, 0]} maxBarSize={72}>
             <LabelList
               dataKey="workouts"
               position="top"

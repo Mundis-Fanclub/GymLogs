@@ -13,7 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ChevronRight, Dumbbell, Trophy, User } from "lucide-react";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { formatVolume } from "@/lib/pr-utils";
-import { WorkoutMuscleAvatar } from "@/components/workout/WorkoutMuscleAvatar";
+import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 
 export default function WorkoutsPage() {
   const { userId, isLoaded } = useConvexUser();
@@ -100,7 +100,11 @@ export default function WorkoutsPage() {
               <Card className="hover:bg-accent/30 transition-colors cursor-pointer">
                 <CardContent className="flex items-center justify-between gap-4 py-4 px-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <WorkoutMuscleAvatar muscleGroups={workout.muscleGroups} />
+                    <WorkoutMuscleMap
+                      muscleGroups={workout.muscleGroups}
+                      compact
+                      className="w-16 border-0 bg-transparent p-0"
+                    />
                     <div className="min-w-0">
                     <p className="font-medium text-sm">
                       {format(workout.date, "EEEE, MMMM d, yyyy", {

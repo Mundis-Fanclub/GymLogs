@@ -66,17 +66,17 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
       aria-label={t("analytics.weeklyVolume")}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={formatted} margin={{ top: 24, right: 12, left: 8, bottom: 18 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+        <BarChart data={formatted} margin={{ top: 24, right: 12, left: 8, bottom: 28 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.55)" vertical={false} />
           <XAxis
             dataKey="label"
             interval={0}
-            tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
+            tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
-            tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
+            tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
             axisLine={false}
             tickLine={false}
             width={48}

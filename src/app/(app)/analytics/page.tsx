@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { BarChart3, Dumbbell, User } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
+import { BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
 
 export default function AnalyticsPage() {
   const { userId, isLoaded } = useConvexUser();
@@ -39,6 +41,18 @@ export default function AnalyticsPage() {
     weeklyVolume !== undefined &&
     workoutFrequency !== undefined &&
     (weeklyVolume.length > 0 || workoutFrequency.total > 0);
+  const muscleGroupSets =
+    weeklyVolume?.reduce((totals, week) => {
+      for (const [group, value] of Object.entries(week.volumes)) {
+        const sets = typeof value === "number" ? value : value.sets;
+        const bodyPart = toBodyPart(group);
+        if (BODY_PARTS.includes(bodyPart as BodyPart)) {
+          totals[bodyPart] += sets;
+        }
+      }
+      return totals;
+    }, Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<BodyPart, number>) ??
+    (Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<BodyPart, number>);
 
   if (isLoaded && !userId) {
     return (
@@ -92,11 +106,18 @@ export default function AnalyticsPage() {
             {t("analytics.weeklySets")}
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-3 pb-4 sm:px-6">
+        <CardContent className="grid gap-4 px-3 pb-4 sm:px-6 lg:grid-cols-[240px_1fr] lg:items-center">
           {weeklyVolume === undefined ? (
             <Skeleton className="h-[220px] w-full" />
           ) : (
-            <VolumeBarChart data={weeklyVolume} />
+            <>
+              <WorkoutMuscleMap
+                muscleGroups={[]}
+                muscleGroupSets={muscleGroupSets}
+                className="mx-auto w-full max-w-[220px]"
+              />
+              <VolumeBarChart data={weeklyVolume} />
+            </>
           )}
         </CardContent>
       </Card>

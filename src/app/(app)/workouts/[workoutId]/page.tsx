@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { formatVolume } from "@/lib/pr-utils";
 import { WorkoutMuscleAvatar } from "@/components/workout/WorkoutMuscleAvatar";
+import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 import { toBodyPart } from "@/lib/muscle-groups";
 import { BookmarkPlus } from "lucide-react";
 
@@ -108,6 +109,8 @@ export default function WorkoutDetailPage() {
           {workout.notes}
         </p>
       )}
+
+      <WorkoutMuscleMap muscleGroups={muscleGroups} />
 
       <div className="space-y-3">
         {workout.exercises.map((ex) => {
