@@ -7,9 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VolumeBarChart } from "@/components/charts/VolumeBarChart";
 import { WorkoutsPerWeekChart } from "@/components/charts/WorkoutsPerWeekChart";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 export default function AnalyticsPage() {
   const { userId } = useConvexUser();
+  const { t } = useAppPreferences();
 
   const weeklyVolume = useQuery(
     api.analytics.getWeeklyVolume,
@@ -23,12 +25,12 @@ export default function AnalyticsPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <h1 className="text-xl font-semibold">Analytics</h1>
+      <h1 className="text-xl font-semibold">{t("common.analytics")}</h1>
 
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">
-            Weekly Volume by Muscle Group
+            {t("analytics.weeklyVolume")}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -43,7 +45,7 @@ export default function AnalyticsPage() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">
-            Workouts per Week
+            {t("analytics.workoutsPerWeek")}
           </CardTitle>
         </CardHeader>
         <CardContent>

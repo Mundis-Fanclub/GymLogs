@@ -6,20 +6,21 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Trophy } from "lucide-react";
 import { formatWeight } from "@/lib/pr-utils";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 interface RecentPRsProps {
   userId: Id<"users">;
 }
 
-const typeLabels = {
-  weight: "Heaviest Weight",
-  "1rm": "Best 1RM",
-  volume: "Best Volume",
-};
-
 export function RecentPRs({ userId }: RecentPRsProps) {
+  const { t } = useAppPreferences();
   const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const prs = useQuery(api.prs.getRecent, { userId, since });
+  const typeLabels = {
+    weight: t("prs.heaviestWeight"),
+    "1rm": t("prs.best1rm"),
+    volume: t("prs.bestVolume"),
+  };
 
   if (prs === undefined) {
     return (
@@ -34,7 +35,7 @@ export function RecentPRs({ userId }: RecentPRsProps) {
   if (prs.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4 text-center">
-        No PRs in the last 30 days
+        {t("prs.noRecent")}
       </p>
     );
   }
@@ -53,7 +54,7 @@ export function RecentPRs({ userId }: RecentPRsProps) {
           <div className="text-right text-xs text-muted-foreground">
             <span>{typeLabels[pr.type]}</span>
             <span className="ml-2 font-medium text-foreground">
-              {formatWeight(pr.value)} kg
+              {formatWeight(pr.value)} {t("common.kg")}
             </span>
           </div>
         </div>

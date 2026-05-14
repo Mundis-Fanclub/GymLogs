@@ -7,10 +7,12 @@ import { api } from "../../../../../convex/_generated/api";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { ActiveWorkout } from "@/components/workout/ActiveWorkout";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 export default function NewWorkoutPage() {
   const router = useRouter();
   const { userId, isLoaded } = useConvexUser();
+  const { t } = useAppPreferences();
   const createWorkout = useMutation(api.workouts.create);
   const incompleteWorkout = useQuery(
     api.workouts.getIncomplete,
@@ -47,7 +49,7 @@ export default function NewWorkoutPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-6">New Workout</h1>
+      <h1 className="text-xl font-semibold mb-6">{t("workouts.newTitle")}</h1>
       <ActiveWorkout workoutId={incompleteWorkout._id} />
     </div>
   );

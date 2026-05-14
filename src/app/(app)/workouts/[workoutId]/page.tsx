@@ -2,16 +2,19 @@
 
 import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
+import { format } from "date-fns";
+import { de, enUS } from "date-fns/locale";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { format } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { formatVolume } from "@/lib/pr-utils";
 
 export default function WorkoutDetailPage() {
   const { workoutId } = useParams();
+  const { locale, t } = useAppPreferences();
   const workout = useQuery(api.workouts.get, {
     workoutId: workoutId as Id<"workouts">,
   });
@@ -26,17 +29,20 @@ export default function WorkoutDetailPage() {
   }
 
   if (!workout) {
-    return <p className="text-muted-foreground">Workout not found.</p>;
+    return <p className="text-muted-foreground">{t("common.notFoundWorkout")}</p>;
   }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-xl font-semibold">
-          {format(workout.date, "EEEE, MMMM d")}
+          {format(workout.date, "EEEE, MMMM d", {
+            locale: locale === "de" ? de : enUS,
+          })}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Total volume: {formatVolume(workout.totalVolume)} kg
+          {t("common.totalVolume")}: {formatVolume(workout.totalVolume)}{" "}
+          {t("common.kg")}
         </p>
       </div>
 
@@ -61,23 +67,22 @@ export default function WorkoutDetailPage() {
                     {ex.exercise.name}
                   </CardTitle>
                   <Badge variant="secondary" className="text-xs capitalize">
-                    {ex.exercise.muscleGroup.replace("_", " ")}
+                    {t(`muscleGroups.${ex.exercise.muscleGroup}`)}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div className="space-y-1">
                   {ex.sets.map((set, i) => (
-                    <div
-                      key={set._id}
-                      className="flex items-center gap-3 text-sm"
-                    >
-                      <span className="text-muted-foreground w-4">
-                        {i + 1}
+                    <div key={set._id} className="flex items-center gap-3 text-sm">
+                      <span className="text-muted-foreground w-4">{i + 1}</span>
+                      <span className="font-medium">
+                        {set.weight} {t("common.kg")}
                       </span>
-                      <span className="font-medium">{set.weight} kg</span>
-                      <span className="text-muted-foreground">×</span>
-                      <span>{set.reps} reps</span>
+                      <span className="text-muted-foreground">x</span>
+                      <span>
+                        {set.reps} {t("common.reps")}
+                      </span>
                       {set.rir !== undefined && (
                         <span className="text-xs text-muted-foreground">
                           RIR {set.rir}
@@ -87,7 +92,7 @@ export default function WorkoutDetailPage() {
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Volume: {formatVolume(volume)} kg
+                  {t("common.volume")}: {formatVolume(volume)} {t("common.kg")}
                 </p>
               </CardContent>
             </Card>

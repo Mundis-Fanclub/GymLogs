@@ -10,6 +10,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { format } from "date-fns";
+import { de, enUS } from "date-fns/locale";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 interface WeekData {
   weekStart: number;
@@ -21,16 +23,19 @@ interface WorkoutsPerWeekChartProps {
 }
 
 export function WorkoutsPerWeekChart({ data }: WorkoutsPerWeekChartProps) {
+  const { locale, t } = useAppPreferences();
   if (data.length === 0) {
     return (
       <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground">
-        No data yet
+        {t("common.noData")}
       </div>
     );
   }
 
   const formatted = data.map((d) => ({
-    label: format(d.weekStart, "MMM d"),
+    label: format(d.weekStart, "MMM d", {
+      locale: locale === "de" ? de : enUS,
+    }),
     workouts: d.count,
   }));
 

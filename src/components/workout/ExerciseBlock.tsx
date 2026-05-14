@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { SetRow } from "./SetRow";
-import { usePRCheck } from "@/hooks/usePRCheck";
+import { Plus, Trash2 } from "lucide-react";
 import { useQuery } from "convex/react";
+import { formatRelative } from "date-fns";
+import { de, enUS } from "date-fns/locale";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { formatRelative } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
+import { usePRCheck } from "@/hooks/usePRCheck";
 import { formatWeight } from "@/lib/pr-utils";
+import { SetRow } from "./SetRow";
 
 interface LocalSet {
   id?: Id<"sets">;
@@ -35,9 +37,8 @@ export function ExerciseBlock({
   userId,
   onRemove,
 }: ExerciseBlockProps) {
-  const [sets, setSets] = useState<LocalSet[]>([
-    { weight: 0, reps: 0 },
-  ]);
+  const { locale, t } = useAppPreferences();
+  const [sets, setSets] = useState<LocalSet[]>([{ weight: 0, reps: 0 }]);
   const [newSetAutoFocus, setNewSetAutoFocus] = useState(0);
 
   const { check } = usePRCheck(userId, exerciseId);
@@ -68,8 +69,10 @@ export function ExerciseBlock({
   }
 
   const lastSummary = lastPerformance
-    ? `${formatRelative(lastPerformance.date, new Date())} — ${lastPerformance.sets
-        .map((s) => `${formatWeight(s.weight)}×${s.reps}`)
+    ? `${formatRelative(lastPerformance.date, new Date(), {
+        locale: locale === "de" ? de : enUS,
+      })} - ${lastPerformance.sets
+        .map((s) => `${formatWeight(s.weight)} x ${s.reps}`)
         .join(", ")}`
     : null;
 
@@ -79,7 +82,7 @@ export function ExerciseBlock({
         <div>
           <h3 className="font-medium text-sm">{exerciseName}</h3>
           <span className="text-xs text-muted-foreground capitalize">
-            {muscleGroup.replace("_", " ")}
+            {t(`muscleGroups.${muscleGroup}`)}
           </span>
         </div>
         <Button
@@ -87,6 +90,7 @@ export function ExerciseBlock({
           size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-destructive"
           onClick={onRemove}
+          aria-label={`${exerciseName} entfernen`}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </Button>
@@ -94,17 +98,23 @@ export function ExerciseBlock({
 
       {lastSummary && (
         <p className="text-xs text-muted-foreground mb-3 bg-muted/40 px-2 py-1.5 rounded">
-          Last: {lastSummary}
+          {t("workout.last")}: {lastSummary}
         </p>
       )}
 
       <div className="mb-1">
         <div className="flex items-center gap-2 px-1 mb-1">
           <span className="w-5" />
-          <span className="text-xs text-muted-foreground w-24 text-center">Weight (kg)</span>
+          <span className="text-xs text-muted-foreground w-24 text-center">
+            {t("workout.weight")} ({t("common.kg")})
+          </span>
           <span className="w-3" />
-          <span className="text-xs text-muted-foreground w-20 text-center">Reps</span>
-          <span className="text-xs text-muted-foreground w-14 text-center">RIR</span>
+          <span className="text-xs text-muted-foreground w-20 text-center">
+            {t("common.reps")}
+          </span>
+          <span className="text-xs text-muted-foreground w-14 text-center">
+            RIR
+          </span>
         </div>
 
         {sets.map((set, index) => (
@@ -118,7 +128,9 @@ export function ExerciseBlock({
             initialWeight={set.weight}
             initialReps={set.reps}
             initialRir={set.rir}
-            prCheck={set.weight > 0 && set.reps > 0 ? check(set.weight, set.reps) : null}
+            prCheck={
+              set.weight > 0 && set.reps > 0 ? check(set.weight, set.reps) : null
+            }
             autoFocus={index === sets.length - 1 && index === newSetAutoFocus}
             onSaved={(id) => handleSaved(index, id)}
             onDelete={() => handleDelete(index)}
@@ -136,7 +148,7 @@ export function ExerciseBlock({
         onClick={addSet}
       >
         <Plus className="w-3.5 h-3.5 mr-1.5" />
-        Add Set
+        {t("workout.addSet")}
       </Button>
     </div>
   );

@@ -1,4 +1,7 @@
+"use client";
+
 import { cn } from "@/lib/utils";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 type PRType = "weight" | "1rm" | "reps";
 
@@ -7,13 +10,14 @@ interface PRBadgeProps {
   className?: string;
 }
 
-const labels: Record<PRType, string> = {
-  weight: "PR",
-  "1rm": "PR 1RM",
-  reps: "PR Reps",
-};
-
 export function PRBadge({ type = "weight", className }: PRBadgeProps) {
+  const { t } = useAppPreferences();
+  const labels: Record<PRType, string> = {
+    weight: "PR",
+    "1rm": "PR 1RM",
+    reps: `PR ${t("common.reps")}`,
+  };
+
   return (
     <span
       className={cn(

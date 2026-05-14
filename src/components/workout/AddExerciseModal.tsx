@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -22,7 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
-import { MUSCLE_GROUPS, CATEGORIES, MUSCLE_GROUP_LABELS, CATEGORY_LABELS } from "@/lib/constants";
+import { MUSCLE_GROUPS, CATEGORIES } from "@/lib/constants";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 interface AddExerciseModalProps {
   open: boolean;
@@ -42,6 +42,7 @@ export function AddExerciseModal({
   userId,
   onSelect,
 }: AddExerciseModalProps) {
+  const { t } = useAppPreferences();
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -77,13 +78,13 @@ export function AddExerciseModal({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Add Exercise</DialogTitle>
+          <DialogTitle>{t("exercises.add")}</DialogTitle>
         </DialogHeader>
 
         {!creating ? (
           <>
             <Input
-              placeholder="Search exercises..."
+              placeholder={t("exercises.search")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               autoFocus
@@ -99,13 +100,13 @@ export function AddExerciseModal({
                 >
                   <span>{ex.name}</span>
                   <span className="text-xs text-muted-foreground capitalize">
-                    {ex.muscleGroup.replace("_", " ")}
+                    {t(`muscleGroups.${ex.muscleGroup}`)}
                   </span>
                 </button>
               ))}
               {exercises?.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-6">
-                  No exercises found
+                  {t("exercises.noExercises")}
                 </p>
               )}
             </div>
@@ -117,15 +118,15 @@ export function AddExerciseModal({
               onClick={() => setCreating(true)}
             >
               <Plus className="w-3.5 h-3.5" />
-              Create custom exercise
+              {t("exercises.createCustom")}
             </Button>
           </>
         ) : (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Name</Label>
+              <Label>{t("exercises.name")}</Label>
               <Input
-                placeholder="Exercise name"
+                placeholder={t("exercises.namePlaceholder")}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 autoFocus
@@ -133,15 +134,18 @@ export function AddExerciseModal({
             </div>
 
             <div className="space-y-1.5">
-              <Label>Muscle Group</Label>
-              <Select value={newMuscle} onValueChange={setNewMuscle}>
+              <Label>{t("exercises.muscleGroup")}</Label>
+              <Select
+                value={newMuscle}
+                onValueChange={(value) => setNewMuscle(value ?? "")}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select muscle group" />
+                  <SelectValue placeholder={t("exercises.selectMuscle")} />
                 </SelectTrigger>
                 <SelectContent>
                   {MUSCLE_GROUPS.map((mg) => (
                     <SelectItem key={mg} value={mg}>
-                      {MUSCLE_GROUP_LABELS[mg]}
+                      {t(`muscleGroups.${mg}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -149,15 +153,18 @@ export function AddExerciseModal({
             </div>
 
             <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={newCategory} onValueChange={setNewCategory}>
+              <Label>{t("exercises.category")}</Label>
+              <Select
+                value={newCategory}
+                onValueChange={(value) => setNewCategory(value ?? "")}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder={t("exercises.selectCategory")} />
                 </SelectTrigger>
                 <SelectContent>
                   {CATEGORIES.map((cat) => (
                     <SelectItem key={cat} value={cat}>
-                      {CATEGORY_LABELS[cat]}
+                      {t(`categories.${cat}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -170,14 +177,14 @@ export function AddExerciseModal({
                 className="flex-1"
                 onClick={() => setCreating(false)}
               >
-                Cancel
+                {t("exercises.cancel")}
               </Button>
               <Button
                 className="flex-1"
                 onClick={handleCreate}
                 disabled={!newName.trim() || !newMuscle || !newCategory}
               >
-                Create
+                {t("exercises.create")}
               </Button>
             </div>
           </div>

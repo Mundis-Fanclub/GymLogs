@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ExerciseBlock } from "./ExerciseBlock";
 import { AddExerciseModal } from "./AddExerciseModal";
-import { Plus, CheckCircle, Clock } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Plus, CheckCircle, Clock, Video } from "lucide-react";
 import { useConvexUser } from "@/hooks/useConvexUser";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 interface SelectedExercise {
   id: Id<"exercises">;
@@ -27,6 +27,7 @@ interface ActiveWorkoutProps {
 export function ActiveWorkout({ workoutId }: ActiveWorkoutProps) {
   const router = useRouter();
   const { userId } = useConvexUser();
+  const { t } = useAppPreferences();
   const [exercises, setExercises] = useState<SelectedExercise[]>([]);
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [notes, setNotes] = useState("");
@@ -78,16 +79,16 @@ export function ActiveWorkout({ workoutId }: ActiveWorkoutProps) {
         </div>
         <Button onClick={handleFinish} className="gap-1.5">
           <CheckCircle className="w-4 h-4" />
-          Finish Workout
+          {t("workout.finish")}
         </Button>
       </div>
 
       {exercises.length === 0 && (
         <div className="border-2 border-dashed border-border rounded-lg py-16 text-center">
-          <p className="text-muted-foreground mb-4">No exercises yet</p>
+          <p className="text-muted-foreground mb-4">{t("workout.noExercises")}</p>
           <Button variant="outline" onClick={() => setShowAddExercise(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Add your first exercise
+            {t("workout.addFirst")}
           </Button>
         </div>
       )}
@@ -113,18 +114,29 @@ export function ActiveWorkout({ workoutId }: ActiveWorkoutProps) {
           onClick={() => setShowAddExercise(true)}
         >
           <Plus className="w-4 h-4" />
-          Add Exercise
+          {t("workout.addExercise")}
         </Button>
       )}
 
       <div className="space-y-1.5">
         <Textarea
-          placeholder="Workout notes (optional)..."
+          aria-label={t("workout.notes")}
+          placeholder={t("workout.notes")}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           className="resize-none text-sm"
         />
+      </div>
+
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm">
+        <div className="flex items-center gap-2 font-medium">
+          <Video className="h-4 w-4 text-amber-700" />
+          {t("workout.saveStandoutTitle")}
+        </div>
+        <p className="mt-1 leading-6 text-muted-foreground">
+          {t("workout.saveStandoutCopy")}
+        </p>
       </div>
 
       <AddExerciseModal

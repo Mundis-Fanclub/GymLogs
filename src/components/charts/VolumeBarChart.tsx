@@ -7,11 +7,12 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
 import { format } from "date-fns";
-import { MUSCLE_GROUP_COLORS, MUSCLE_GROUP_LABELS, type MuscleGroup } from "@/lib/constants";
+import { de, enUS } from "date-fns/locale";
+import { MUSCLE_GROUP_COLORS, type MuscleGroup } from "@/lib/constants";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 interface WeekData {
   weekStart: number;
@@ -23,10 +24,11 @@ interface VolumeBarChartProps {
 }
 
 export function VolumeBarChart({ data }: VolumeBarChartProps) {
+  const { locale, t } = useAppPreferences();
   if (data.length === 0) {
     return (
       <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
-        No data yet
+        {t("common.noData")}
       </div>
     );
   }
@@ -36,7 +38,9 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
   ] as MuscleGroup[];
 
   const formatted = data.map((d) => ({
-    label: format(d.weekStart, "MMM d"),
+    label: format(d.weekStart, "MMM d", {
+      locale: locale === "de" ? de : enUS,
+    }),
     ...d.volumes,
   }));
 
@@ -69,7 +73,7 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
             dataKey={mg}
             stackId="volume"
             fill={MUSCLE_GROUP_COLORS[mg] ?? "#64748b"}
-            name={MUSCLE_GROUP_LABELS[mg] ?? mg}
+            name={t(`muscleGroups.${mg}`)}
           />
         ))}
       </BarChart>

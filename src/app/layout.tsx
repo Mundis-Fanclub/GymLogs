@@ -1,17 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Audiowide, Mozilla_Text } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ConvexClientProvider } from "@/components/providers/ConvexClientProvider";
+import { AppPreferencesProvider } from "@/components/providers/AppPreferencesProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const audiowide = Audiowide({
+  variable: "--font-audiowide",
+  weight: "400",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const mozillaText = Mozilla_Text({
+  variable: "--font-mozilla-text",
   subsets: ["latin"],
 });
 
@@ -29,13 +31,13 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" className="dark">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${audiowide.variable} ${mozillaText.variable} antialiased`}
         >
-          <ConvexClientProvider>
-            <TooltipProvider>
-              {children}
-            </TooltipProvider>
-          </ConvexClientProvider>
+          <AppPreferencesProvider>
+            <ConvexClientProvider>
+              <TooltipProvider>{children}</TooltipProvider>
+            </ConvexClientProvider>
+          </AppPreferencesProvider>
         </body>
       </html>
     </ClerkProvider>
