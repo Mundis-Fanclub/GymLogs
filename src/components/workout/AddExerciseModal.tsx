@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -21,7 +21,9 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
-import { MUSCLE_GROUPS, CATEGORIES } from "@/lib/constants";
+import { CATEGORIES, type Category } from "@/lib/constants";
+import { getDefaultCategoriesForMuscleGroup } from "@/lib/default-exercises";
+import { BODY_PARTS, toBodyPart, toSchemaMuscleGroup, type BodyPart } from "@/lib/muscle-groups";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 interface AddExerciseModalProps {
@@ -51,12 +53,27 @@ export function AddExerciseModal({
 
   const exercises = useQuery(api.exercises.search, { query, limit: 30 });
   const createCustom = useMutation(api.exercises.createCustom);
+  const availableCategories = useMemo<Category[]>(() => {
+    if (!newMuscle) return [...CATEGORIES];
+    const defaults = getDefaultCategoriesForMuscleGroup(newMuscle);
+    return defaults.length > 0 ? defaults : [...CATEGORIES];
+  }, [newMuscle]);
+
+  useEffect(() => {
+    if (!newMuscle) return;
+    if (newCategory && !availableCategories.includes(newCategory as Category)) {
+      setNewCategory("");
+    }
+    if (!newCategory && availableCategories.length === 1) {
+      setNewCategory(availableCategories[0]);
+    }
+  }, [availableCategories, newCategory, newMuscle]);
 
   async function handleCreate() {
     if (!newName.trim() || !newMuscle || !newCategory) return;
     const id = await createCustom({
       name: newName.trim(),
-      muscleGroup: newMuscle as never,
+      muscleGroup: toSchemaMuscleGroup(newMuscle as BodyPart) as never,
       category: newCategory as never,
       userId,
     });
@@ -76,7 +93,7 @@ export function AddExerciseModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
+      <DialogContent className="flex max-h-[85dvh] w-[calc(100vw-2rem)] max-w-md flex-col">
         <DialogHeader>
           <DialogTitle>{t("exercises.add")}</DialogTitle>
         </DialogHeader>
@@ -96,11 +113,11 @@ export function AddExerciseModal({
                 <button
                   key={ex._id}
                   onClick={() => handleSelect(ex)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-md hover:bg-accent text-left text-sm transition-colors"
+                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent"
                 >
-                  <span>{ex.name}</span>
-                  <span className="text-xs text-muted-foreground capitalize">
-                    {t(`muscleGroups.${ex.muscleGroup}`)}
+                  <span className="min-w-0 truncate">{ex.name}</span>
+                  <span className="shrink-0 text-xs capitalize text-muted-foreground">
+                    {t(`muscleGroups.${toBodyPart(ex.muscleGroup)}`)}
                   </span>
                 </button>
               ))}
@@ -143,7 +160,7 @@ export function AddExerciseModal({
                   <SelectValue placeholder={t("exercises.selectMuscle")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {MUSCLE_GROUPS.map((mg) => (
+                  {BODY_PARTS.map((mg) => (
                     <SelectItem key={mg} value={mg}>
                       {t(`muscleGroups.${mg}`)}
                     </SelectItem>
@@ -157,12 +174,13 @@ export function AddExerciseModal({
               <Select
                 value={newCategory}
                 onValueChange={(value) => setNewCategory(value ?? "")}
+                disabled={!newMuscle}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={t("exercises.selectCategory")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map((cat) => (
+                  {availableCategories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {t(`categories.${cat}`)}
                     </SelectItem>

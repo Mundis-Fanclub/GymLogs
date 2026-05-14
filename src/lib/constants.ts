@@ -9,6 +9,8 @@ export const MUSCLE_GROUPS = [
   "glutes",
   "calves",
   "core",
+  "legs",
+  "other",
   "full_body",
   "cardio",
 ] as const;
@@ -29,6 +31,8 @@ export const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = {
   glutes: "Glutes",
   calves: "Calves",
   core: "Core",
+  legs: "Legs",
+  other: "Other",
   full_body: "Full Body",
   cardio: "Cardio",
 };
@@ -51,6 +55,8 @@ export const MUSCLE_GROUP_COLORS: Record<MuscleGroup, string> = {
   glutes: "#f59e0b",
   calves: "#84cc16",
   core: "#06b6d4",
+  legs: "#22c55e",
+  other: "#94a3b8",
   full_body: "#8b5cf6",
   cardio: "#64748b",
 };

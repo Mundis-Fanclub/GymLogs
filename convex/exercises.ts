@@ -102,6 +102,8 @@ export const createCustom = mutation({
       v.literal("glutes"),
       v.literal("calves"),
       v.literal("core"),
+      v.literal("legs"),
+      v.literal("other"),
       v.literal("full_body"),
       v.literal("cardio")
     ),

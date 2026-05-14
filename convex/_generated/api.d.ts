@@ -10,6 +10,7 @@
 
 import type * as analytics from "../analytics.js";
 import type * as exercises from "../exercises.js";
+import type * as logs from "../logs.js";
 import type * as prs from "../prs.js";
 import type * as seed from "../seed.js";
 import type * as sets from "../sets.js";
@@ -25,6 +26,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   exercises: typeof exercises;
+  logs: typeof logs;
   prs: typeof prs;
   seed: typeof seed;
   sets: typeof sets;

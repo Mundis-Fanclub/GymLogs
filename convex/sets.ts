@@ -58,7 +58,6 @@ export const add = mutation({
     userId: v.id("users"),
     weight: v.number(),
     reps: v.number(),
-    rir: v.optional(v.number()),
     setOrder: v.number(),
   },
   handler: async (ctx, args) => {
@@ -68,7 +67,6 @@ export const add = mutation({
       userId: args.userId,
       weight: args.weight,
       reps: args.reps,
-      rir: args.rir,
       setOrder: args.setOrder,
       createdAt: Date.now(),
     });
@@ -80,13 +78,11 @@ export const update = mutation({
     setId: v.id("sets"),
     weight: v.number(),
     reps: v.number(),
-    rir: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.setId, {
       weight: args.weight,
       reps: args.reps,
-      rir: args.rir,
     });
   },
 });

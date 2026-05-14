@@ -27,6 +27,6 @@ export function useConvexUser() {
   return {
     userId: convexUser?._id as Id<"users"> | undefined,
     convexUser,
-    isLoaded: isLoaded && convexUser !== undefined,
+    isLoaded: isLoaded && (!user || convexUser !== undefined),
   };
 }

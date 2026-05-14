@@ -19,7 +19,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, ArrowRight, Crown, ShieldCheck, Trophy, Video } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { AlertCircle, ArrowRight, Crown, Dumbbell, ShieldCheck, Trophy, User, Video } from "lucide-react";
 
 export default function DashboardPage() {
   const { userId, isLoaded } = useConvexUser();
@@ -34,7 +35,7 @@ export default function DashboardPage() {
     userId ? { userId } : "skip"
   );
 
-  if (!isLoaded || !userId) {
+  if (!isLoaded) {
     return (
       <div className="space-y-6">
         <h1 className="sr-only">{t("common.dashboard")}</h1>
@@ -46,6 +47,27 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  if (!userId) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <EmptyState
+          icon={User}
+          title={t("dashboard.signedOutTitle")}
+          description={t("dashboard.signedOutCopy")}
+          action={
+            <Link href="/sign-in">
+              <Button>{t("common.signIn")}</Button>
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  const hasTrainingData =
+    stats !== undefined &&
+    (stats.totalWorkouts > 0 || stats.totalSets > 0 || stats.totalVolume > 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -127,6 +149,22 @@ export default function DashboardPage() {
           subtitle={t("dashboard.totalSetsSub")}
         />
       </div>
+
+      {stats !== undefined && !hasTrainingData && (
+        <EmptyState
+          icon={Dumbbell}
+          title={t("dashboard.emptyTitle")}
+          description={t("dashboard.emptyCopy")}
+          action={
+            <Link href="/workouts/new">
+              <Button className="gap-2">
+                <Dumbbell className="h-4 w-4" />
+                {t("common.startWorkout")}
+              </Button>
+            </Link>
+          }
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <Card className="border-amber-200 bg-[linear-gradient(180deg,#fffdf5_0%,#fff7ed_100%)]">

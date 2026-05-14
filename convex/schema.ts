@@ -12,11 +12,30 @@ export const muscleGroups = [
   "glutes",
   "calves",
   "core",
+  "legs",
+  "other",
   "full_body",
   "cardio",
 ] as const;
 
 export const categories = ["push", "pull", "legs", "other"] as const;
+
+export const leaderboardLiftTypes = [
+  "bench_press",
+  "squat",
+  "deadlift",
+] as const;
+
+export const verificationStatuses = [
+  "draft",
+  "submitted",
+  "pending_review",
+  "verified",
+  "rejected",
+] as const;
+
+export const equipmentClasses = ["raw", "wraps", "single_ply", "multi_ply"] as const;
+export const sexClasses = ["female", "male", "open"] as const;
 
 export default defineSchema({
   users: defineTable({
@@ -38,6 +57,8 @@ export default defineSchema({
       v.literal("glutes"),
       v.literal("calves"),
       v.literal("core"),
+      v.literal("legs"),
+      v.literal("other"),
       v.literal("full_body"),
       v.literal("cardio")
     ),
@@ -48,10 +69,19 @@ export default defineSchema({
       v.literal("other")
     ),
     isCustom: v.boolean(),
+    isLeaderboardLift: v.optional(v.boolean()),
+    leaderboardLiftType: v.optional(
+      v.union(
+        v.literal("bench_press"),
+        v.literal("squat"),
+        v.literal("deadlift")
+      )
+    ),
     createdBy: v.optional(v.id("users")),
   })
     .index("by_muscle_group", ["muscleGroup"])
     .index("by_category", ["category"])
+    .index("by_leaderboard_lift", ["isLeaderboardLift"])
     .searchIndex("search_by_name", { searchField: "name" }),
 
   workouts: defineTable({
@@ -62,6 +92,29 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_date", ["userId", "date"]),
+
+  workout_templates: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    sourceWorkoutId: v.optional(v.id("workouts")),
+    exercises: v.array(
+      v.object({
+        exerciseId: v.id("exercises"),
+        exerciseName: v.string(),
+        muscleGroup: v.string(),
+        category: v.string(),
+        sets: v.array(
+          v.object({
+            weight: v.number(),
+            reps: v.number(),
+          })
+        ),
+      })
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_created", ["userId", "createdAt"]),
 
   sets: defineTable({
     workoutId: v.id("workouts"),
@@ -76,4 +129,122 @@ export default defineSchema({
     .index("by_workout", ["workoutId"])
     .index("by_user_exercise", ["userId", "exerciseId"])
     .index("by_user_created", ["userId", "createdAt"]),
+
+  log_brackets: defineTable({
+    liftType: v.union(
+      v.literal("bench_press"),
+      v.literal("squat"),
+      v.literal("deadlift")
+    ),
+    sex: v.union(v.literal("female"), v.literal("male"), v.literal("open")),
+    equipment: v.union(
+      v.literal("raw"),
+      v.literal("wraps"),
+      v.literal("single_ply"),
+      v.literal("multi_ply")
+    ),
+    bodyweightClass: v.string(),
+    minBodyweightKg: v.optional(v.number()),
+    maxBodyweightKg: v.optional(v.number()),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_lift", ["liftType"])
+    .index("by_bracket", ["liftType", "sex", "equipment", "bodyweightClass"]),
+
+  log_submissions: defineTable({
+    userId: v.id("users"),
+    exerciseId: v.id("exercises"),
+    workoutId: v.optional(v.id("workouts")),
+    setId: v.optional(v.id("sets")),
+    liftType: v.union(
+      v.literal("bench_press"),
+      v.literal("squat"),
+      v.literal("deadlift")
+    ),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("submitted"),
+      v.literal("pending_review"),
+      v.literal("verified"),
+      v.literal("rejected")
+    ),
+    weightKg: v.number(),
+    reps: v.number(),
+    bodyweightKg: v.optional(v.number()),
+    bodyweightClass: v.string(),
+    sex: v.union(v.literal("female"), v.literal("male"), v.literal("open")),
+    equipment: v.union(
+      v.literal("raw"),
+      v.literal("wraps"),
+      v.literal("single_ply"),
+      v.literal("multi_ply")
+    ),
+    videoStorageId: v.optional(v.id("_storage")),
+    videoUrl: v.optional(v.string()),
+    videoDurationSeconds: v.optional(v.number()),
+    videoMimeType: v.optional(v.string()),
+    bracketKey: v.string(),
+    score: v.optional(v.number()),
+    submittedAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+    reviewerId: v.optional(v.id("users")),
+    rejectionReason: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_lift_status", ["liftType", "status"])
+    .index("by_leaderboard", [
+      "liftType",
+      "sex",
+      "equipment",
+      "bodyweightClass",
+      "status",
+      "score",
+    ]),
+
+  log_verification_events: defineTable({
+    submissionId: v.id("log_submissions"),
+    fromStatus: v.optional(
+      v.union(
+        v.literal("draft"),
+        v.literal("submitted"),
+        v.literal("pending_review"),
+        v.literal("verified"),
+        v.literal("rejected")
+      )
+    ),
+    toStatus: v.union(
+      v.literal("draft"),
+      v.literal("submitted"),
+      v.literal("pending_review"),
+      v.literal("verified"),
+      v.literal("rejected")
+    ),
+    reviewerId: v.optional(v.id("users")),
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_submission", ["submissionId"]),
+
+  leaderboard_snapshots: defineTable({
+    liftType: v.union(
+      v.literal("bench_press"),
+      v.literal("squat"),
+      v.literal("deadlift")
+    ),
+    bracketKey: v.string(),
+    generatedAt: v.number(),
+    entries: v.array(
+      v.object({
+        rank: v.number(),
+        submissionId: v.id("log_submissions"),
+        userId: v.id("users"),
+        score: v.number(),
+        weightKg: v.number(),
+        reps: v.number(),
+      })
+    ),
+  })
+    .index("by_lift", ["liftType"])
+    .index("by_bracket", ["liftType", "bracketKey", "generatedAt"]),
 });

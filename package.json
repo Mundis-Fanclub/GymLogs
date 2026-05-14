@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "convex:dev": "convex dev",
+    "convex:seed": "convex run seed:seedExercises && convex run seed:seedLogBrackets",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint"
