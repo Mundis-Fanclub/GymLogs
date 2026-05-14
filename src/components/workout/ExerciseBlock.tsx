@@ -16,12 +16,20 @@ interface LocalSet {
   reps: number;
 }
 
+interface InitialSet {
+  id: Id<"sets">;
+  weight: number;
+  reps: number;
+  setOrder: number;
+}
+
 interface ExerciseBlockProps {
   workoutId: Id<"workouts">;
   exerciseId: Id<"exercises">;
   exerciseName: string;
   muscleGroup: string;
   userId: Id<"users">;
+  initialSets?: InitialSet[];
   onRemove: () => void;
 }
 
@@ -30,10 +38,20 @@ export function ExerciseBlock({
   exerciseId,
   exerciseName,
   userId,
+  initialSets,
   onRemove,
 }: ExerciseBlockProps) {
   const { t } = useAppPreferences();
-  const [sets, setSets] = useState<LocalSet[]>([{ weight: 0, reps: 0 }]);
+  const [sets, setSets] = useState<LocalSet[]>(() => {
+    if (!initialSets?.length) return [{ weight: 0, reps: 0 }];
+    return [...initialSets]
+      .sort((a, b) => a.setOrder - b.setOrder)
+      .map((set) => ({
+        id: set.id,
+        weight: set.weight,
+        reps: set.reps,
+      }));
+  });
   const [newSetAutoFocus, setNewSetAutoFocus] = useState(0);
   const [restSeconds, setRestSeconds] = useState(120);
   const [remainingRest, setRemainingRest] = useState(0);

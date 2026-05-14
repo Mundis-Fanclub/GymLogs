@@ -18,6 +18,12 @@ interface SelectedExercise {
   name: string;
   muscleGroup: string;
   category: string;
+  sets?: {
+    id: Id<"sets">;
+    weight: number;
+    reps: number;
+    setOrder: number;
+  }[];
 }
 
 interface ActiveWorkoutProps {
@@ -36,6 +42,7 @@ export function ActiveWorkout({ workoutId }: ActiveWorkoutProps) {
   const workout = useQuery(api.workouts.get, { workoutId });
   const completeWorkout = useMutation(api.workouts.complete);
   const updateNotes = useMutation(api.workouts.updateNotes);
+  const removeExerciseSets = useMutation(api.sets.removeForExercise);
 
   // Timer
   useEffect(() => {
@@ -49,6 +56,28 @@ export function ActiveWorkout({ workoutId }: ActiveWorkoutProps) {
     }, 1000);
     return () => clearInterval(interval);
   }, [workout]);
+
+  useEffect(() => {
+    if (!workout || exercises.length > 0) return;
+    const restoredExercises = workout.exercises
+      .filter((exercise) => exercise.exercise && exercise.sets.length > 0)
+      .map((exercise) => ({
+        id: exercise.exerciseId,
+        name: exercise.exercise!.name,
+        muscleGroup: exercise.exercise!.muscleGroup,
+        category: exercise.exercise!.category,
+        sets: exercise.sets.map((set) => ({
+          id: set._id,
+          weight: set.weight,
+          reps: set.reps,
+          setOrder: set.setOrder,
+        })),
+      }));
+
+    if (restoredExercises.length > 0) {
+      setExercises(restoredExercises);
+    }
+  }, [exercises.length, workout]);
 
   async function handleFinish() {
     if (notes.trim()) {
@@ -64,7 +93,8 @@ export function ActiveWorkout({ workoutId }: ActiveWorkoutProps) {
     );
   }
 
-  function handleRemoveExercise(id: Id<"exercises">) {
+  async function handleRemoveExercise(id: Id<"exercises">) {
+    await removeExerciseSets({ workoutId, exerciseId: id });
     setExercises((prev) => prev.filter((e) => e.id !== id));
   }
 
@@ -102,6 +132,7 @@ export function ActiveWorkout({ workoutId }: ActiveWorkoutProps) {
             exerciseName={exercise.name}
             muscleGroup={exercise.muscleGroup}
             userId={userId}
+            initialSets={exercise.sets}
             onRemove={() => handleRemoveExercise(exercise.id)}
           />
         ))}

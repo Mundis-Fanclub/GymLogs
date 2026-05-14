@@ -16,6 +16,8 @@ Create `.env.local` from `.env.example`, then start Convex in one terminal:
 npm run convex:dev
 ```
 
+Keep this terminal running while you use the app. Dashboard, workout history, and analytics all subscribe to Convex queries and will stay in loading states if the Convex dev server is not running.
+
 When Convex has written `NEXT_PUBLIC_CONVEX_URL`, seed the standard exercises and MVP leaderboard brackets:
 
 ```powershell

@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 
 function toBodyPart(muscleGroup: string): string {
   if (
@@ -92,8 +93,8 @@ export const get = query({
 
     // Group sets by exercise
     const exerciseMap = new Map<
-      string,
-      { exerciseId: string; exercise: { name: string; muscleGroup: string; category: string } | null; sets: typeof sets }
+      Id<"exercises">,
+      { exerciseId: Id<"exercises">; exercise: { name: string; muscleGroup: string; category: string } | null; sets: typeof sets }
     >();
 
     for (const set of sets) {

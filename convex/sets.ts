@@ -93,3 +93,22 @@ export const remove = mutation({
     await ctx.db.delete(args.setId);
   },
 });
+
+export const removeForExercise = mutation({
+  args: {
+    workoutId: v.id("workouts"),
+    exerciseId: v.id("exercises"),
+  },
+  handler: async (ctx, args) => {
+    const sets = await ctx.db
+      .query("sets")
+      .withIndex("by_workout", (q) => q.eq("workoutId", args.workoutId))
+      .collect();
+
+    for (const set of sets) {
+      if (set.exerciseId === args.exerciseId) {
+        await ctx.db.delete(set._id);
+      }
+    }
+  },
+});

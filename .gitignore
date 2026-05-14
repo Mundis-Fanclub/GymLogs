@@ -47,3 +47,5 @@ next-env.d.ts
 # local dev server logs
 .devserver.*.log
 dev-server.log
+.convex-dev*.log
+.next-dev*.log
