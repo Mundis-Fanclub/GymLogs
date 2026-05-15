@@ -121,7 +121,7 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
     >
   );
 
-  const formatted = BODY_PARTS.map((part) => ({
+  const formatted = BODY_PARTS.filter((part) => part !== "other").map((part) => ({
     key: part,
     label: t(`muscleGroups.${part}`),
     sets: totals[part].sets,

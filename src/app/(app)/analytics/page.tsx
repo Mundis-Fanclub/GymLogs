@@ -228,6 +228,7 @@ function MuscleInsight({
     triceps: "Trizeps",
     core: "Core",
     legs: "Beine",
+    glutes: "Glutes",
     shoulders: "Schultern",
     other: "Sonstiges",
   }[part.part];

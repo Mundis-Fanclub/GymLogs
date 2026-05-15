@@ -7,6 +7,7 @@ export const BODY_PARTS = [
   "triceps",
   "core",
   "legs",
+  "glutes",
   "shoulders",
   "other",
 ] as const;
@@ -20,6 +21,7 @@ export const BODY_PART_COLORS: Record<BodyPart, string> = {
   triceps: "#ec4899",
   core: "#06b6d4",
   legs: "#22c55e",
+  glutes: "#f59e0b",
   shoulders: "#a855f7",
   other: "#94a3b8",
 };
@@ -45,21 +47,21 @@ export const WEEKLY_SET_VOLUME_ZONES: Array<{
     label: "1-5 Sätze",
     minSets: 1,
     maxSets: 5,
-    color: "#22c55e",
+    color: "#4ade80",
   },
   {
     zone: "moderate",
     label: "6-10 Sätze",
     minSets: 6,
     maxSets: 10,
-    color: "#eab308",
+    color: "#fde047",
   },
   {
     zone: "high",
     label: "11+ Sätze",
     minSets: 11,
     maxSets: null,
-    color: "#ef4444",
+    color: "#f87171",
   },
 ];
 
@@ -81,7 +83,6 @@ export function getWeeklySetVolumeColor(setCount: number) {
 export function toBodyPart(muscleGroup: string): BodyPart {
   if (muscleGroup === "quads") return "legs";
   if (muscleGroup === "hamstrings") return "legs";
-  if (muscleGroup === "glutes") return "legs";
   if (muscleGroup === "calves") return "legs";
   if (muscleGroup === "full_body") return "other";
   if (muscleGroup === "cardio") return "other";
