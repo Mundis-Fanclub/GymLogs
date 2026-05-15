@@ -7,6 +7,7 @@ import {
   Dumbbell,
   LayoutDashboard,
   Trophy,
+  MessageSquareText,
 } from "lucide-react";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/workouts", labelKey: "common.workouts", icon: ClipboardList },
   { href: "/exercises", labelKey: "common.exercises", icon: Dumbbell },
   { href: "/analytics", labelKey: "common.analytics", icon: BarChart2 },
+  { href: "/social", labelKey: "common.social", icon: MessageSquareText },
 ];
 
 export function BottomNav() {
@@ -26,7 +28,7 @@ export function BottomNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-2 backdrop-blur md:hidden">
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid grid-cols-6 gap-1">
         {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (

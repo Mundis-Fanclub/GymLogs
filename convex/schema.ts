@@ -44,22 +44,52 @@ export default defineSchema({
     email: v.string(),
     username: v.optional(v.string()),
     bio: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    avatarStorageId: v.optional(v.id("_storage")),
+    coverUrl: v.optional(v.string()),
+    coverStorageId: v.optional(v.id("_storage")),
+    location: v.optional(v.string()),
+    favoriteLift: v.optional(v.string()),
+    trainingGoal: v.optional(v.string()),
+    profileAccent: v.optional(v.string()),
     heightCm: v.optional(v.number()),
     weightKg: v.optional(v.number()),
     birthDate: v.optional(v.string()),
+    isPro: v.optional(v.boolean()),
+    proSince: v.optional(v.number()),
     isPublic: v.optional(v.boolean()),
     allowMessages: v.optional(v.boolean()),
+    showTrainingSummary: v.optional(v.boolean()),
     publicFields: v.optional(
       v.object({
         heightCm: v.boolean(),
         weightKg: v.boolean(),
         birthDate: v.boolean(),
+        trainingSummary: v.optional(v.boolean()),
       })
     ),
     updatedAt: v.optional(v.number()),
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_username", ["username"]),
+
+  username_reservations: defineTable({
+    username: v.string(),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_username", ["username"])
+    .index("by_user", ["userId"]),
+
+  friends: defineTable({
+    requesterId: v.id("users"),
+    addresseeId: v.id("users"),
+    status: v.union(v.literal("accepted"), v.literal("blocked")),
+    createdAt: v.number(),
+  })
+    .index("by_requester", ["requesterId", "createdAt"])
+    .index("by_addressee", ["addresseeId", "createdAt"])
+    .index("by_pair", ["requesterId", "addresseeId"]),
 
   exercises: defineTable({
     name: v.string(),
@@ -114,6 +144,11 @@ export default defineSchema({
     userId: v.id("users"),
     name: v.string(),
     sourceWorkoutId: v.optional(v.id("workouts")),
+    visibility: v.optional(
+      v.union(v.literal("private"), v.literal("friends"), v.literal("public"))
+    ),
+    showWeights: v.optional(v.boolean()),
+    description: v.optional(v.string()),
     exercises: v.array(
       v.object({
         exerciseId: v.id("exercises"),
@@ -158,16 +193,86 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_and_exercise", ["userId", "exerciseId"]),
 
+  conversations: defineTable({
+    userAId: v.id("users"),
+    userBId: v.id("users"),
+    lastMessagePreview: v.optional(v.string()),
+    lastSenderId: v.optional(v.id("users")),
+    updatedAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user_a_and_updated", ["userAId", "updatedAt"])
+    .index("by_user_b_and_updated", ["userBId", "updatedAt"])
+    .index("by_pair", ["userAId", "userBId"]),
+
   messages: defineTable({
+    conversationId: v.optional(v.id("conversations")),
     senderId: v.id("users"),
     recipientId: v.id("users"),
     body: v.string(),
     createdAt: v.number(),
     readAt: v.optional(v.number()),
+    reportCount: v.optional(v.number()),
+    hiddenForSender: v.optional(v.boolean()),
+    hiddenForRecipient: v.optional(v.boolean()),
   })
     .index("by_sender", ["senderId", "createdAt"])
     .index("by_recipient", ["recipientId", "createdAt"])
-    .index("by_conversation", ["senderId", "recipientId", "createdAt"]),
+    .index("by_conversation", ["senderId", "recipientId", "createdAt"])
+    .index("by_conversation_id", ["conversationId", "createdAt"]),
+
+  message_blocks: defineTable({
+    blockerId: v.id("users"),
+    blockedId: v.id("users"),
+    reason: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_blocker", ["blockerId", "createdAt"])
+    .index("by_blocker_and_blocked", ["blockerId", "blockedId"]),
+
+  message_reports: defineTable({
+    reporterId: v.id("users"),
+    reportedUserId: v.id("users"),
+    messageId: v.optional(v.id("messages")),
+    reason: v.string(),
+    details: v.optional(v.string()),
+    status: v.union(v.literal("open"), v.literal("reviewed"), v.literal("dismissed")),
+    createdAt: v.number(),
+  })
+    .index("by_reporter", ["reporterId", "createdAt"])
+    .index("by_reported_user", ["reportedUserId", "createdAt"])
+    .index("by_status", ["status", "createdAt"]),
+
+  social_posts: defineTable({
+    authorId: v.id("users"),
+    body: v.string(),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
+    linkedSubmissionId: v.optional(v.id("log_submissions")),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_created", ["createdAt"])
+    .index("by_author", ["authorId", "createdAt"]),
+
+  social_comments: defineTable({
+    postId: v.id("social_posts"),
+    authorId: v.id("users"),
+    body: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_post", ["postId", "createdAt"])
+    .index("by_author", ["authorId", "createdAt"]),
+
+  social_likes: defineTable({
+    postId: v.id("social_posts"),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_post", ["postId", "createdAt"])
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_post_and_user", ["postId", "userId"]),
 
   log_brackets: defineTable({
     liftType: v.union(

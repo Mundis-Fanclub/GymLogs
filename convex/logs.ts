@@ -175,3 +175,65 @@ export const listMine = query({
       .take(args.limit ?? 20);
   },
 });
+
+export const getProfileTopLogs = query({
+  args: {
+    userId: v.id("users"),
+    viewerId: v.optional(v.id("users")),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return [];
+    if (user.isPublic === false && args.viewerId !== args.userId) return [];
+
+    const submissions = await ctx.db
+      .query("log_submissions")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(100);
+
+    const verified = submissions
+      .filter((submission) => submission.status === "verified")
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .slice(0, args.limit ?? 5);
+
+    return await Promise.all(
+      verified.map(async (submission) => {
+        const [exercise, bracketSubmissions] = await Promise.all([
+          ctx.db.get(submission.exerciseId),
+          ctx.db
+            .query("log_submissions")
+            .withIndex("by_leaderboard", (q) =>
+              q
+                .eq("liftType", submission.liftType)
+                .eq("sex", submission.sex)
+                .eq("equipment", submission.equipment)
+                .eq("bodyweightClass", submission.bodyweightClass)
+                .eq("status", "verified")
+            )
+            .order("desc")
+            .take(500),
+        ]);
+
+        const ranked = bracketSubmissions.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        const rank = ranked.findIndex((entry) => entry._id === submission._id) + 1;
+        const total = ranked.length;
+        const percentile =
+          rank > 0 && total > 0
+            ? Math.round((1 - (rank - 1) / total) * 1000) / 10
+            : null;
+        const topFiveCutoff = Math.max(1, Math.ceil(total * 0.05));
+
+        return {
+          submission,
+          exerciseName: exercise?.name ?? submission.liftType,
+          rank: rank || null,
+          total,
+          percentile,
+          isTopFivePercent: rank > 0 && rank <= topFiveCutoff,
+        };
+      })
+    );
+  },
+});

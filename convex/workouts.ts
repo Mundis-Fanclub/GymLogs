@@ -1,6 +1,13 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
+
+const templateVisibility = v.union(
+  v.literal("private"),
+  v.literal("friends"),
+  v.literal("public")
+);
 
 function estimated1RM(weight: number, reps: number): number {
   return weight * (1 + reps / 30);
@@ -213,6 +220,9 @@ export const saveAsTemplate = mutation({
   args: {
     workoutId: v.id("workouts"),
     name: v.string(),
+    visibility: v.optional(templateVisibility),
+    showWeights: v.optional(v.boolean()),
+    description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const workout = await ctx.db.get(args.workoutId);
@@ -260,11 +270,114 @@ export const saveAsTemplate = mutation({
 
     return await ctx.db.insert("workout_templates", {
       userId: workout.userId,
-      name: args.name.trim(),
+      name: args.name.trim().slice(0, 80),
       sourceWorkoutId: args.workoutId,
+      visibility: args.visibility ?? "private",
+      showWeights: args.showWeights ?? false,
+      description: args.description?.trim().slice(0, 180),
       exercises: Array.from(exerciseMap.values()),
       createdAt: Date.now(),
     });
+  },
+});
+
+export const updateTemplateVisibility = mutation({
+  args: {
+    templateId: v.id("workout_templates"),
+    userId: v.id("users"),
+    name: v.optional(v.string()),
+    visibility: templateVisibility,
+    showWeights: v.boolean(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template || template.userId !== args.userId) {
+      throw new Error("Template not found.");
+    }
+
+    await ctx.db.patch(args.templateId, {
+      name: args.name?.trim().slice(0, 80) || template.name,
+      visibility: args.visibility,
+      showWeights: args.showWeights,
+      description: args.description?.trim().slice(0, 180),
+    });
+  },
+});
+
+async function areFriends(
+  ctx: QueryCtx,
+  a: Id<"users">,
+  b: Id<"users">
+) {
+  const requesterId = a < b ? a : b;
+  const addresseeId = a < b ? b : a;
+  const friendship = await ctx.db
+    .query("friends")
+    .withIndex("by_pair", (q) =>
+      q.eq("requesterId", requesterId).eq("addresseeId", addresseeId)
+    )
+    .unique();
+  return friendship?.status === "accepted";
+}
+
+export const listProfileTemplates = query({
+  args: {
+    userId: v.id("users"),
+    viewerId: v.optional(v.id("users")),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const isSelf = args.viewerId === args.userId;
+    const canSeeFriends = args.viewerId
+      ? isSelf || (await areFriends(ctx, args.userId, args.viewerId))
+      : false;
+
+    const templates = await ctx.db
+      .query("workout_templates")
+      .withIndex("by_user_created", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(args.limit ?? 12);
+
+    return templates
+      .filter((template) => {
+        const visibility = template.visibility ?? "private";
+        if (isSelf) return true;
+        if (visibility === "public") return true;
+        if (visibility === "friends") return canSeeFriends;
+        return false;
+      })
+      .map((template) => {
+        const showWeights = isSelf || template.showWeights === true;
+        return {
+          ...template,
+          visibility: template.visibility ?? "private",
+          showWeights: template.showWeights ?? false,
+          exercises: template.exercises.map((exercise) => ({
+            ...exercise,
+            sets: exercise.sets.map((set) => ({
+              reps: set.reps,
+              weight: showWeights ? set.weight : null,
+            })),
+          })),
+          totalExercises: template.exercises.length,
+          totalSets: template.exercises.reduce(
+            (sum, exercise) => sum + exercise.sets.length,
+            0
+          ),
+          totalVolume: showWeights
+            ? template.exercises.reduce(
+                (sum, exercise) =>
+                  sum +
+                  exercise.sets.reduce(
+                    (exerciseSum, set) => exerciseSum + set.weight * set.reps,
+                    0
+                  ),
+                0
+              )
+            : null,
+        };
+      });
   },
 });
 
