@@ -59,28 +59,28 @@ export function WorkoutsPerWeekChart({
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={formatted} margin={{ top: 24, right: 12, left: 8, bottom: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.55)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in oklch, var(--border) 55%, transparent)" vertical={false} />
           <XAxis
             dataKey="label"
             interval={0}
-            tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+            tick={{ fontSize: 12, fill: "color-mix(in oklch, var(--foreground) 76%, transparent)" }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
-            tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+            tick={{ fontSize: 12, fill: "color-mix(in oklch, var(--foreground) 76%, transparent)" }}
             axisLine={false}
             tickLine={false}
             allowDecimals={false}
             width={36}
           />
           <Tooltip
-            cursor={{ fill: "hsl(var(--foreground) / 0.06)" }}
+            cursor={{ fill: "color-mix(in oklch, var(--foreground) 6%, transparent)" }}
             contentStyle={{
-              background: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
+              background: "var(--card)",
+              border: "1px solid var(--border)",
               borderRadius: "8px",
-              color: "hsl(var(--foreground))",
+              color: "var(--foreground)",
               fontSize: "12px",
             }}
             formatter={(value) => [value, t("analytics.workouts")]}
@@ -89,7 +89,7 @@ export function WorkoutsPerWeekChart({
             <LabelList
               dataKey="workouts"
               position="top"
-              fill="hsl(var(--foreground))"
+              fill="color-mix(in oklch, var(--foreground) 90%, transparent)"
               fontSize={12}
               formatter={(value) => {
                 const numericValue = Number(value ?? 0);

@@ -61,34 +61,43 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
 
   return (
     <div
-      className="h-[320px] w-full"
+      className="h-[340px] w-full"
       role="img"
       aria-label={t("analytics.weeklyVolume")}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={formatted} margin={{ top: 24, right: 12, left: 8, bottom: 28 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.55)" vertical={false} />
-          <XAxis
-            dataKey="label"
-            interval={0}
-            tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-            axisLine={false}
-            tickLine={false}
+        <BarChart
+          data={formatted}
+          layout="vertical"
+          margin={{ top: 8, right: 36, left: 4, bottom: 8 }}
+        >
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="color-mix(in oklch, var(--border) 55%, transparent)"
+            horizontal={false}
           />
-          <YAxis
-            tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+          <XAxis
+            type="number"
+            tick={{ fontSize: 11, fill: "color-mix(in oklch, var(--foreground) 72%, transparent)" }}
             axisLine={false}
             tickLine={false}
-            width={48}
             allowDecimals={false}
           />
+          <YAxis
+            dataKey="label"
+            type="category"
+            tick={{ fontSize: 11, fill: "color-mix(in oklch, var(--foreground) 78%, transparent)" }}
+            axisLine={false}
+            tickLine={false}
+            width={76}
+          />
           <Tooltip
-            cursor={{ fill: "hsl(var(--foreground) / 0.06)" }}
+            cursor={{ fill: "color-mix(in oklch, var(--foreground) 6%, transparent)" }}
             contentStyle={{
-              background: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
+              background: "var(--card)",
+              border: "1px solid var(--border)",
               borderRadius: "8px",
-              color: "hsl(var(--foreground))",
+              color: "var(--foreground)",
               fontSize: "12px",
             }}
             formatter={(value, _name, item) => [
@@ -97,14 +106,14 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
             ]}
             labelFormatter={(label) => label}
           />
-          <Bar dataKey="sets" radius={[6, 6, 0, 0]} maxBarSize={72}>
+          <Bar dataKey="sets" radius={[0, 8, 8, 0]} maxBarSize={22}>
             {formatted.map((entry) => (
               <Cell key={entry.key} fill={entry.fill} />
             ))}
             <LabelList
               dataKey="sets"
-              position="top"
-              fill="hsl(var(--foreground))"
+              position="right"
+              fill="var(--foreground)"
               fontSize={12}
               formatter={(value) => {
                 const numericValue = Number(value ?? 0);
