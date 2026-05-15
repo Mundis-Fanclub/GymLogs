@@ -15,7 +15,11 @@ import Link from "next/link";
 import { BarChart3, Dumbbell, TrendingDown, TrendingUp, User } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
-import { BODY_PARTS, type BodyPart } from "@/lib/muscle-groups";
+import {
+  BODY_PARTS,
+  getWeeklySetVolumeColor,
+  type BodyPart,
+} from "@/lib/muscle-groups";
 
 const VolumeBarChart = dynamic(
   () => import("@/components/charts/VolumeBarChart").then((mod) => mod.VolumeBarChart),
@@ -241,12 +245,15 @@ function MuscleInsight({
       : part.status === "high"
         ? "border-amber-500/30 bg-amber-500/10"
         : "border-border bg-muted/30";
+  const volumeColor = getWeeklySetVolumeColor(part.sets);
 
   return (
     <div className={`rounded-lg border p-3 ${statusClass}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-medium">{label}</p>
+          <p className="font-medium" style={{ color: volumeColor }}>
+            {label}
+          </p>
           <p className="text-xs text-muted-foreground">
             Ziel: {part.targetMin}-{part.targetMax} Sätze
           </p>
@@ -263,7 +270,9 @@ function MuscleInsight({
       </div>
       <div className="mt-3 flex items-end justify-between gap-3">
         <div>
-          <p className="text-2xl font-semibold">{part.sets}</p>
+          <p className="text-2xl font-semibold" style={{ color: volumeColor }}>
+            {part.sets}
+          </p>
           <p className="text-xs text-muted-foreground">{statusText}</p>
         </div>
         <p className="text-right text-xs text-muted-foreground">

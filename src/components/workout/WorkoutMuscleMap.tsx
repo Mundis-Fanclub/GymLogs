@@ -3,13 +3,13 @@
 import Image from "next/image";
 import {
   BODY_PARTS,
-  BODY_PART_COLORS,
+  getWeeklySetVolumeColor,
   toBodyPart,
   type BodyPart,
 } from "@/lib/muscle-groups";
 import { cn } from "@/lib/utils";
 
-const IMAGE_SRC = "/bodygraph-muscle-map.png";
+const IMAGE_SRC = "/bodygraph-muscle-map-transparent.png";
 
 const BODY_LABELS: Record<BodyPart, string> = {
   chest: "Brust",
@@ -50,14 +50,21 @@ function MaskOverlay({ part, setCounts }: MaskOverlayProps) {
   if (setCount <= 0) return null;
 
   return (
-    <Image
-      src={BODY_PART_MASKS[part]}
-      alt=""
-      fill
-      sizes="(max-width: 430px) 92vw, 380px"
-      className="object-contain"
-      style={{ opacity: getMaskOpacity(setCount) }}
+    <span
       aria-hidden="true"
+      className="absolute inset-0 bg-current"
+      style={{
+        color: getWeeklySetVolumeColor(setCount),
+        maskImage: `url(${BODY_PART_MASKS[part]})`,
+        WebkitMaskImage: `url(${BODY_PART_MASKS[part]})`,
+        maskPosition: "center",
+        WebkitMaskPosition: "center",
+        maskRepeat: "no-repeat",
+        WebkitMaskRepeat: "no-repeat",
+        maskSize: "contain",
+        WebkitMaskSize: "contain",
+        opacity: getMaskOpacity(setCount),
+      }}
     />
   );
 }
@@ -105,7 +112,7 @@ export function WorkoutMuscleMap({
       )}
       <div
         className={cn(
-          "relative mx-auto aspect-[1448/1086] overflow-hidden rounded-[1.65rem] border border-zinc-200 bg-white dark:border-white/10",
+          "relative mx-auto aspect-[1448/1086] overflow-hidden rounded-[1.65rem] border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950",
           compact ? "max-w-24" : "max-w-[380px]"
         )}
         role="img"
@@ -131,15 +138,13 @@ export function WorkoutMuscleMap({
         <figcaption className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
           {BODY_PARTS.map((part) => {
             const setCount = setCounts[part];
-            const color =
-              setCount > 0
-                ? BODY_PART_COLORS[part]
-                : "color-mix(in oklch, var(--muted-foreground) 35%, transparent)";
+            const color = getWeeklySetVolumeColor(setCount);
 
             return (
               <span
                 key={part}
                 className="inline-flex min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background/70 px-2.5 py-2"
+                style={{ color }}
               >
                 <span className="inline-flex min-w-0 items-center gap-2">
                   <span
@@ -148,7 +153,7 @@ export function WorkoutMuscleMap({
                   />
                   <span className="truncate">{BODY_LABELS[part]}</span>
                 </span>
-                <span className="font-semibold text-foreground">{setCount}</span>
+                <span className="font-semibold">{setCount}</span>
               </span>
             );
           })}

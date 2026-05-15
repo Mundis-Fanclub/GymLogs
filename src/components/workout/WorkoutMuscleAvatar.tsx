@@ -1,6 +1,11 @@
 "use client";
 
-import { BODY_PART_COLORS, BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
+import {
+  BODY_PARTS,
+  getWeeklySetVolumeColor,
+  toBodyPart,
+  type BodyPart,
+} from "@/lib/muscle-groups";
 import { cn } from "@/lib/utils";
 
 const BODY_LABELS: Record<BodyPart, string> = {
@@ -21,7 +26,7 @@ interface WorkoutMuscleAvatarProps {
 
 function zoneFill(active: Set<BodyPart>, part: BodyPart) {
   return active.has(part)
-    ? BODY_PART_COLORS[part]
+    ? getWeeklySetVolumeColor(1)
     : "color-mix(in oklch, var(--card) 68%, var(--foreground) 18%)";
 }
 

@@ -14,7 +14,7 @@ import {
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import {
   BODY_PARTS,
-  BODY_PART_COLORS,
+  getWeeklySetVolumeColor,
   toBodyPart,
   type BodyPart,
 } from "@/lib/muscle-groups";
@@ -26,6 +26,76 @@ interface WeekData {
 
 interface VolumeBarChartProps {
   data: WeekData[];
+}
+
+interface FormattedVolumeDatum {
+  key: BodyPart;
+  label: string;
+  sets: number;
+  volume: number;
+  fill: string;
+}
+
+interface ChartTextProps {
+  x?: number;
+  y?: number;
+  payload?: {
+    value?: string;
+  };
+}
+
+interface ChartLabelProps {
+  x?: number;
+  y?: number;
+  width?: number;
+  value?: number | string;
+  payload?: FormattedVolumeDatum;
+}
+
+function VolumeYAxisTick({
+  x = 0,
+  y = 0,
+  payload,
+  data,
+}: ChartTextProps & { data: FormattedVolumeDatum[] }) {
+  const label = String(payload?.value ?? "");
+  const datum = data.find((entry) => entry.label === label);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      dy={4}
+      textAnchor="end"
+      fill={datum?.fill ?? "var(--muted-foreground)"}
+      fontSize={11}
+    >
+      {label}
+    </text>
+  );
+}
+
+function VolumeValueLabel({
+  x = 0,
+  y = 0,
+  width = 0,
+  value,
+  payload,
+}: ChartLabelProps) {
+  const numericValue = Number(value ?? 0);
+
+  return (
+    <text
+      x={x + width + 8}
+      y={y}
+      dy={15}
+      fill={payload?.fill ?? "var(--foreground)"}
+      fontSize={12}
+      fontWeight={600}
+    >
+      {numericValue > 0 ? numericValue : "0"}
+    </text>
+  );
 }
 
 export function VolumeBarChart({ data }: VolumeBarChartProps) {
@@ -56,7 +126,7 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
     label: t(`muscleGroups.${part}`),
     sets: totals[part].sets,
     volume: totals[part].volume,
-    fill: BODY_PART_COLORS[part],
+    fill: getWeeklySetVolumeColor(totals[part].sets),
   }));
 
   return (
@@ -86,7 +156,7 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
           <YAxis
             dataKey="label"
             type="category"
-            tick={{ fontSize: 11, fill: "color-mix(in oklch, var(--foreground) 78%, transparent)" }}
+            tick={<VolumeYAxisTick data={formatted} />}
             axisLine={false}
             tickLine={false}
             width={76}
@@ -113,12 +183,7 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
             <LabelList
               dataKey="sets"
               position="right"
-              fill="var(--foreground)"
-              fontSize={12}
-              formatter={(value) => {
-                const numericValue = Number(value ?? 0);
-                return numericValue > 0 ? numericValue : "0";
-              }}
+              content={<VolumeValueLabel />}
             />
           </Bar>
         </BarChart>
