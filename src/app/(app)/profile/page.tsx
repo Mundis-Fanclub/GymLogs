@@ -28,6 +28,12 @@ import { useConvexUser } from "@/hooks/useConvexUser";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -120,11 +126,11 @@ export default function ProfilePage() {
   );
   const topLogs = useQuery(
     api.logs.getProfileTopLogs,
-    userId ? { userId, viewerId: userId, limit: 5 } : "skip"
+    userId ? { userId, viewerId: undefined, limit: 5 } : "skip"
   );
   const workoutTemplates = useQuery(
     api.workouts.listProfileTemplates,
-    userId ? { userId, viewerId: userId, limit: 12 } : "skip"
+    userId ? { userId, viewerId: undefined, limit: 12 } : "skip"
   );
   const friends = useQuery(api.friends.list, userId ? { userId } : "skip");
   const updateProfile = useMutation(api.users.updateProfile);
@@ -159,6 +165,7 @@ export default function ProfilePage() {
   const [friendError, setFriendError] = useState("");
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [coverPreviewUrl, setCoverPreviewUrl] = useState("");
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [form, setForm] = useState<ProfileForm>({
     name: "",
     username: "",
@@ -225,6 +232,7 @@ export default function ProfilePage() {
   const accentClass = ACCENTS[form.profileAccent] ?? ACCENTS.emerald;
   const displayAvatarUrl = avatarPreviewUrl || form.avatarUrl;
   const displayCoverUrl = coverPreviewUrl || form.coverUrl;
+  const visibleProfile = publicPreview;
 
   if (isLoaded && !userId) {
     return (
@@ -270,6 +278,7 @@ export default function ProfilePage() {
       },
     });
     setSaved(true);
+    setEditProfileOpen(false);
     window.setTimeout(() => setSaved(false), 2200);
   }
 
@@ -365,11 +374,46 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
-          <CardContent className="grid gap-4 p-4 sm:grid-cols-4 sm:p-6">
-            <QuickStat label="Sichtbarkeit" value={form.isPublic ? "Öffentlich" : "Privat"} />
-            <QuickStat label="Nachrichten" value={form.allowMessages ? "Offen" : "Geschlossen"} />
-            <QuickStat label="Plan" value={user?.isPro ? "Pro" : "Free"} />
-            <QuickStat label="Ungelesen" value={String(unreadTotal)} />
+          <CardContent className="space-y-5 p-4 sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button className="flex-1" onClick={() => setEditProfileOpen(true)}>
+                Profil bearbeiten
+              </Button>
+              <Link href={profileUrl} className="flex-1">
+                <Button variant="outline" className="w-full">
+                  Öffentlich ansehen
+                </Button>
+              </Link>
+            </div>
+            {(visibleProfile?.bio || visibleProfile?.location || visibleProfile?.favoriteLift || visibleProfile?.trainingGoal) && (
+              <div className="space-y-3 text-sm">
+                {visibleProfile?.bio && <p className="leading-6">{visibleProfile.bio}</p>}
+                <div className="flex flex-wrap gap-2">
+                  {visibleProfile?.location && <Badge variant="secondary">{visibleProfile.location}</Badge>}
+                  {visibleProfile?.favoriteLift && <Badge variant="secondary">{visibleProfile.favoriteLift}</Badge>}
+                </div>
+                {visibleProfile?.trainingGoal && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">Trainingsziel</p>
+                    <p className="mt-1">{visibleProfile.trainingGoal}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-3">
+              {visibleProfile?.heightCm && <QuickStat label="Größe" value={`${visibleProfile.heightCm} cm`} />}
+              {visibleProfile?.weightKg && <QuickStat label="Gewicht" value={`${visibleProfile.weightKg} kg`} />}
+              {visibleProfile?.birthDate && (
+                <QuickStat label="Geburtsdatum" value={new Date(visibleProfile.birthDate).toLocaleDateString("de-DE")} />
+              )}
+              {visibleProfile?.trainingSummary && (
+                <>
+                  <QuickStat label="Workouts" value={String(visibleProfile.trainingSummary.completedWorkouts)} />
+                  <QuickStat label="Sets" value={String(visibleProfile.trainingSummary.totalSets)} />
+                  <QuickStat label="Frequenz" value={`${visibleProfile.trainingSummary.averageWorkoutsPerWeek}/Woche`} />
+                </>
+              )}
+            </div>
             <div className="grid gap-2 sm:hidden">
               <a href="#messages">
                 <Button variant="outline" className="w-full gap-1.5">
@@ -387,14 +431,15 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="border-b border-border bg-muted/30">
-            <CardTitle>Profil ausbauen</CardTitle>
+        <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Profil bearbeiten</DialogTitle>
             <p className="text-sm text-muted-foreground">
               Avatar, Cover, Trainingssignal und Sichtbarkeit an einer Stelle.
             </p>
-          </CardHeader>
-          <CardContent className="grid gap-4 p-4 sm:grid-cols-2 sm:p-6">
+            </DialogHeader>
+            <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Name">
               <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
             </Field>
@@ -491,12 +536,13 @@ export default function ProfilePage() {
               </Link>
               {saved && <span className="self-center text-sm text-emerald-500">Gespeichert</span>}
             </div>
-          </CardContent>
-        </Card>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <TopLogsCard logs={topLogs} />
 
-        <WorkoutTemplatesCard templates={workoutTemplates} ownerView />
+        <WorkoutTemplatesCard templates={workoutTemplates} />
 
         <Card id="messages" className="scroll-mt-6">
           <CardHeader>

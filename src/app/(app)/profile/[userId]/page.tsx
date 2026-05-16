@@ -16,6 +16,7 @@ import {
   Ruler,
   Scale,
   Send,
+  Share2,
   Sparkles,
   Target,
   Trophy,
@@ -73,6 +74,22 @@ type ProfileWorkoutTemplate = {
   }>;
 };
 
+type ProfilePost = {
+  _id: Id<"social_posts">;
+  body: string;
+  createdAt: number;
+  mediaUrl?: string | null;
+  mediaType?: "image" | "video";
+  likeCount: number;
+  commentCount: number;
+  linkedLog: null | {
+    exerciseName: string | null;
+    weightKg: number;
+    reps: number;
+    score?: number;
+  };
+};
+
 const LIFT_LABELS = {
   bench_press: "Bench Press",
   squat: "Squat",
@@ -85,17 +102,22 @@ export default function PublicProfilePage() {
   const { userId } = useConvexUser();
   const profile = useQuery(api.users.getPublicProfile, {
     userId: viewedUserId,
-    viewerId: userId,
+    viewerId: undefined,
   });
   const topLogs = useQuery(api.logs.getProfileTopLogs, {
     userId: viewedUserId,
-    viewerId: userId,
+    viewerId: undefined,
     limit: 5,
   });
   const workoutTemplates = useQuery(api.workouts.listProfileTemplates, {
     userId: viewedUserId,
-    viewerId: userId,
+    viewerId: undefined,
     limit: 12,
+  });
+  const posts = useQuery(api.social.listByAuthor, {
+    authorId: viewedUserId,
+    viewerId: userId,
+    limit: 30,
   });
   const sendMessage = useMutation(api.messages.send);
   const blockUser = useMutation(api.messages.blockUser);
@@ -104,12 +126,14 @@ export default function PublicProfilePage() {
   const [sent, setSent] = useState(false);
   const [reportReason, setReportReason] = useState("Profil wirkt wie Spam");
   const [showReport, setShowReport] = useState(false);
+  const [showMessageComposer, setShowMessageComposer] = useState(false);
 
   async function submit() {
     if (!userId || !body.trim()) return;
     await sendMessage({ senderId: userId, recipientId: viewedUserId, body });
     setBody("");
     setSent(true);
+    setShowMessageComposer(false);
     window.setTimeout(() => setSent(false), 2200);
   }
 
@@ -133,6 +157,17 @@ export default function PublicProfilePage() {
 
   const isSelf = userId === viewedUserId;
   const accent = ACCENTS[(profile.profileAccent ?? "emerald") as keyof typeof ACCENTS] ?? ACCENTS.emerald;
+  const visibleMetrics = [
+    profile.heightCm ? { icon: Ruler, label: "Größe", value: `${profile.heightCm} cm` } : null,
+    profile.weightKg ? { icon: Scale, label: "Gewicht", value: `${profile.weightKg} kg` } : null,
+    profile.birthDate
+      ? {
+          icon: Calendar,
+          label: "Geburtsdatum",
+          value: new Date(profile.birthDate).toLocaleDateString("de-DE"),
+        }
+      : null,
+  ].filter(Boolean) as Array<{ icon: typeof Ruler; label: string; value: string }>;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -161,6 +196,12 @@ export default function PublicProfilePage() {
               ) : (
                 userId && (
                   <>
+                    {profile.allowMessages && (
+                      <Button onClick={() => setShowMessageComposer((value) => !value)}>
+                        <MessageCircle className="h-4 w-4" />
+                        Nachricht senden
+                      </Button>
+                    )}
                     <Button variant="outline" onClick={() => blockUser({ blockerId: userId, blockedId: viewedUserId })}>
                       <Ban className="h-4 w-4" />
                       Blockieren
@@ -200,11 +241,33 @@ export default function PublicProfilePage() {
                 </div>
               )}
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Metric icon={Ruler} label="Größe" value={profile.heightCm ? `${profile.heightCm} cm` : "Privat"} />
-                <Metric icon={Scale} label="Gewicht" value={profile.weightKg ? `${profile.weightKg} kg` : "Privat"} />
-                <Metric icon={Calendar} label="Geburtsdatum" value={profile.birthDate ? new Date(profile.birthDate).toLocaleDateString("de-DE") : "Privat"} />
-              </div>
+              {showMessageComposer && !isSelf && profile.allowMessages && userId && (
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <div className="mb-2 flex items-center gap-2 font-medium">
+                    <MessageCircle className="h-4 w-4" />
+                    Nachricht senden
+                  </div>
+                  <Textarea value={body} onChange={(event) => setBody(event.target.value)} rows={3} maxLength={600} />
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button size="sm" onClick={submit} disabled={!body.trim()}>
+                      <Send className="h-4 w-4" />
+                      Senden
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowMessageComposer(false)}>
+                      Abbrechen
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {sent && <p className="text-sm text-emerald-500">Nachricht gesendet.</p>}
+
+              {visibleMetrics.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {visibleMetrics.map((metric) => (
+                    <Metric key={metric.label} icon={metric.icon} label={metric.label} value={metric.value} />
+                  ))}
+                </div>
+              )}
 
               {profile.trainingSummary ? (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -213,11 +276,7 @@ export default function PublicProfilePage() {
                   <Metric icon={Trophy} label="Volumen" value={`${Math.round(profile.trainingSummary.totalVolume).toLocaleString("de-DE")} kg`} />
                   <Metric icon={Calendar} label="Frequenz" value={`${profile.trainingSummary.averageWorkoutsPerWeek}/Woche`} />
                 </div>
-              ) : (
-                <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                  Trainingszusammenfassung ist privat.
-                </div>
-              )}
+              ) : null}
 
               {profile.trainingSummary?.bestSet && (
                 <div className="rounded-lg border border-border bg-muted/30 p-4">
@@ -251,26 +310,6 @@ export default function PublicProfilePage() {
         </Card>
       )}
 
-      {!isSelf && profile.allowMessages && userId && (
-        <Card>
-          <CardContent className="space-y-3 p-4 sm:p-6">
-            <div className="flex items-center gap-2 font-medium">
-              <MessageCircle className="h-4 w-4" />
-              Nachricht senden
-            </div>
-            <div className="space-y-1.5">
-              <Label>Nachricht</Label>
-              <Textarea value={body} onChange={(event) => setBody(event.target.value)} rows={4} maxLength={600} />
-            </div>
-            <Button onClick={submit} disabled={!body.trim()}>
-              <Send className="h-4 w-4" />
-              Senden
-            </Button>
-            {sent && <span className="ml-3 text-sm text-emerald-500">Gesendet</span>}
-          </CardContent>
-        </Card>
-      )}
-
       {!userId && !isSelf && (
         <Card>
           <CardContent className="flex items-center gap-3 p-4 text-sm text-muted-foreground">
@@ -279,6 +318,8 @@ export default function PublicProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      {profile.isPublic !== false && <ProfilePostsPanel posts={posts} />}
     </div>
   );
 }
@@ -406,6 +447,79 @@ function WorkoutTemplatesPanel({
         </div>
       )}
     </div>
+  );
+}
+
+function ProfilePostsPanel({ posts }: { posts: ProfilePost[] | undefined }) {
+  return (
+    <section className="space-y-3">
+      <div className="border-b border-border pb-3">
+        <p className="text-sm font-medium">Beiträge</p>
+        <p className="text-xs text-muted-foreground">Neueste zuerst</p>
+      </div>
+      {posts === undefined ? (
+        <p className="text-sm text-muted-foreground">Beiträge werden geladen...</p>
+      ) : posts.length === 0 ? (
+        <div className="flex min-h-44 flex-col items-center justify-center gap-3 rounded-lg border border-border bg-muted/20 p-6 text-center">
+          <MessageCircle className="h-10 w-10 text-muted-foreground" />
+          <div>
+            <p className="font-medium">Noch keine Beiträge</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Wenn Beiträge geteilt werden, erscheinen sie hier.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="divide-y divide-border rounded-lg border border-border bg-card">
+          {posts.map((post) => (
+            <article key={post._id} className="space-y-3 p-4">
+              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                <time title={new Date(post.createdAt).toLocaleString("de-DE")}>
+                  {new Date(post.createdAt).toLocaleDateString("de-DE")}
+                </time>
+                <div className="flex items-center gap-4">
+                  <span>{post.likeCount} Likes</span>
+                  <span>{post.commentCount} Kommentare</span>
+                </div>
+              </div>
+              {post.body && <p className="whitespace-pre-wrap text-sm leading-6">{post.body}</p>}
+              {post.linkedLog && (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                  <p className="font-medium">{post.linkedLog.exerciseName ?? "Top Log"}</p>
+                  <p className="text-muted-foreground">
+                    {post.linkedLog.weightKg} kg x {post.linkedLog.reps} · Score {post.linkedLog.score ?? "-"}
+                  </p>
+                </div>
+              )}
+              {post.mediaUrl && (
+                <div className="overflow-hidden rounded-lg border border-border">
+                  {post.mediaType === "video" ? (
+                    <video src={post.mediaUrl} controls className="max-h-[32rem] w-full bg-black object-contain" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={post.mediaUrl} alt="" className="max-h-[32rem] w-full object-cover" />
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-5 text-sm text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <Sparkles className="h-4 w-4" />
+                  {post.likeCount}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <MessageCircle className="h-4 w-4" />
+                  {post.commentCount}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Share2 className="h-4 w-4" />
+                  Teilen
+                </span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

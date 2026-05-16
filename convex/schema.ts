@@ -258,11 +258,14 @@ export default defineSchema({
 
   social_comments: defineTable({
     postId: v.id("social_posts"),
+    parentCommentId: v.optional(v.id("social_comments")),
     authorId: v.id("users"),
     body: v.string(),
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   })
     .index("by_post", ["postId", "createdAt"])
+    .index("by_post_and_parent_comment", ["postId", "parentCommentId", "createdAt"])
     .index("by_author", ["authorId", "createdAt"]),
 
   social_likes: defineTable({
@@ -273,6 +276,15 @@ export default defineSchema({
     .index("by_post", ["postId", "createdAt"])
     .index("by_user", ["userId", "createdAt"])
     .index("by_post_and_user", ["postId", "userId"]),
+
+  social_comment_likes: defineTable({
+    commentId: v.id("social_comments"),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_comment", ["commentId", "createdAt"])
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_comment_and_user", ["commentId", "userId"]),
 
   log_brackets: defineTable({
     liftType: v.union(
