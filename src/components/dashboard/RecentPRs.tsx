@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -14,7 +15,7 @@ interface RecentPRsProps {
 
 export function RecentPRs({ userId }: RecentPRsProps) {
   const { t } = useAppPreferences();
-  const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const since = useMemo(() => Date.now() - 30 * 24 * 60 * 60 * 1000, []);
   const prs = useQuery(api.prs.getRecent, { userId, since });
   const typeLabels = {
     weight: t("prs.heaviestWeight"),

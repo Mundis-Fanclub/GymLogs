@@ -27,8 +27,8 @@ export function BottomNav() {
   const { t } = useAppPreferences();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-2 backdrop-blur md:hidden">
-      <div className="grid grid-cols-6 gap-1">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur md:hidden">
+      <div className="mx-auto grid w-full max-w-md grid-cols-[repeat(6,minmax(0,1fr))] gap-1">
         {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
@@ -38,13 +38,13 @@ export function BottomNav() {
               active={active}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-[0.68rem] font-medium transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97]",
+                "flex min-h-[3.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-[0.62rem] font-medium leading-none transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] min-[390px]:text-[0.66rem]",
                 active
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-primary text-primary-foreground shadow-sm shadow-black/15"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-[1.05rem] w-[1.05rem]" />
               <span className="max-w-full truncate">{t(labelKey)}</span>
             </AppNavLink>
           );

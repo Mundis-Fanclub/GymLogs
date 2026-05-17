@@ -28,13 +28,13 @@ export function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-3 backdrop-blur sm:px-5 md:px-6">
-      <div className="flex min-w-0 items-center gap-3">
+    <header className="sticky top-0 z-30 grid h-[3.75rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-background/95 px-3 backdrop-blur sm:h-14 sm:px-5 md:px-6">
+      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
         <Link href="/dashboard" className="flex min-w-0 items-center gap-2 md:hidden">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground sm:h-8 sm:w-8">
             <Dumbbell className="h-4 w-4" />
           </div>
-          <span className="truncate font-heading text-sm">{t("common.appName")}</span>
+          <span className="truncate text-sm font-semibold leading-none sm:font-heading">{t("common.appName")}</span>
         </Link>
         <div className="hidden md:block">
           <p className="truncate text-sm font-medium">{t("topbar.title")}</p>
@@ -43,7 +43,7 @@ export function TopBar() {
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
         <Button
           type="button"
           size="icon-sm"
@@ -51,7 +51,7 @@ export function TopBar() {
           onClick={toggleLocale}
           aria-label={t("common.openLanguageMenu")}
           title={t("common.openLanguageMenu")}
-          className="rounded-full font-heading text-[0.65rem]"
+          className="hidden rounded-full font-heading text-[0.65rem] lg:inline-flex"
         >
           <span aria-hidden="true">{LOCALE_FLAGS[locale]}</span>
         </Button>
@@ -66,7 +66,7 @@ export function TopBar() {
           title={
             theme === "dark" ? t("common.switchToLight") : t("common.switchToDark")
           }
-          className="rounded-full"
+          className="hidden rounded-full lg:inline-flex"
         >
           {theme === "dark" ? (
             <Sun className="h-4 w-4" />
@@ -77,7 +77,7 @@ export function TopBar() {
         <Button
           size="sm"
           variant="outline"
-          className="hidden gap-1.5 !border-amber-300 !bg-amber-300 !text-slate-950 hover:!bg-amber-200 sm:inline-flex"
+          className="hidden gap-1.5 !border-amber-300 !bg-amber-300 !text-slate-950 hover:!bg-amber-200 lg:inline-flex"
         >
           <Crown className="w-4 h-4" />
           <span className="hidden sm:inline">{t("common.proPrice")}</span>
@@ -86,15 +86,15 @@ export function TopBar() {
           size="icon-sm"
           onClick={handleNewWorkout}
           aria-label={t("common.newWorkout")}
-          className="sm:hidden"
+          className="order-1 lg:hidden"
         >
           <Plus className="w-4 h-4" />
         </Button>
-        <Button size="sm" onClick={handleNewWorkout} className="hidden gap-1.5 sm:inline-flex">
+        <Button size="sm" onClick={handleNewWorkout} className="hidden gap-1.5 lg:inline-flex">
           <Plus className="w-4 h-4" />
           <span>{t("common.newWorkout")}</span>
         </Button>
-        <Link href="/profile">
+        <Link href="/profile" className="order-2">
           <Button
             type="button"
             size="icon-sm"

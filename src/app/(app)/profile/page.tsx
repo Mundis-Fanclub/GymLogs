@@ -341,22 +341,22 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="space-y-5">
+    <div className="mx-auto grid max-w-7xl gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="space-y-4 sm:space-y-5">
         <Card className="overflow-hidden">
           <div
-            className={`relative min-h-44 bg-gradient-to-br ${accentClass}`}
+            className={`relative min-h-40 bg-gradient-to-br bg-cover bg-center sm:min-h-44 ${accentClass}`}
             style={displayCoverUrl ? { backgroundImage: `url(${displayCoverUrl})` } : undefined}
           >
-            <div className="absolute inset-0 bg-black/20" />
-            <div className="absolute bottom-4 left-4 right-4 flex items-end gap-4">
+            <div className="absolute inset-0 bg-black/25" />
+            <div className="absolute bottom-3 left-3 right-3 flex items-end gap-3 sm:bottom-4 sm:left-4 sm:right-4 sm:gap-4">
               <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="lg" />
               <div className="min-w-0 flex-1 text-white">
-                <h1 className="flex items-center gap-2 truncate text-3xl font-semibold">
+                <h1 className="flex items-center gap-2 truncate text-[1.65rem] font-semibold leading-tight sm:text-3xl">
                   {form.name || "GymLogs User"}
-                  {user?.isPro && <Crown className="h-6 w-6 shrink-0 text-amber-300" />}
+                  {user?.isPro && <Crown className="h-5 w-5 shrink-0 text-amber-300 sm:h-6 sm:w-6" />}
                 </h1>
-                <p className="text-sm text-white/80">@{form.username || "username"}</p>
+                <p className="mt-0.5 truncate text-xs text-white/80 sm:text-sm">@{form.username || "username"}</p>
               </div>
               <div className="hidden flex-wrap gap-2 sm:flex">
                 <a href="#messages">
@@ -374,8 +374,8 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
-          <CardContent className="space-y-5 p-4 sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row">
+          <CardContent className="space-y-4 p-3.5 sm:space-y-5 sm:p-6">
+            <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
               <Button className="flex-1" onClick={() => setEditProfileOpen(true)}>
                 Profil bearbeiten
               </Button>
@@ -387,20 +387,20 @@ export default function ProfilePage() {
             </div>
             {(visibleProfile?.bio || visibleProfile?.location || visibleProfile?.favoriteLift || visibleProfile?.trainingGoal) && (
               <div className="space-y-3 text-sm">
-                {visibleProfile?.bio && <p className="leading-6">{visibleProfile.bio}</p>}
+                {visibleProfile?.bio && <p className="leading-6 text-muted-foreground">{visibleProfile.bio}</p>}
                 <div className="flex flex-wrap gap-2">
                   {visibleProfile?.location && <Badge variant="secondary">{visibleProfile.location}</Badge>}
                   {visibleProfile?.favoriteLift && <Badge variant="secondary">{visibleProfile.favoriteLift}</Badge>}
                 </div>
                 {visibleProfile?.trainingGoal && (
-                  <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-xs text-muted-foreground">Trainingsziel</p>
-                    <p className="mt-1">{visibleProfile.trainingGoal}</p>
+                  <div className="rounded-lg border border-border bg-muted/25 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Trainingsziel</p>
+                    <p className="mt-1 leading-5">{visibleProfile.trainingGoal}</p>
                   </div>
                 )}
               </div>
             )}
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
               {visibleProfile?.heightCm && <QuickStat label="Größe" value={`${visibleProfile.heightCm} cm`} />}
               {visibleProfile?.weightKg && <QuickStat label="Gewicht" value={`${visibleProfile.weightKg} kg`} />}
               {visibleProfile?.birthDate && (
@@ -414,7 +414,7 @@ export default function ProfilePage() {
                 </>
               )}
             </div>
-            <div className="grid gap-2 sm:hidden">
+            <div className="grid grid-cols-2 gap-2 sm:hidden">
               <a href="#messages">
                 <Button variant="outline" className="w-full gap-1.5">
                   Nachrichten
@@ -1018,9 +1018,9 @@ function MediaUpload({
 }
 
 function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "md" | "lg" }) {
-  const classes = size === "lg" ? "h-24 w-24 text-3xl" : "h-11 w-11 text-base";
+  const classes = size === "lg" ? "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl" : "h-11 w-11 text-base";
   return (
-    <div className={`${classes} flex shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-background bg-muted font-semibold`}>
+    <div className={`${classes} flex shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-background bg-muted font-semibold shadow-sm shadow-black/20 sm:border-4`}>
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -1042,7 +1042,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function PrivacyToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+    <label className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border bg-muted/25 px-3 py-2.5 text-sm">
       <span>{label}</span>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 accent-primary" />
     </label>
@@ -1051,16 +1051,16 @@ function PrivacyToggle({ label, checked, onChange }: { label: string; checked: b
 
 function QuickStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border bg-muted/30 p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-semibold">{value}</p>
+    <div className="min-h-[4.75rem] rounded-lg border border-border bg-muted/25 p-3">
+      <p className="text-[0.72rem] font-medium uppercase leading-none tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-2 text-base font-semibold leading-tight">{value}</p>
     </div>
   );
 }
 
 function PreviewRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+    <div className="flex min-h-11 items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-medium">{value}</span>
     </div>

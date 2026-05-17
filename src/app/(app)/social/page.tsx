@@ -150,6 +150,13 @@ export default function SocialPage() {
 
   const composerExpanded = composerOpen || body.length > 0 || Boolean(mediaStorageId) || Boolean(mediaPreviewUrl);
 
+  function openCommentComposer(postId: Id<"social_posts">) {
+    setOpenCommentPostId(postId);
+    window.setTimeout(() => {
+      document.getElementById(`comment-input-${postId}`)?.focus();
+    }, 0);
+  }
+
   const composerForm = (
     <div className="min-w-0 space-y-3">
       {!composerExpanded ? (
@@ -538,7 +545,7 @@ export default function SocialPage() {
                     <button
                       type="button"
                       className="inline-flex items-center gap-1.5 text-sm transition hover:text-foreground"
-                      onClick={() => setOpenCommentPostId(openCommentPostId === post._id ? null : post._id)}
+                      onClick={() => openCommentComposer(post._id)}
                     >
                       <MessageCircle className="h-4 w-4" />
                       <span>{post.commentCount}</span>
@@ -565,62 +572,46 @@ export default function SocialPage() {
                     </button>
                   </div>
 
-                  <details className="group rounded-lg border border-border bg-muted/20 sm:hidden">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
-                      <span className="inline-flex items-center gap-3 text-muted-foreground">
-                        <span className="inline-flex items-center gap-1">
-                          <MessageCircle className="h-4 w-4" />
-                          {post.commentCount}
-                        </span>
-                        <span className={`inline-flex items-center gap-1 ${post.likedByViewer ? "text-rose-500" : ""}`}>
-                          <Heart className={`h-4 w-4 ${post.likedByViewer ? "fill-current" : ""}`} />
-                          {post.likeCount}
-                        </span>
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-muted-foreground">
-                        Aktionen
-                        <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
-                      </span>
-                    </summary>
-                    <div className="grid gap-1 border-t border-border p-2">
-                      <button
-                        type="button"
-                        className="flex h-9 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                        onClick={() => setOpenCommentPostId(openCommentPostId === post._id ? null : post._id)}
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        Antworten
-                      </button>
-                      <button
-                        type="button"
-                        className={`flex h-9 items-center gap-2 rounded-md px-2 text-sm transition hover:bg-muted ${
-                          post.likedByViewer ? "text-rose-500" : "text-muted-foreground hover:text-rose-500"
-                        }`}
-                        onClick={() => userId && toggleLike({ userId, postId: post._id })}
-                      >
-                        <Heart className={`h-4 w-4 ${post.likedByViewer ? "fill-current" : ""}`} />
-                        {post.likedByViewer ? "Like entfernen" : "Liken"}
-                      </button>
-                      <button
-                        type="button"
-                        className="flex h-9 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                        aria-label="Repost"
-                      >
-                        <Repeat2 className="h-4 w-4" />
-                        Repost
-                      </button>
-                      <button
-                        type="button"
-                        className="flex h-9 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                        onClick={() => setOpenSharePostId(openSharePostId === post._id ? null : post._id)}
-                      >
-                        <Share2 className="h-4 w-4" />
-                        Teilen
-                      </button>
-                    </div>
-                  </details>
+                  <div className="grid grid-cols-4 gap-1 rounded-lg border border-border bg-muted/20 p-1 sm:hidden">
+                    <button
+                      type="button"
+                      className="flex min-h-10 items-center justify-center gap-1 rounded-md text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                      onClick={() => openCommentComposer(post._id)}
+                      aria-label="Kommentieren"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      <span>{post.commentCount}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex min-h-10 items-center justify-center gap-1 rounded-md text-sm transition hover:bg-muted ${
+                        post.likedByViewer ? "text-rose-500" : "text-muted-foreground hover:text-rose-500"
+                      }`}
+                      onClick={() => userId && toggleLike({ userId, postId: post._id })}
+                      aria-label={post.likedByViewer ? "Like entfernen" : "Liken"}
+                      aria-pressed={post.likedByViewer}
+                    >
+                      <Heart className={`h-4 w-4 ${post.likedByViewer ? "fill-current" : ""}`} />
+                      <span>{post.likeCount}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="flex min-h-10 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                      aria-label="Repost"
+                    >
+                      <Repeat2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className="flex min-h-10 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                      onClick={() => setOpenSharePostId(openSharePostId === post._id ? null : post._id)}
+                      aria-label="Teilen"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
+                  </div>
 
-                  {post.comments.length > 0 && (
+                  {post.comments.length > 0 && openCommentPostId !== post._id && (
                     <details className="group rounded-lg border border-border sm:hidden">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
                         <span>Kommentare</span>
@@ -632,6 +623,12 @@ export default function SocialPage() {
                     </details>
                   )}
 
+                  {post.comments.length > 0 && openCommentPostId === post._id && (
+                    <div className="space-y-3 rounded-lg border border-border p-3 sm:hidden">
+                      {post.comments.map((comment) => renderComment(comment, post._id))}
+                    </div>
+                  )}
+
                   {post.comments.length > 0 && (
                     <div className="hidden space-y-3 border-t border-border pt-3 sm:block">
                       {post.comments.map((comment) => renderComment(comment, post._id))}
@@ -641,6 +638,7 @@ export default function SocialPage() {
                   {openCommentPostId === post._id && (
                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                       <Input
+                        id={`comment-input-${post._id}`}
                         placeholder="Antwort schreiben..."
                         value={comments[post._id] ?? ""}
                         onChange={(event) => setComments({ ...comments, [post._id]: event.target.value })}
