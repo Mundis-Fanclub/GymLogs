@@ -1,6 +1,11 @@
 "use client";
 
-import { BODY_PART_COLORS, BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
+import {
+  BODY_PARTS,
+  getWeeklySetVolumeColor,
+  toBodyPart,
+  type BodyPart,
+} from "@/lib/muscle-groups";
 import { cn } from "@/lib/utils";
 
 const BODY_LABELS: Record<BodyPart, string> = {
@@ -10,6 +15,7 @@ const BODY_LABELS: Record<BodyPart, string> = {
   triceps: "Trizeps",
   core: "Core",
   legs: "Beine",
+  glutes: "Glutes",
   shoulders: "Schultern",
   other: "Sonstiges",
 };
@@ -20,7 +26,9 @@ interface WorkoutMuscleAvatarProps {
 }
 
 function zoneFill(active: Set<BodyPart>, part: BodyPart) {
-  return active.has(part) ? BODY_PART_COLORS[part] : "hsl(var(--muted))";
+  return active.has(part)
+    ? getWeeklySetVolumeColor(1)
+    : "color-mix(in oklch, var(--card) 68%, var(--foreground) 18%)";
 }
 
 function zoneOpacity(active: Set<BodyPart>, part: BodyPart) {
@@ -58,9 +66,9 @@ export function WorkoutMuscleAvatar({
             ? `Trainierte Muskelgruppen: ${activeLabel}`
             : "Keine Muskelgruppen markiert"}
         </title>
-        <rect width="256" height="256" rx="44" fill="hsl(var(--muted) / 0.32)" />
+        <rect width="256" height="256" rx="44" fill="color-mix(in oklch, var(--muted) 55%, transparent)" />
 
-        <circle cx="128" cy="35" r="19" fill="hsl(var(--muted-foreground) / 0.55)" />
+        <circle cx="128" cy="35" r="19" fill="color-mix(in oklch, var(--muted-foreground) 55%, transparent)" />
         <path
           d="M83 66c14-12 76-12 90 0l-14 44H97L83 66Z"
           fill={zoneFill(active, "shoulders")}
@@ -125,20 +133,20 @@ export function WorkoutMuscleAvatar({
         <path
           d="M91 70c21 16 53 16 74 0"
           fill="none"
-          stroke="hsl(var(--background) / 0.75)"
+          stroke="color-mix(in oklch, var(--background) 75%, transparent)"
           strokeLinecap="round"
           strokeWidth="5"
         />
         <path
           d="M128 74v96M96 126h64M103 173h50"
           fill="none"
-          stroke="hsl(var(--background) / 0.55)"
+          stroke="color-mix(in oklch, var(--background) 55%, transparent)"
           strokeLinecap="round"
           strokeWidth="4"
         />
         <path
           d="M94 236h28M134 236h28"
-          stroke="hsl(var(--muted-foreground) / 0.55)"
+          stroke="color-mix(in oklch, var(--muted-foreground) 55%, transparent)"
           strokeLinecap="round"
           strokeWidth="8"
         />

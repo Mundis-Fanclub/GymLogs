@@ -6,7 +6,8 @@
       "Read(//Users/buki/.nvm/versions/**)",
       "Read(//Users/buki/**)",
       "Read(//Users/buki/.volta/**)",
-      "Read(//usr/bin/**)"
+      "Read(//usr/bin/**)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

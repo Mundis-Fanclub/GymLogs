@@ -30,39 +30,39 @@ export function WeightProgressChart({ data }: WeightProgressChartProps) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={formatted} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
         <XAxis
           dataKey="label"
-          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          tick={{ fontSize: 11, fill: "color-mix(in oklch, var(--foreground) 76%, transparent)" }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          tick={{ fontSize: 11, fill: "color-mix(in oklch, var(--foreground) 76%, transparent)" }}
           axisLine={false}
           tickLine={false}
         />
         <Tooltip
           contentStyle={{
-            background: "hsl(var(--card))",
-            border: "1px solid hsl(var(--border))",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
             borderRadius: "6px",
             fontSize: "12px",
           }}
-          labelStyle={{ color: "hsl(var(--foreground))" }}
+          labelStyle={{ color: "var(--foreground)" }}
         />
         <Line
           type="monotone"
           dataKey="weight"
-          stroke="hsl(var(--primary))"
+          stroke="var(--primary)"
           strokeWidth={2}
-          dot={{ r: 3, fill: "hsl(var(--primary))" }}
+          dot={{ r: 3, fill: "var(--primary)" }}
           name="Weight (kg)"
         />
         <Line
           type="monotone"
           dataKey="e1rm"
-          stroke="hsl(var(--muted-foreground))"
+          stroke="var(--muted-foreground)"
           strokeWidth={1.5}
           strokeDasharray="4 2"
           dot={false}
