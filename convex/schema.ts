@@ -246,21 +246,29 @@ export default defineSchema({
   social_posts: defineTable({
     authorId: v.id("users"),
     body: v.string(),
+    bodyAfter: v.optional(v.string()),
     mediaStorageId: v.optional(v.id("_storage")),
     mediaUrl: v.optional(v.string()),
-    mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
+    mediaType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("gif"))),
+    mediaSize: v.optional(v.union(v.literal("sm"), v.literal("md"), v.literal("lg"))),
+    mediaScale: v.optional(v.number()),
     linkedSubmissionId: v.optional(v.id("log_submissions")),
+    repostOfPostId: v.optional(v.id("social_posts")),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
     .index("by_created", ["createdAt"])
-    .index("by_author", ["authorId", "createdAt"]),
+    .index("by_author", ["authorId", "createdAt"])
+    .index("by_repost", ["repostOfPostId", "createdAt"]),
 
   social_comments: defineTable({
     postId: v.id("social_posts"),
     parentCommentId: v.optional(v.id("social_comments")),
     authorId: v.id("users"),
     body: v.string(),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(v.union(v.literal("gif"))),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })

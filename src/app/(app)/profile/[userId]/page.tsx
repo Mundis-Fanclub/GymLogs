@@ -79,7 +79,7 @@ type ProfilePost = {
   body: string;
   createdAt: number;
   mediaUrl?: string | null;
-  mediaType?: "image" | "video";
+  mediaType?: "image" | "video" | "gif";
   likeCount: number;
   commentCount: number;
   linkedLog: null | {

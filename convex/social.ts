@@ -3,7 +3,9 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
-const mediaType = v.union(v.literal("image"), v.literal("video"));
+const mediaType = v.union(v.literal("image"), v.literal("video"), v.literal("gif"));
+const mediaSize = v.union(v.literal("sm"), v.literal("md"), v.literal("lg"));
+const commentMediaType = v.union(v.literal("gif"));
 
 async function userPreview(ctx: QueryCtx, user: Doc<"users"> | null) {
   if (!user) return null;
@@ -20,6 +22,94 @@ async function userPreview(ctx: QueryCtx, user: Doc<"users"> | null) {
 async function mediaUrl(ctx: QueryCtx, post: Doc<"social_posts">) {
   if (post.mediaStorageId) return await ctx.storage.getUrl(post.mediaStorageId);
   return post.mediaUrl;
+}
+
+async function commentMediaUrl(ctx: QueryCtx, comment: Doc<"social_comments">) {
+  if (comment.mediaStorageId) return await ctx.storage.getUrl(comment.mediaStorageId);
+  return comment.mediaUrl;
+}
+
+async function postCounts(ctx: QueryCtx, postId: Id<"social_posts">) {
+  const [likes, comments, reposts] = await Promise.all([
+    ctx.db
+      .query("social_likes")
+      .withIndex("by_post", (q) => q.eq("postId", postId))
+      .take(500),
+    ctx.db
+      .query("social_comments")
+      .withIndex("by_post", (q) => q.eq("postId", postId))
+      .take(500),
+    ctx.db
+      .query("social_posts")
+      .withIndex("by_repost", (q) => q.eq("repostOfPostId", postId))
+      .take(500),
+  ]);
+
+  return {
+    likeCount: likes.length,
+    commentCount: comments.length,
+    repostCount: reposts.length,
+  };
+}
+
+async function linkedLogPreview(ctx: QueryCtx, post: Doc<"social_posts">) {
+  if (!post.linkedSubmissionId) return null;
+  const linkedSubmission = await ctx.db.get(post.linkedSubmissionId);
+  if (!linkedSubmission) return null;
+  const exercise = await ctx.db.get(linkedSubmission.exerciseId);
+
+  return {
+    exerciseName: exercise?.name ?? linkedSubmission.liftType,
+    liftType: linkedSubmission.liftType,
+    weightKg: linkedSubmission.weightKg,
+    reps: linkedSubmission.reps,
+    score: linkedSubmission.score,
+    status: linkedSubmission.status,
+  };
+}
+
+async function viewerRepost(ctx: QueryCtx, postId: Id<"social_posts">, viewerId: Id<"users"> | undefined) {
+  if (!viewerId) return null;
+  const reposts = await ctx.db
+    .query("social_posts")
+    .withIndex("by_repost", (q) => q.eq("repostOfPostId", postId))
+    .take(500);
+  return reposts.find((post) => post.authorId === viewerId) ?? null;
+}
+
+async function renderPostSummary(ctx: QueryCtx, post: Doc<"social_posts">, viewerId: Id<"users"> | undefined) {
+  const [author, viewerLike, viewerRepostPost, counts, repostOf] = await Promise.all([
+    ctx.db.get(post.authorId),
+    viewerId
+      ? ctx.db
+          .query("social_likes")
+          .withIndex("by_post_and_user", (q) =>
+            q.eq("postId", post._id).eq("userId", viewerId)
+          )
+          .unique()
+      : null,
+    viewerRepost(ctx, post._id, viewerId),
+    postCounts(ctx, post._id),
+    post.repostOfPostId ? ctx.db.get(post.repostOfPostId) : null,
+  ]);
+
+  return {
+    ...post,
+    mediaUrl: await mediaUrl(ctx, post),
+    author: await userPreview(ctx, author),
+    likedByViewer: Boolean(viewerLike),
+    repostedByViewer: Boolean(viewerRepostPost),
+    ...counts,
+    repostOf: repostOf
+      ? {
+          ...repostOf,
+          mediaUrl: await mediaUrl(ctx, repostOf),
+          author: await userPreview(ctx, await ctx.db.get(repostOf.authorId)),
+          linkedLog: await linkedLogPreview(ctx, repostOf),
+        }
+      : null,
+    linkedLog: await linkedLogPreview(ctx, post),
+  };
 }
 
 async function renderComment(
@@ -72,6 +162,7 @@ async function renderComment(
       return {
         ...reply,
         author: await userPreview(ctx, replyAuthor),
+        mediaUrl: await commentMediaUrl(ctx, reply),
         likeCount: replyLikes.length,
         likedByViewer: Boolean(replyViewerLike),
         replies: [],
@@ -82,6 +173,7 @@ async function renderComment(
   return {
     ...comment,
     author: await userPreview(ctx, author),
+    mediaUrl: await commentMediaUrl(ctx, comment),
     likeCount: likes.length,
     likedByViewer: Boolean(viewerLike),
     replies: renderedReplies,
@@ -116,25 +208,48 @@ export const createPost = mutation({
   args: {
     authorId: v.id("users"),
     body: v.string(),
+    bodyAfter: v.optional(v.string()),
     mediaStorageId: v.optional(v.id("_storage")),
     mediaUrl: v.optional(v.string()),
     mediaType: v.optional(mediaType),
+    mediaSize: v.optional(mediaSize),
+    mediaScale: v.optional(v.number()),
     linkedSubmissionId: v.optional(v.id("log_submissions")),
+    repostOfPostId: v.optional(v.id("social_posts")),
   },
   handler: async (ctx, args) => {
     const body = args.body.trim();
-    if (!body && !args.mediaStorageId && !args.mediaUrl && !args.linkedSubmissionId) {
+    const bodyAfter = args.bodyAfter?.trim();
+    if (
+      !body &&
+      !bodyAfter &&
+      !args.mediaStorageId &&
+      !args.mediaUrl &&
+      !args.linkedSubmissionId &&
+      !args.repostOfPostId
+    ) {
       throw new Error("Post needs text, media, or a top log.");
     }
     if (body.length > 1200) throw new Error("Post text is too long.");
+    if (args.repostOfPostId) {
+      const repostedPost = await ctx.db.get(args.repostOfPostId);
+      if (!repostedPost) throw new Error("Post not found.");
+      if (repostedPost.authorId === args.authorId) throw new Error("You cannot repost your own post.");
+      const existingRepost = await viewerRepost(ctx, args.repostOfPostId, args.authorId);
+      if (existingRepost) throw new Error("You already reposted this post.");
+    }
 
     return await ctx.db.insert("social_posts", {
       authorId: args.authorId,
       body,
+      bodyAfter,
       mediaStorageId: args.mediaStorageId,
       mediaUrl: args.mediaUrl?.trim().slice(0, 500),
       mediaType: args.mediaType,
+      mediaSize: args.mediaSize,
+      mediaScale: args.mediaScale ? Math.min(100, Math.max(35, args.mediaScale)) : undefined,
       linkedSubmissionId: args.linkedSubmissionId,
+      repostOfPostId: args.repostOfPostId,
       createdAt: Date.now(),
     });
   },
@@ -152,65 +267,56 @@ export const listFeed = query({
       .order("desc")
       .take(args.limit ?? 30);
 
-    return await Promise.all(
-      posts.map(async (post) => {
-        const [author, likes, comments, viewerLike, linkedSubmission] = await Promise.all([
-          ctx.db.get(post.authorId),
-          ctx.db
-            .query("social_likes")
-            .withIndex("by_post", (q) => q.eq("postId", post._id))
-            .take(200),
-          ctx.db
-            .query("social_comments")
-            .withIndex("by_post_and_parent_comment", (q) =>
-              q.eq("postId", post._id).eq("parentCommentId", undefined)
-            )
-            .order("asc")
-            .take(6),
-          args.viewerId
-            ? ctx.db
-                .query("social_likes")
-                .withIndex("by_post_and_user", (q) =>
-                  q.eq("postId", post._id).eq("userId", args.viewerId!)
-                )
-                .unique()
-            : null,
-          post.linkedSubmissionId ? ctx.db.get(post.linkedSubmissionId) : null,
-        ]);
+    return await Promise.all(posts.map((post) => renderPostSummary(ctx, post, args.viewerId)));
+  },
+});
 
-        const renderedComments = await Promise.all(
-          comments.map(async (comment) => renderComment(ctx, comment, args.viewerId, 4))
-        );
+export const getPostThread = query({
+  args: {
+    postId: v.id("social_posts"),
+    viewerId: v.optional(v.id("users")),
+    commentLimit: v.optional(v.number()),
+    replyLimit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!post) return null;
 
-        let linkedExerciseName = null as string | null;
-        if (linkedSubmission) {
-          const exercise = await ctx.db.get(linkedSubmission.exerciseId);
-          linkedExerciseName = exercise?.name ?? linkedSubmission.liftType;
-        }
+    const rootComments = await ctx.db
+      .query("social_comments")
+      .withIndex("by_post_and_parent_comment", (q) =>
+        q.eq("postId", args.postId).eq("parentCommentId", undefined)
+      )
+      .take(args.commentLimit ?? 40);
+
+    const renderedComments = await Promise.all(
+      rootComments.map(async (comment) => {
+        const rendered = await renderComment(ctx, comment, args.viewerId, args.replyLimit ?? 12);
+        const allReplies = await ctx.db
+          .query("social_comments")
+          .withIndex("by_post_and_parent_comment", (q) =>
+            q.eq("postId", comment.postId).eq("parentCommentId", comment._id)
+          )
+          .take(200);
 
         return {
-          ...post,
-          mediaUrl: await mediaUrl(ctx, post),
-          author: await userPreview(ctx, author),
-          likedByViewer: Boolean(viewerLike),
-          likeCount: likes.length,
-          commentCount:
-            renderedComments.length +
-            renderedComments.reduce((count, comment) => count + comment.replies.length, 0),
-          comments: renderedComments,
-          linkedLog: linkedSubmission
-            ? {
-                exerciseName: linkedExerciseName,
-                liftType: linkedSubmission.liftType,
-                weightKg: linkedSubmission.weightKg,
-                reps: linkedSubmission.reps,
-                score: linkedSubmission.score,
-                status: linkedSubmission.status,
-              }
-            : null,
+          ...rendered,
+          replyCount: allReplies.length,
+          hiddenReplyCount: Math.max(0, allReplies.length - rendered.replies.length),
+          score: rendered.likeCount + allReplies.length * 2,
         };
       })
     );
+
+    renderedComments.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.createdAt - a.createdAt;
+    });
+
+    return {
+      post: await renderPostSummary(ctx, post, args.viewerId),
+      comments: renderedComments,
+    };
   },
 });
 
@@ -321,18 +427,26 @@ export const updatePost = mutation({
     userId: v.id("users"),
     postId: v.id("social_posts"),
     body: v.string(),
+    bodyAfter: v.optional(v.string()),
+    mediaSize: v.optional(mediaSize),
+    mediaScale: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const post = await ctx.db.get(args.postId);
     if (!post) throw new Error("Post not found.");
     if (post.authorId !== args.userId) throw new Error("Not allowed.");
     const body = args.body.trim();
-    if (!body && !post.mediaStorageId && !post.mediaUrl && !post.linkedSubmissionId) {
+    const bodyAfter = args.bodyAfter?.trim();
+    if (!body && !bodyAfter && !post.mediaStorageId && !post.mediaUrl && !post.linkedSubmissionId) {
       throw new Error("Post needs text, media, or a top log.");
     }
     if (body.length > 1200) throw new Error("Post text is too long.");
+    if ((bodyAfter?.length ?? 0) > 1200) throw new Error("Post text is too long.");
     await ctx.db.patch(args.postId, {
       body,
+      bodyAfter,
+      mediaSize: args.mediaSize,
+      mediaScale: args.mediaScale ? Math.min(100, Math.max(35, args.mediaScale)) : undefined,
       updatedAt: Date.now(),
     });
     return true;
@@ -385,10 +499,15 @@ export const addComment = mutation({
     postId: v.id("social_posts"),
     parentCommentId: v.optional(v.id("social_comments")),
     body: v.string(),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(commentMediaType),
   },
   handler: async (ctx, args) => {
     const body = args.body.trim();
-    if (body.length === 0) throw new Error("Comment cannot be empty.");
+    if (body.length === 0 && !args.mediaStorageId && !args.mediaUrl) {
+      throw new Error("Comment cannot be empty.");
+    }
     if (body.length > 500) throw new Error("Comment is too long.");
     const post = await ctx.db.get(args.postId);
     if (!post) throw new Error("Post not found.");
@@ -403,6 +522,9 @@ export const addComment = mutation({
       parentCommentId: args.parentCommentId,
       authorId: args.userId,
       body,
+      mediaStorageId: args.mediaStorageId,
+      mediaUrl: args.mediaUrl?.trim().slice(0, 500),
+      mediaType: args.mediaType,
       createdAt: Date.now(),
     });
   },
