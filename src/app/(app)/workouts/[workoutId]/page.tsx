@@ -23,7 +23,7 @@ import { useAppPreferences } from "@/components/providers/AppPreferencesProvider
 import { formatVolume } from "@/lib/pr-utils";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 import { ActiveWorkout } from "@/components/workout/ActiveWorkout";
-import { toBodyPart } from "@/lib/muscle-groups";
+import { BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
 import { BookmarkPlus, Pencil, Trash2 } from "lucide-react";
 
 export default function WorkoutDetailPage() {
@@ -57,15 +57,18 @@ export default function WorkoutDetailPage() {
     return <p className="text-muted-foreground">{t("common.notFoundWorkout")}</p>;
   }
 
-  const muscleGroups = Array.from(
-    new Set(
-      workout.exercises
-        .map((exercise) =>
-          exercise.exercise ? toBodyPart(exercise.exercise.muscleGroup) : null
-        )
-        .filter(Boolean)
-    )
-  ) as string[];
+  const muscleGroupSets = workout.exercises.reduce(
+    (counts, ex) => {
+      if (!ex.exercise) return counts;
+      const part = toBodyPart(ex.exercise.muscleGroup);
+      counts[part] += ex.sets.length;
+      return counts;
+    },
+    Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<
+      BodyPart,
+      number
+    >
+  );
 
   async function handleSaveTemplate() {
     if (!workout || !templateName.trim()) return;
@@ -168,7 +171,7 @@ export default function WorkoutDetailPage() {
         </p>
       )}
 
-      <WorkoutMuscleMap muscleGroups={muscleGroups} />
+      <WorkoutMuscleMap muscleGroups={[]} muscleGroupSets={muscleGroupSets} />
 
       <div className="space-y-3">
         {workout.exercises.map((ex) => {

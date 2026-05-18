@@ -14,7 +14,6 @@ function toBodyPart(muscleGroup: string): string {
   if (
     muscleGroup === "quads" ||
     muscleGroup === "hamstrings" ||
-    muscleGroup === "glutes" ||
     muscleGroup === "calves"
   ) {
     return "legs";
@@ -29,6 +28,7 @@ function toBodyPart(muscleGroup: string): string {
     muscleGroup === "triceps" ||
     muscleGroup === "core" ||
     muscleGroup === "legs" ||
+    muscleGroup === "glutes" ||
     muscleGroup === "shoulders"
   ) {
     return muscleGroup;
@@ -43,6 +43,7 @@ const BODY_PARTS = [
   "triceps",
   "core",
   "legs",
+  "glutes",
   "shoulders",
   "other",
 ] as const;
