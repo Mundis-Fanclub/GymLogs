@@ -92,12 +92,15 @@ export function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 grid h-[3.75rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-background/95 px-3 backdrop-blur sm:h-14 sm:px-5 md:px-6">
+    <header className="sticky top-0 z-30 relative grid h-[3.75rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-background/95 px-3 backdrop-blur sm:h-14 sm:px-5 md:px-6">
+      <Link
+        href="/dashboard"
+        className="pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 md:hidden"
+        aria-label={t("common.appName")}
+      >
+        <Logo size={44} priority />
+      </Link>
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-        <Link href="/dashboard" className="flex min-w-0 items-center gap-2 md:hidden">
-          <Logo size={36} priority className="shrink-0 sm:h-8 sm:w-8" />
-          <span className="truncate text-sm font-semibold leading-none sm:font-heading">{t("common.appName")}</span>
-        </Link>
         <div className="hidden md:block">
           <p className="truncate text-sm font-medium">{t("topbar.title")}</p>
           <p className="text-xs text-muted-foreground">{t("topbar.subtitle")}</p>

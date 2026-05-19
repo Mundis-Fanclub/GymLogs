@@ -31,16 +31,8 @@ export function Sidebar() {
   return (
     <aside className="hidden w-64 min-h-screen flex-col bg-card border-r border-border text-card-foreground md:flex">
       <div className="px-4 py-5 border-b border-border">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <Logo size={36} priority className="shadow-sm" />
-          <div>
-            <span className="font-semibold text-base tracking-tight block">
-              {t("common.appName")}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {t("common.navSubtitle")}
-            </span>
-          </div>
+        <Link href="/dashboard" className="flex items-center justify-center">
+          <Logo size={64} priority className="shadow-sm" />
         </Link>
       </div>
       <nav className="flex-1 px-2 py-4 space-y-0.5">
