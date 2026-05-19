@@ -1,11 +1,11 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Crown, MessageCircle, Moon, Plus, Settings, Sun, User } from "lucide-react";
+import { Crown, LogOut, MessageCircle, Moon, Settings, Sun, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/Logo";
 import { useConvexUser } from "@/hooks/useConvexUser";
@@ -20,6 +20,9 @@ import {
 export function TopBar() {
   const router = useRouter();
   const { userId } = useConvexUser();
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  const profileImageUrl = user?.imageUrl;
   const { locale, setLocale, theme, toggleTheme, t } = useAppPreferences();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -56,11 +59,6 @@ export function TopBar() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [profileMenuOpen]);
-
-  function handleNewWorkout() {
-    if (!userId) return;
-    router.push("/workouts/new");
-  }
 
   function toggleLocale() {
     const nextLocale = LOCALES.find((item) => item !== locale) ?? "en";
@@ -137,18 +135,6 @@ export function TopBar() {
           <Crown className="h-4 w-4" />
           <span className="hidden sm:inline">{t("common.proPrice")}</span>
         </Button>
-        <Button
-          size="icon-sm"
-          onClick={handleNewWorkout}
-          aria-label={t("common.newWorkout")}
-          className="order-1 lg:hidden"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-        <Button size="sm" onClick={handleNewWorkout} className="hidden gap-1.5 lg:inline-flex">
-          <Plus className="h-4 w-4" />
-          <span>{t("common.newWorkout")}</span>
-        </Button>
         <div className="relative order-2" ref={profileMenuRef}>
           <Button
             type="button"
@@ -158,10 +144,19 @@ export function TopBar() {
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen}
             title="Profilmenue oeffnen"
-            className="relative rounded-full"
+            className="relative overflow-hidden rounded-full p-0"
             onClick={() => setProfileMenuOpen((open) => !open)}
           >
-            <User className="h-4 w-4" />
+            {profileImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profileImageUrl}
+                alt="Profilbild"
+                className="h-full w-full rounded-full object-cover"
+              />
+            ) : (
+              <User className="h-4 w-4" />
+            )}
             {unreadCount > 0 && (
               <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full border border-background bg-destructive px-1 text-[0.62rem] font-semibold leading-5 text-destructive-foreground">
                 {unreadLabel}
@@ -192,10 +187,17 @@ export function TopBar() {
                 label="Einstellungen"
                 onClick={() => goToProfileMenuItem("/settings")}
               />
+              <ProfileMenuItem
+                icon={LogOut}
+                label="Abmelden"
+                onClick={() => {
+                  setProfileMenuOpen(false);
+                  void signOut({ redirectUrl: "/sign-in" });
+                }}
+              />
             </div>
           )}
         </div>
-        <UserButton />
       </div>
     </header>
   );
