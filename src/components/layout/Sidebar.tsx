@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
+import { Logo } from "@/components/brand/Logo";
 import { AppNavLink } from "./AppNavLink";
 
 const NAV_ITEMS = [
@@ -31,9 +32,7 @@ export function Sidebar() {
     <aside className="hidden w-64 min-h-screen flex-col bg-card border-r border-border text-card-foreground md:flex">
       <div className="px-4 py-5 border-b border-border">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[linear-gradient(135deg,var(--color-primary),color-mix(in_oklab,var(--color-primary)_68%,#f59e0b))] flex items-center justify-center shadow-sm">
-            <Dumbbell className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <Logo size={36} priority className="shadow-sm" />
           <div>
             <span className="font-semibold text-base tracking-tight block">
               {t("common.appName")}
