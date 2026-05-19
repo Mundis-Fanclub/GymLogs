@@ -32,7 +32,7 @@ export function Sidebar() {
     <aside className="hidden w-64 min-h-screen flex-col bg-card border-r border-border text-card-foreground md:flex">
       <div className="px-4 py-5 border-b border-border">
         <Link href="/dashboard" className="flex items-center justify-center">
-          <Logo size={64} priority className="shadow-sm" />
+          <Logo size={64} priority />
         </Link>
       </div>
       <nav className="flex-1 px-2 py-4 space-y-0.5">
