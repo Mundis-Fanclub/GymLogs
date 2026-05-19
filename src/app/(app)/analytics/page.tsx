@@ -17,7 +17,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 import { WorkoutsList } from "@/components/workout/WorkoutsList";
 import { ExercisesList } from "@/components/exercises/ExercisesList";
-import { cn } from "@/lib/utils";
 import {
   BODY_PARTS,
   getWeeklySetVolumeColor,
@@ -43,12 +42,14 @@ const WorkoutsPerWeekChart = dynamic(
   }
 );
 
+type AnalyticsTab = "overview" | "workouts" | "exercises";
+
 export default function AnalyticsPage() {
   const { userId, isLoaded } = useConvexUser();
   const { t } = useAppPreferences();
   const [frequencyPeriod, setFrequencyPeriod] =
     useState<FrequencyPeriod>("week");
-  const hideTabs = useHideOnScrollDown();
+  const [tab, setTab] = useState<AnalyticsTab>("overview");
 
   const muscleAnalytics = useQuery(
     api.analytics.getMuscleAnalytics,
@@ -59,6 +60,10 @@ export default function AnalyticsPage() {
     api.analytics.getWorkoutFrequency,
     userId ? { userId, period: frequencyPeriod } : "skip"
   );
+
+  useEffect(() => {
+    document.querySelector("main")?.scrollTo({ top: 0 });
+  }, [tab]);
 
   const isLoading =
     !isLoaded ||
@@ -106,179 +111,140 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div data-flush className="mx-auto max-w-5xl">
       <h1 className="sr-only">{t("common.analytics")}</h1>
-      <Tabs defaultValue="overview" className="gap-0">
-        <div
-          className={cn(
-            "sticky top-0 z-20 -mx-4 -mt-4 bg-background px-4 pb-2 pt-1 transition-transform duration-200 sm:-mx-5 sm:px-5 md:-mx-6 md:-mt-6 md:px-6",
-            hideTabs && "-translate-y-full"
-          )}
-        >
-          <TabsList className="flex w-full">
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as AnalyticsTab)}
+        className="gap-0"
+      >
+        <div className="sticky top-0 z-20 border-b border-border bg-background pb-2 pt-2">
+          <TabsList variant="line" className="flex w-full">
             <TabsTrigger value="overview">Übersicht</TabsTrigger>
             <TabsTrigger value="workouts">{t("common.workouts")}</TabsTrigger>
             <TabsTrigger value="exercises">{t("common.exercises")}</TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent value="overview" className="space-y-6">
-          {isLoading && (
-            <p className="text-sm text-muted-foreground">{t("analytics.loadingCopy")}</p>
-          )}
+        <div>
+          <TabsContent value="overview" className="space-y-6">
+            {isLoading && (
+              <p className="text-sm text-muted-foreground">{t("analytics.loadingCopy")}</p>
+            )}
 
-          {!isLoading && !hasData && (
-            <EmptyState
-              icon={BarChart3}
-              title={t("analytics.emptyTitle")}
-              description={t("analytics.emptyCopy")}
-              action={
+            {!isLoading && !hasData && (
+              <EmptyState
+                icon={BarChart3}
+                title={t("analytics.emptyTitle")}
+                description={t("analytics.emptyCopy")}
+                action={
+                  <Link href="/workouts/new">
+                    <Button className="gap-2">
+                      <Dumbbell className="h-4 w-4" />
+                      {t("common.startWorkout")}
+                    </Button>
+                  </Link>
+                }
+              />
+            )}
+
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-2">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                  <CardTitle className="text-sm font-medium">
+                    Wochenanalyse pro Muskelgruppe
+                  </CardTitle>
+                  {muscleAnalytics && (
+                    <p className="text-xs text-muted-foreground">
+                      {muscleAnalytics.totalSets} Sätze · {Math.round(muscleAnalytics.totalVolume).toLocaleString("de-DE")} kg Volumen
+                    </p>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-4 px-3 pb-4 sm:px-6 xl:grid-cols-[minmax(240px,320px)_1fr] xl:items-start">
+                {muscleAnalytics === undefined ? (
+                  <Skeleton className="h-[220px] w-full" />
+                ) : (
+                  <>
+                    <WorkoutMuscleMap
+                      muscleGroups={[]}
+                      muscleGroupSets={muscleGroupSets}
+                      className="mx-auto w-full"
+                    />
+                    <div className="space-y-4">
+                      <VolumeBarChart data={weeklyVolume} />
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {muscleAnalytics.bodyParts
+                          .filter((part) => part.part !== "other")
+                          .map((part) => (
+                            <MuscleInsight key={part.part} part={part} />
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden">
+              <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-sm font-medium">
+                    {t("analytics.workoutFrequency")}
+                  </CardTitle>
+                  {workoutFrequency && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("analytics.totalWorkouts")}: {workoutFrequency.total}
+                    </p>
+                  )}
+                </div>
+                <Tabs
+                  value={frequencyPeriod}
+                  onValueChange={(value) => setFrequencyPeriod(value as FrequencyPeriod)}
+                >
+                  <TabsList aria-label={t("analytics.period")}>
+                    <TabsTrigger value="week">{t("analytics.week")}</TabsTrigger>
+                    <TabsTrigger value="month">{t("analytics.month")}</TabsTrigger>
+                    <TabsTrigger value="year">{t("analytics.year")}</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </CardHeader>
+              <CardContent className="px-3 pb-4 sm:px-6">
+                {workoutFrequency === undefined ? (
+                  <Skeleton className="h-[180px] w-full" />
+                ) : (
+                  <WorkoutsPerWeekChart
+                    data={workoutFrequency}
+                    period={frequencyPeriod}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="workouts" className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-sm text-muted-foreground">{t("workouts.copy")}</p>
+              {userId && (
                 <Link href="/workouts/new">
-                  <Button className="gap-2">
+                  <Button size="sm" className="gap-2">
                     <Dumbbell className="h-4 w-4" />
                     {t("common.startWorkout")}
                   </Button>
                 </Link>
-              }
-            />
-          )}
-
-          <Card className="overflow-hidden">
-            <CardHeader className="pb-2">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                <CardTitle className="text-sm font-medium">
-                  Wochenanalyse pro Muskelgruppe
-                </CardTitle>
-                {muscleAnalytics && (
-                  <p className="text-xs text-muted-foreground">
-                    {muscleAnalytics.totalSets} Sätze · {Math.round(muscleAnalytics.totalVolume).toLocaleString("de-DE")} kg Volumen
-                  </p>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="grid gap-4 px-3 pb-4 sm:px-6 xl:grid-cols-[minmax(240px,320px)_1fr] xl:items-start">
-              {muscleAnalytics === undefined ? (
-                <Skeleton className="h-[220px] w-full" />
-              ) : (
-                <>
-                  <WorkoutMuscleMap
-                    muscleGroups={[]}
-                    muscleGroupSets={muscleGroupSets}
-                    className="mx-auto w-full"
-                  />
-                  <div className="space-y-4">
-                    <VolumeBarChart data={weeklyVolume} />
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {muscleAnalytics.bodyParts
-                        .filter((part) => part.part !== "other")
-                        .map((part) => (
-                          <MuscleInsight key={part.part} part={part} />
-                        ))}
-                    </div>
-                  </div>
-                </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+            <WorkoutsList userId={userId} />
+          </TabsContent>
 
-          <Card className="overflow-hidden">
-            <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="text-sm font-medium">
-                  {t("analytics.workoutFrequency")}
-                </CardTitle>
-                {workoutFrequency && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t("analytics.totalWorkouts")}: {workoutFrequency.total}
-                  </p>
-                )}
-              </div>
-              <Tabs
-                value={frequencyPeriod}
-                onValueChange={(value) => setFrequencyPeriod(value as FrequencyPeriod)}
-              >
-                <TabsList aria-label={t("analytics.period")}>
-                  <TabsTrigger value="week">{t("analytics.week")}</TabsTrigger>
-                  <TabsTrigger value="month">{t("analytics.month")}</TabsTrigger>
-                  <TabsTrigger value="year">{t("analytics.year")}</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </CardHeader>
-            <CardContent className="px-3 pb-4 sm:px-6">
-              {workoutFrequency === undefined ? (
-                <Skeleton className="h-[180px] w-full" />
-              ) : (
-                <WorkoutsPerWeekChart
-                  data={workoutFrequency}
-                  period={frequencyPeriod}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="workouts" className="space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <p className="text-sm text-muted-foreground">{t("workouts.copy")}</p>
-            {userId && (
-              <Link href="/workouts/new">
-                <Button size="sm" className="gap-2">
-                  <Dumbbell className="h-4 w-4" />
-                  {t("common.startWorkout")}
-                </Button>
-              </Link>
-            )}
-          </div>
-          <WorkoutsList userId={userId} />
-        </TabsContent>
-
-        <TabsContent value="exercises" className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("exercises.copy")}</p>
-          <ExercisesList />
-        </TabsContent>
+          <TabsContent value="exercises" className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t("exercises.copy")}</p>
+            <ExercisesList />
+          </TabsContent>
+        </div>
       </Tabs>
     </div>
   );
-}
-
-function useHideOnScrollDown(threshold = 1) {
-  const [hidden, setHidden] = useState(false);
-
-  useEffect(() => {
-    const main = document.querySelector("main");
-    const getY = () =>
-      (main?.scrollTop ?? 0) +
-      (window.scrollY || document.documentElement.scrollTop || 0);
-
-    let lastY = getY();
-    let raf = 0;
-
-    const handler = () => {
-      const y = getY();
-      if (y > lastY + 2 && y > threshold) {
-        setHidden(true);
-      } else if (y < lastY - 2) {
-        setHidden(false);
-      }
-      lastY = y;
-      raf = 0;
-    };
-
-    const onScroll = () => {
-      if (raf) return;
-      raf = window.requestAnimationFrame(handler);
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    main?.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      if (raf) window.cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", onScroll);
-      main?.removeEventListener("scroll", onScroll);
-    };
-  }, [threshold]);
-
-  return hidden;
 }
 
 function MuscleInsight({
