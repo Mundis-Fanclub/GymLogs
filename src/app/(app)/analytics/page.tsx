@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import dynamic from "next/dynamic";
 import { api } from "../../../../convex/_generated/api";
@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 import { WorkoutsList } from "@/components/workout/WorkoutsList";
 import { ExercisesList } from "@/components/exercises/ExercisesList";
+import { cn } from "@/lib/utils";
 import {
   BODY_PARTS,
   getWeeklySetVolumeColor,
@@ -47,6 +48,7 @@ export default function AnalyticsPage() {
   const { t } = useAppPreferences();
   const [frequencyPeriod, setFrequencyPeriod] =
     useState<FrequencyPeriod>("week");
+  const hideTabs = useHideOnScrollDown();
 
   const muscleAnalytics = useQuery(
     api.analytics.getMuscleAnalytics,
@@ -111,11 +113,18 @@ export default function AnalyticsPage() {
       </div>
 
       <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">Übersicht</TabsTrigger>
-          <TabsTrigger value="workouts">{t("common.workouts")}</TabsTrigger>
-          <TabsTrigger value="exercises">{t("common.exercises")}</TabsTrigger>
-        </TabsList>
+        <div
+          className={cn(
+            "sticky top-0 z-20 bg-background/95 py-2 backdrop-blur transition-transform duration-200",
+            hideTabs && "-translate-y-full"
+          )}
+        >
+          <TabsList>
+            <TabsTrigger value="overview">Übersicht</TabsTrigger>
+            <TabsTrigger value="workouts">{t("common.workouts")}</TabsTrigger>
+            <TabsTrigger value="exercises">{t("common.exercises")}</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="overview" className="space-y-6">
           {isLoading && (
@@ -234,6 +243,42 @@ export default function AnalyticsPage() {
       </Tabs>
     </div>
   );
+}
+
+function useHideOnScrollDown(threshold = 80) {
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (!main) return;
+
+    let lastY = main.scrollTop;
+    let raf = 0;
+
+    const handler = () => {
+      const y = main.scrollTop;
+      if (y > lastY + 4 && y > threshold) {
+        setHidden(true);
+      } else if (y < lastY - 4) {
+        setHidden(false);
+      }
+      lastY = y;
+      raf = 0;
+    };
+
+    const onScroll = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(handler);
+    };
+
+    main.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      main.removeEventListener("scroll", onScroll);
+    };
+  }, [threshold]);
+
+  return hidden;
 }
 
 function MuscleInsight({
