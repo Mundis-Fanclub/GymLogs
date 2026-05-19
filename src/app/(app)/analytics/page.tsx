@@ -111,11 +111,11 @@ export default function AnalyticsPage() {
       <Tabs defaultValue="overview" className="gap-0">
         <div
           className={cn(
-            "sticky top-0 z-20 -mx-4 -mt-4 bg-background/95 px-4 pb-3 pt-3 backdrop-blur transition-transform duration-200 sm:-mx-5 sm:px-5 md:-mx-6 md:-mt-6 md:px-6 md:pt-4",
+            "sticky top-0 z-20 -mx-4 -mt-4 bg-background px-4 pb-3 pt-3 transition-transform duration-200 sm:-mx-5 sm:px-5 md:-mx-6 md:-mt-6 md:px-6 md:pt-4",
             hideTabs && "-translate-y-full"
           )}
         >
-          <TabsList>
+          <TabsList className="flex w-full">
             <TabsTrigger value="overview">Übersicht</TabsTrigger>
             <TabsTrigger value="workouts">{t("common.workouts")}</TabsTrigger>
             <TabsTrigger value="exercises">{t("common.exercises")}</TabsTrigger>
