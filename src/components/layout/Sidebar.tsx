@@ -4,10 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Dumbbell,
-  ClipboardList,
   BarChart2,
-  Trophy,
   MessageSquareText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,9 +14,6 @@ import { AppNavLink } from "./AppNavLink";
 
 const NAV_ITEMS = [
   { href: "/dashboard", labelKey: "common.dashboard", icon: LayoutDashboard },
-  { href: "/logs", labelKey: "common.logs", icon: Trophy },
-  { href: "/workouts", labelKey: "common.workouts", icon: ClipboardList },
-  { href: "/exercises", labelKey: "common.exercises", icon: Dumbbell },
   { href: "/analytics", labelKey: "common.analytics", icon: BarChart2 },
   { href: "/social", labelKey: "common.social", icon: MessageSquareText },
 ];

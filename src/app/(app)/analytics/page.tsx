@@ -13,8 +13,10 @@ import { useAppPreferences } from "@/components/providers/AppPreferencesProvider
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { BarChart3, Dumbbell, TrendingDown, TrendingUp, User } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
+import { WorkoutsList } from "@/components/workout/WorkoutsList";
+import { ExercisesList } from "@/components/exercises/ExercisesList";
 import {
   BODY_PARTS,
   getWeeklySetVolumeColor,
@@ -86,7 +88,7 @@ export default function AnalyticsPage() {
 
   if (isLoaded && !userId) {
     return (
-      <div className="max-w-3xl mx-auto">
+      <div className="mx-auto max-w-3xl">
         <EmptyState
           icon={User}
           title={t("dashboard.signedOutTitle")}
@@ -102,106 +104,134 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div>
         <h1 className="text-xl font-semibold">{t("common.analytics")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t("analytics.copy")}
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{t("analytics.copy")}</p>
       </div>
 
-      {isLoading && (
-        <p className="text-sm text-muted-foreground">{t("analytics.loadingCopy")}</p>
-      )}
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Übersicht</TabsTrigger>
+          <TabsTrigger value="workouts">{t("common.workouts")}</TabsTrigger>
+          <TabsTrigger value="exercises">{t("common.exercises")}</TabsTrigger>
+        </TabsList>
 
-      {!isLoading && !hasData && (
-        <EmptyState
-          icon={BarChart3}
-          title={t("analytics.emptyTitle")}
-          description={t("analytics.emptyCopy")}
-          action={
-            <Link href="/workouts/new">
-              <Button className="gap-2">
-                <Dumbbell className="h-4 w-4" />
-                {t("common.startWorkout")}
-              </Button>
-            </Link>
-          }
-        />
-      )}
-
-      <Card className="overflow-hidden">
-        <CardHeader className="pb-2">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <CardTitle className="text-sm font-medium">
-              Wochenanalyse pro Muskelgruppe
-          </CardTitle>
-            {muscleAnalytics && (
-              <p className="text-xs text-muted-foreground">
-                {muscleAnalytics.totalSets} Sätze · {Math.round(muscleAnalytics.totalVolume).toLocaleString("de-DE")} kg Volumen
-              </p>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 px-3 pb-4 sm:px-6 xl:grid-cols-[minmax(240px,320px)_1fr] xl:items-start">
-          {muscleAnalytics === undefined ? (
-            <Skeleton className="h-[220px] w-full" />
-          ) : (
-            <>
-              <WorkoutMuscleMap
-                muscleGroups={[]}
-                muscleGroupSets={muscleGroupSets}
-                className="mx-auto w-full"
-              />
-              <div className="space-y-4">
-                <VolumeBarChart data={weeklyVolume} />
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {muscleAnalytics.bodyParts
-                    .filter((part) => part.part !== "other")
-                    .map((part) => (
-                      <MuscleInsight key={part.part} part={part} />
-                    ))}
-                </div>
-              </div>
-            </>
+        <TabsContent value="overview" className="space-y-6">
+          {isLoading && (
+            <p className="text-sm text-muted-foreground">{t("analytics.loadingCopy")}</p>
           )}
-        </CardContent>
-      </Card>
 
-      <Card className="overflow-hidden">
-        <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-sm font-medium">
-              {t("analytics.workoutFrequency")}
-            </CardTitle>
-            {workoutFrequency && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("analytics.totalWorkouts")}: {workoutFrequency.total}
-              </p>
-            )}
-          </div>
-          <Tabs
-            value={frequencyPeriod}
-            onValueChange={(value) => setFrequencyPeriod(value as FrequencyPeriod)}
-          >
-            <TabsList aria-label={t("analytics.period")}>
-              <TabsTrigger value="week">{t("analytics.week")}</TabsTrigger>
-              <TabsTrigger value="month">{t("analytics.month")}</TabsTrigger>
-              <TabsTrigger value="year">{t("analytics.year")}</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </CardHeader>
-        <CardContent className="px-3 pb-4 sm:px-6">
-          {workoutFrequency === undefined ? (
-            <Skeleton className="h-[180px] w-full" />
-          ) : (
-            <WorkoutsPerWeekChart
-              data={workoutFrequency}
-              period={frequencyPeriod}
+          {!isLoading && !hasData && (
+            <EmptyState
+              icon={BarChart3}
+              title={t("analytics.emptyTitle")}
+              description={t("analytics.emptyCopy")}
+              action={
+                <Link href="/workouts/new">
+                  <Button className="gap-2">
+                    <Dumbbell className="h-4 w-4" />
+                    {t("common.startWorkout")}
+                  </Button>
+                </Link>
+              }
             />
           )}
-        </CardContent>
-      </Card>
+
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-2">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <CardTitle className="text-sm font-medium">
+                  Wochenanalyse pro Muskelgruppe
+                </CardTitle>
+                {muscleAnalytics && (
+                  <p className="text-xs text-muted-foreground">
+                    {muscleAnalytics.totalSets} Sätze · {Math.round(muscleAnalytics.totalVolume).toLocaleString("de-DE")} kg Volumen
+                  </p>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-4 px-3 pb-4 sm:px-6 xl:grid-cols-[minmax(240px,320px)_1fr] xl:items-start">
+              {muscleAnalytics === undefined ? (
+                <Skeleton className="h-[220px] w-full" />
+              ) : (
+                <>
+                  <WorkoutMuscleMap
+                    muscleGroups={[]}
+                    muscleGroupSets={muscleGroupSets}
+                    className="mx-auto w-full"
+                  />
+                  <div className="space-y-4">
+                    <VolumeBarChart data={weeklyVolume} />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {muscleAnalytics.bodyParts
+                        .filter((part) => part.part !== "other")
+                        .map((part) => (
+                          <MuscleInsight key={part.part} part={part} />
+                        ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="text-sm font-medium">
+                  {t("analytics.workoutFrequency")}
+                </CardTitle>
+                {workoutFrequency && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("analytics.totalWorkouts")}: {workoutFrequency.total}
+                  </p>
+                )}
+              </div>
+              <Tabs
+                value={frequencyPeriod}
+                onValueChange={(value) => setFrequencyPeriod(value as FrequencyPeriod)}
+              >
+                <TabsList aria-label={t("analytics.period")}>
+                  <TabsTrigger value="week">{t("analytics.week")}</TabsTrigger>
+                  <TabsTrigger value="month">{t("analytics.month")}</TabsTrigger>
+                  <TabsTrigger value="year">{t("analytics.year")}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </CardHeader>
+            <CardContent className="px-3 pb-4 sm:px-6">
+              {workoutFrequency === undefined ? (
+                <Skeleton className="h-[180px] w-full" />
+              ) : (
+                <WorkoutsPerWeekChart
+                  data={workoutFrequency}
+                  period={frequencyPeriod}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="workouts" className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-sm text-muted-foreground">{t("workouts.copy")}</p>
+            {userId && (
+              <Link href="/workouts/new">
+                <Button size="sm" className="gap-2">
+                  <Dumbbell className="h-4 w-4" />
+                  {t("common.startWorkout")}
+                </Button>
+              </Link>
+            )}
+          </div>
+          <WorkoutsList userId={userId} />
+        </TabsContent>
+
+        <TabsContent value="exercises" className="space-y-4">
+          <p className="text-sm text-muted-foreground">{t("exercises.copy")}</p>
+          <ExercisesList />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -288,4 +318,3 @@ function MuscleInsight({
     </div>
   );
 }
-
