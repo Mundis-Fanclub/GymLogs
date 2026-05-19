@@ -106,16 +106,12 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">{t("common.analytics")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t("analytics.copy")}</p>
-      </div>
-
-      <Tabs defaultValue="overview">
+    <div className="mx-auto max-w-5xl">
+      <h1 className="sr-only">{t("common.analytics")}</h1>
+      <Tabs defaultValue="overview" className="gap-0">
         <div
           className={cn(
-            "sticky top-0 z-20 bg-background/95 py-2 backdrop-blur transition-transform duration-200",
+            "sticky top-0 z-20 -mx-4 -mt-4 bg-background/95 px-4 pb-3 pt-3 backdrop-blur transition-transform duration-200 sm:-mx-5 sm:px-5 md:-mx-6 md:-mt-6 md:px-6 md:pt-4",
             hideTabs && "-translate-y-full"
           )}
         >
@@ -245,21 +241,23 @@ export default function AnalyticsPage() {
   );
 }
 
-function useHideOnScrollDown(threshold = 80) {
+function useHideOnScrollDown(threshold = 40) {
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
     const main = document.querySelector("main");
-    if (!main) return;
+    const getY = () =>
+      (main?.scrollTop ?? 0) +
+      (window.scrollY || document.documentElement.scrollTop || 0);
 
-    let lastY = main.scrollTop;
+    let lastY = getY();
     let raf = 0;
 
     const handler = () => {
-      const y = main.scrollTop;
-      if (y > lastY + 4 && y > threshold) {
+      const y = getY();
+      if (y > lastY + 2 && y > threshold) {
         setHidden(true);
-      } else if (y < lastY - 4) {
+      } else if (y < lastY - 2) {
         setHidden(false);
       }
       lastY = y;
@@ -271,10 +269,12 @@ function useHideOnScrollDown(threshold = 80) {
       raf = window.requestAnimationFrame(handler);
     };
 
-    main.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    main?.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       if (raf) window.cancelAnimationFrame(raf);
-      main.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll);
+      main?.removeEventListener("scroll", onScroll);
     };
   }, [threshold]);
 
