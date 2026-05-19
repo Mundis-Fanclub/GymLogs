@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { formatVolume } from "@/lib/pr-utils";
@@ -32,6 +33,9 @@ export default function WorkoutDetailPage() {
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [templateName, setTemplateName] = useState("");
+  const [templateVisibility, setTemplateVisibility] = useState<"private" | "friends" | "public">("private");
+  const [templateShowWeights, setTemplateShowWeights] = useState(false);
+  const [templateDescription, setTemplateDescription] = useState("");
   const [savedTemplate, setSavedTemplate] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const workout = useQuery(api.workouts.get, {
@@ -71,6 +75,9 @@ export default function WorkoutDetailPage() {
     await saveAsTemplate({
       workoutId: workout._id,
       name: templateName.trim(),
+      visibility: templateVisibility,
+      showWeights: templateShowWeights,
+      description: templateDescription || undefined,
     });
     setSavedTemplate(true);
     setShowTemplateDialog(false);
@@ -137,6 +144,9 @@ export default function WorkoutDetailPage() {
                   locale: locale === "de" ? de : enUS,
                 })
               );
+              setTemplateVisibility("private");
+              setTemplateShowWeights(false);
+              setTemplateDescription("");
               setShowTemplateDialog(true);
             }}
           >
@@ -211,13 +221,59 @@ export default function WorkoutDetailPage() {
           <DialogHeader>
             <DialogTitle>{t("workouts.saveTemplate")}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              value={templateName}
-              onChange={(event) => setTemplateName(event.target.value)}
-              placeholder={t("workouts.templateName")}
-              autoFocus
-            />
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>{t("workouts.templateName")}</Label>
+              <Input
+                value={templateName}
+                onChange={(event) => setTemplateName(event.target.value)}
+                placeholder="Steffen's Pull Session"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Beschreibung</Label>
+              <Input
+                value={templateDescription}
+                onChange={(event) => setTemplateDescription(event.target.value)}
+                placeholder="Optionaler kurzer Kontext"
+                maxLength={180}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Sichtbarkeit</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: "private", label: "Privat" },
+                  { value: "friends", label: "Freunde" },
+                  { value: "public", label: "Öffentlich" },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() =>
+                      setTemplateVisibility(option.value as "private" | "friends" | "public")
+                    }
+                    className={`rounded-lg border px-2 py-2 text-sm ${
+                      templateVisibility === option.value
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background hover:bg-muted"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+              <span>Gewichte im Profil anzeigen</span>
+              <input
+                type="checkbox"
+                checked={templateShowWeights}
+                onChange={(event) => setTemplateShowWeights(event.target.checked)}
+                className="h-5 w-5 accent-primary"
+              />
+            </label>
             <Button
               className="w-full"
               onClick={handleSaveTemplate}

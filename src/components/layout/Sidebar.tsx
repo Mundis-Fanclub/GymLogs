@@ -8,6 +8,7 @@ import {
   ClipboardList,
   BarChart2,
   Trophy,
+  MessageSquareText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { href: "/workouts", labelKey: "common.workouts", icon: ClipboardList },
   { href: "/exercises", labelKey: "common.exercises", icon: Dumbbell },
   { href: "/analytics", labelKey: "common.analytics", icon: BarChart2 },
+  { href: "/social", labelKey: "common.social", icon: MessageSquareText },
 ];
 
 export function Sidebar() {
