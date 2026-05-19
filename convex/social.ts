@@ -656,10 +656,12 @@ export const shareToUsername = mutation({
       senderId: args.senderId,
       recipientId: recipient._id,
       body,
+      type: "post_share",
+      postId: post._id,
       createdAt: now,
     });
     await ctx.db.patch(conversationId, {
-      lastMessagePreview: "Shared a post",
+      lastMessagePreview: "Beitrag geteilt",
       lastSenderId: args.senderId,
       updatedAt: now,
     });

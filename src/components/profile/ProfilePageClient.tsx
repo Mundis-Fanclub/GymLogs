@@ -1,21 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import {
+  Activity,
   Ban,
+  BarChart3,
+  Calendar,
   Crown,
+  Dumbbell,
   Eye,
+  ExternalLink,
   Flag,
+  Flame,
+  ImageIcon,
   ImagePlus,
   Lock,
+  MapPin,
   MessageCircle,
   MoveRight,
+  Paperclip,
+  PlusCircle,
   Search,
   Send,
   ShieldCheck,
   Sparkles,
+  Target,
   Trophy,
   User,
   UserPlus,
@@ -38,6 +49,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 const ACCENTS = {
   emerald: "from-emerald-500 via-sky-500 to-slate-950",
@@ -107,6 +119,12 @@ type ProfileWorkoutTemplate = {
   }>;
 };
 
+type MessageImageDraft = {
+  storageId: Id<"_storage">;
+  url: string;
+  name: string;
+};
+
 const LIFT_LABELS = {
   bench_press: "Bench Press",
   squat: "Squat",
@@ -139,6 +157,7 @@ export function ProfilePageClient() {
   const addFriend = useMutation(api.friends.addByUsername);
   const removeFriend = useMutation(api.friends.remove);
   const sendMessage = useMutation(api.messages.send);
+  const generateMessageUploadUrl = useMutation(api.messages.generateUploadUrl);
   const markRead = useMutation(api.messages.markConversationRead);
   const blockUser = useMutation(api.messages.blockUser);
   const unblockUser = useMutation(api.messages.unblockUser);
@@ -157,6 +176,9 @@ export function ProfilePageClient() {
     userId && activeConversation ? { userId, conversationId: activeConversation } : "skip"
   );
   const [messageBody, setMessageBody] = useState("");
+  const [messageImageDraft, setMessageImageDraft] = useState<MessageImageDraft | null>(null);
+  const [messageUploadError, setMessageUploadError] = useState("");
+  const [uploadingMessageImage, setUploadingMessageImage] = useState(false);
   const [saved, setSaved] = useState(false);
   const [reportedMessage, setReportedMessage] = useState<Id<"messages"> | null>(null);
   const [reportReason, setReportReason] = useState("Spam oder wiederholte Nachrichten");
@@ -230,6 +252,12 @@ export function ProfilePageClient() {
     void markRead({ userId, conversationId: activeConversation });
   }, [activeConversation, markRead, userId, thread?.messages.length]);
 
+  useEffect(() => {
+    return () => {
+      if (messageImageDraft?.url) URL.revokeObjectURL(messageImageDraft.url);
+    };
+  }, [messageImageDraft]);
+
   const unreadTotal = useMemo(
     () => conversations?.reduce((sum, item) => sum + item.unreadCount, 0) ?? 0,
     [conversations]
@@ -239,6 +267,29 @@ export function ProfilePageClient() {
   const displayAvatarUrl = avatarPreviewUrl || form.avatarUrl;
   const displayCoverUrl = coverPreviewUrl || form.coverUrl;
   const visibleProfile = publicPreview ?? user;
+  const trainingSummary = publicPreview?.trainingSummary;
+  const topLog = topLogs?.[0];
+  const bestSet = trainingSummary?.bestSet;
+  const primaryLift = bestSet
+    ? `${bestSet.weight} kg x ${bestSet.reps}`
+    : topLog
+      ? `${topLog.submission.weightKg} kg x ${topLog.submission.reps}`
+      : null;
+  const primaryLiftLabel =
+    bestSet?.exerciseName ??
+    topLog?.exerciseName ??
+    form.favoriteLift ??
+    "Top Lift";
+  const weeklyActivity = trainingSummary
+    ? `${trainingSummary.averageWorkoutsPerWeek}/Woche`
+    : "Noch kein Verlauf";
+  const activeWeeks = trainingSummary?.activeWeeks ?? 0;
+  const lastWorkoutLabel = trainingSummary?.lastWorkoutAt
+    ? new Date(trainingSummary.lastWorkoutAt).toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "short",
+      })
+    : "Noch offen";
 
   if (isLoaded && !userId) {
     return (
@@ -326,12 +377,65 @@ export function ProfilePageClient() {
     }
   }
 
+  async function uploadMessageImage(file: File | undefined) {
+    if (!userId || !file) return;
+    setMessageUploadError("");
+    if (!file.type.startsWith("image/")) {
+      setMessageUploadError("Bitte waehle eine Bilddatei aus.");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setMessageUploadError("Bildnachrichten duerfen maximal 8 MB gross sein.");
+      return;
+    }
+
+    setUploadingMessageImage(true);
+    try {
+      const postUrl = await generateMessageUploadUrl({ userId });
+      const result = await fetch(postUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!result.ok) throw new Error("Upload fehlgeschlagen.");
+      const { storageId } = (await result.json()) as { storageId: Id<"_storage"> };
+      if (messageImageDraft?.url) URL.revokeObjectURL(messageImageDraft.url);
+      setMessageImageDraft({
+        storageId,
+        url: URL.createObjectURL(file),
+        name: file.name,
+      });
+    } catch (error) {
+      setMessageUploadError(error instanceof Error ? error.message : "Upload fehlgeschlagen.");
+    } finally {
+      setUploadingMessageImage(false);
+    }
+  }
+
+  function clearMessageImageDraft() {
+    if (messageImageDraft?.url) URL.revokeObjectURL(messageImageDraft.url);
+    setMessageImageDraft(null);
+    setMessageUploadError("");
+  }
+
   async function submitMessage(targetId?: Id<"users">) {
-    if (!userId || !messageBody.trim()) return;
+    if (!userId || (!messageBody.trim() && !messageImageDraft)) return;
     const recipientId = targetId ?? thread?.otherUser?._id ?? messageTarget;
     if (!recipientId) return;
-    await sendMessage({ senderId: userId, recipientId, body: messageBody });
+    await sendMessage({
+      senderId: userId,
+      recipientId,
+      body: messageBody,
+      ...(messageImageDraft
+        ? {
+            type: "image" as const,
+            mediaStorageId: messageImageDraft.storageId,
+            mediaType: "image" as const,
+          }
+        : {}),
+    });
     setMessageBody("");
+    clearMessageImageDraft();
     setMessageTarget(null);
   }
 
@@ -347,41 +451,102 @@ export function ProfilePageClient() {
   }
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="space-y-4 sm:space-y-5">
-        <Card className="overflow-hidden">
+    <div className="mx-auto grid max-w-[90rem] gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="space-y-5">
+        <Card className="overflow-hidden border-cyan-500/20 bg-card/95 shadow-2xl shadow-cyan-950/10">
           <div
-            className={`relative min-h-40 bg-gradient-to-br bg-cover bg-center sm:min-h-44 ${accentClass}`}
+            className={`relative min-h-[22rem] overflow-hidden bg-gradient-to-br bg-cover bg-center sm:min-h-[24rem] ${accentClass}`}
             style={displayCoverUrl ? { backgroundImage: `url(${displayCoverUrl})` } : undefined}
           >
-            <div className="absolute inset-0 bg-black/25" />
-            <div className="absolute bottom-3 left-3 right-3 flex items-end gap-3 sm:bottom-4 sm:left-4 sm:right-4 sm:gap-4">
-              <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="lg" />
-              <div className="min-w-0 flex-1 text-white">
-                <h1 className="flex items-center gap-2 truncate text-[1.65rem] font-semibold leading-tight sm:text-3xl">
-                  {form.name || "GymLogs User"}
-                  {user?.isPro && <Crown className="h-5 w-5 shrink-0 text-amber-300 sm:h-6 sm:w-6" />}
-                </h1>
-                <p className="mt-0.5 truncate text-xs text-white/80 sm:text-sm">@{form.username || "username"}</p>
-              </div>
-              <div className="hidden flex-wrap gap-2 sm:flex">
-                <a href="#messages">
-                  <Button variant="secondary" className="gap-1.5">
-                    Nachrichten
-                    <MoveRight className="h-4 w-4" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(34,211,238,0.28),transparent_32%),linear-gradient(180deg,rgba(2,6,23,0.12),rgba(2,6,23,0.9))]" />
+            <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-slate-950/35 p-4 backdrop-blur-md sm:p-6">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end">
+                  <div className="relative">
+                    <div className="absolute -inset-2 rounded-full bg-cyan-300/25 blur-xl" />
+                    <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="lg" />
+                  </div>
+                  <div className="min-w-0 text-white">
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {user?.isPro && (
+                        <Badge className="gap-1 border-amber-300/40 bg-amber-300 text-slate-950">
+                          <Crown className="h-3 w-3" />
+                          Pro
+                        </Badge>
+                      )}
+                      {topLogs?.some((log) => log.isTopFivePercent) && (
+                        <Badge className="gap-1 border-cyan-300/30 bg-cyan-300 text-slate-950">
+                          <Sparkles className="h-3 w-3" />
+                          Top 5%
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="border-white/25 bg-white/10 text-white">
+                        {trainingSummary?.completedWorkouts ? "Aktives Profil" : "Profil im Aufbau"}
+                      </Badge>
+                    </div>
+                    <h1 className="flex items-center gap-2 text-3xl font-semibold leading-none tracking-tight sm:text-5xl">
+                      <span className="truncate">{form.name || "GymLogs User"}</span>
+                    </h1>
+                    <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-cyan-100/85">
+                      <span>@{form.username || "username"}</span>
+                      {visibleProfile?.location && (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin className="h-3.5 w-3.5" />
+                          {visibleProfile.location}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                  <Button className="gap-1.5 bg-cyan-300 text-slate-950 hover:bg-cyan-200" onClick={() => setEditProfileOpen(true)}>
+                    Profil bearbeiten
+                    <Sparkles className="h-4 w-4" />
                   </Button>
-                </a>
-                <Link href="/social">
-                  <Button variant="secondary" className="gap-1.5">
-                    Social
-                    <MoveRight className="h-4 w-4" />
-                  </Button>
-                </Link>
+                  <Link href={profileUrl}>
+                    <Button variant="secondary" className="w-full gap-1.5 bg-white/15 text-white hover:bg-white/25 sm:w-auto">
+                      Oeffentlich ansehen
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                  <a href="#messages">
+                    <Button variant="outline" className="w-full gap-1.5 border-white/20 bg-slate-950/30 text-white hover:bg-white/10 sm:w-auto">
+                      Nachrichten
+                      <MoveRight className="h-4 w-4" />
+                    </Button>
+                  </a>
+                </div>
               </div>
             </div>
           </div>
-          <CardContent className="space-y-4 p-3.5 sm:space-y-5 sm:p-6">
-            <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
+          <CardContent className="space-y-5 p-4 sm:p-6">
+            <div className="grid gap-3 md:grid-cols-[1.25fr_0.75fr]">
+              <div className="rounded-xl border border-border bg-background/70 p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:shadow-lg hover:shadow-cyan-950/10">
+                <p className="mb-2 flex items-center gap-2 text-sm font-medium text-cyan-300">
+                  <Target className="h-4 w-4" />
+                  Fitness Identity
+                </p>
+                {visibleProfile?.bio ? (
+                  <p className="text-sm leading-6 text-muted-foreground">{visibleProfile.bio}</p>
+                ) : (
+                  <p className="text-sm leading-6 text-muted-foreground">Ergaenze Bio, Ziel und Lieblingsuebung, damit dein Profil mehr nach dir aussieht.</p>
+                )}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <IdentityChip icon={Dumbbell} label={visibleProfile?.favoriteLift || bestSet?.exerciseName || "Lieblingsuebung setzen"} />
+                  <IdentityChip icon={Flame} label={`Streak: ${lastWorkoutLabel}`} />
+                  <IdentityChip icon={Activity} label={`Weekly: ${weeklyActivity}`} />
+                </div>
+              </div>
+              <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/12 via-background to-blue-500/10 p-4 shadow-lg shadow-cyan-950/10">
+                <p className="text-xs font-medium uppercase tracking-wide text-cyan-300">Signature Lift</p>
+                <p className="mt-2 truncate text-lg font-semibold">{primaryLiftLabel}</p>
+                <p className="mt-1 text-3xl font-semibold tracking-tight text-cyan-100">{primaryLift ?? "Noch offen"}</p>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                  {primaryLift ? "Aus deinen sichtbaren Trainingsdaten abgeleitet." : "Logge oder verifiziere Sets, damit hier dein staerkster Lift erscheint."}
+                </p>
+              </div>
+            </div>
+            <div className="hidden">
               <Button className="flex-1" onClick={() => setEditProfileOpen(true)}>
                 Profil bearbeiten
               </Button>
@@ -392,7 +557,7 @@ export function ProfilePageClient() {
               </Link>
             </div>
             {(visibleProfile?.bio || visibleProfile?.location || visibleProfile?.favoriteLift || visibleProfile?.trainingGoal) && (
-              <div className="space-y-3 text-sm">
+              <div className="hidden">
                 {visibleProfile?.bio && <p className="leading-6 text-muted-foreground">{visibleProfile.bio}</p>}
                 <div className="flex flex-wrap gap-2">
                   {visibleProfile?.location && <Badge variant="secondary">{visibleProfile.location}</Badge>}
@@ -406,7 +571,22 @@ export function ProfilePageClient() {
                 )}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+            {visibleProfile?.trainingGoal && (
+              <div className="rounded-xl border border-border bg-muted/20 p-4">
+                <p className="mb-1 flex items-center gap-2 text-sm font-medium">
+                  <Target className="h-4 w-4 text-cyan-300" />
+                  Trainingsziel
+                </p>
+                <p className="text-sm leading-6 text-muted-foreground">{visibleProfile.trainingGoal}</p>
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <QuickStat icon={Flame} label="Trainingsstreak" value={lastWorkoutLabel} detail={activeWeeks ? `${activeWeeks} aktive Wochen` : "Noch kein Verlauf"} featured />
+              <QuickStat icon={Dumbbell} label="Top Lift / PR" value={primaryLift ?? "Offen"} detail={primaryLiftLabel} />
+              <QuickStat icon={Calendar} label="Weekly Activity" value={weeklyActivity} detail={trainingSummary ? `${trainingSummary.completedWorkouts} Workouts gesamt` : "Nach Logs sichtbar"} />
+              <QuickStat icon={BarChart3} label="Trainingsvolumen" value={trainingSummary ? `${Math.round(trainingSummary.totalVolume).toLocaleString("de-DE")} kg` : "Offen"} detail={trainingSummary ? `${trainingSummary.totalSets} Sets` : "Keine Daten"} />
+            </div>
+            <div className="hidden">
               {visibleProfile?.heightCm && <QuickStat label="Größe" value={`${visibleProfile.heightCm} cm`} />}
               {visibleProfile?.weightKg && <QuickStat label="Gewicht" value={`${visibleProfile.weightKg} kg`} />}
               {visibleProfile?.birthDate && (
@@ -548,33 +728,36 @@ export function ProfilePageClient() {
 
         <TopLogsCard logs={topLogs} />
 
-        <WorkoutTemplatesCard templates={workoutTemplates} />
+        <WorkoutTemplatesCard templates={workoutTemplates} ownerView />
 
-        <Card id="messages" className="scroll-mt-6">
-          <CardHeader>
+        <Card id="messages" className="scroll-mt-6 overflow-hidden border-cyan-500/10 bg-card/95 shadow-xl shadow-cyan-950/5">
+          <CardHeader className="border-b border-border/70 bg-muted/10">
             <CardTitle className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
               Nachrichten
               {unreadTotal > 0 && <Badge>{unreadTotal} ungelesen</Badge>}
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 p-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
-            <div className="space-y-2">
+          <CardContent className="grid gap-4 p-3.5 sm:p-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+            <div className="max-h-[34rem] space-y-2 overflow-auto pr-1">
               {conversations === undefined ? (
                 <p className="text-sm text-muted-foreground">Nachrichten werden geladen...</p>
               ) : conversations.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Noch keine Nachrichten.</p>
+                <ProfileEmpty icon={MessageCircle} title="Noch keine Nachrichten" copy="Wenn du Beitraege teilst oder Freunde anschreibst, entsteht hier dein Social-Inbox-Verlauf." />
               ) : (
                 conversations.map((conversation) => (
                   <button
                     key={conversation._id}
                     type="button"
                     onClick={() => setActiveConversation(conversation._id)}
-                    className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                    className={cn(
+                      "w-full rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       activeConversation === conversation._id
                         ? "border-primary bg-primary/10"
-                        : "border-border bg-muted/30 hover:bg-muted"
-                    }`}
+                        : conversation.unreadCount > 0
+                          ? "border-primary/40 bg-primary/5 hover:bg-primary/10"
+                          : "border-border bg-muted/30 hover:bg-muted"
+                    )}
                   >
                     <div className="flex items-center gap-3">
                       <Avatar name={conversation.otherUser?.name ?? "?"} avatarUrl={conversation.otherUser?.avatarUrl} />
@@ -594,15 +777,15 @@ export function ProfilePageClient() {
               )}
             </div>
 
-            <div className="min-h-[24rem] rounded-lg border border-border bg-background">
+            <div className="min-h-[28rem] overflow-hidden rounded-lg border border-border bg-background">
               {!thread ? (
                 <div className="flex h-full min-h-[24rem] flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
-                  <MessageCircle className="h-8 w-8" />
+                  <MessageCircle className="h-8 w-8 text-cyan-300" />
                   Wähle eine Unterhaltung aus.
                 </div>
               ) : (
-                <div className="flex min-h-[24rem] flex-col">
-                  <div className="flex items-center justify-between gap-3 border-b border-border p-3">
+                <div className="flex min-h-[28rem] flex-col">
+                  <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/20 p-3">
                     <div className="flex items-center gap-3">
                       <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} />
                       <div>
@@ -630,17 +813,32 @@ export function ProfilePageClient() {
                       </div>
                     )}
                   </div>
-                  <div className="flex-1 space-y-3 overflow-auto p-3">
+                  <div className="flex-1 space-y-3 overflow-auto bg-[radial-gradient(circle_at_top_left,color-mix(in_oklab,var(--color-primary)_10%,transparent),transparent_35%)] p-3 sm:p-4">
                     {thread.messages.map((message) => {
                       const mine = message.senderId === userId;
                       return (
-                        <div key={message._id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                          <div className={`max-w-[78%] rounded-lg border p-3 text-sm ${mine ? "bg-primary text-primary-foreground" : "bg-muted/50"}`}>
-                            <p>{message.body}</p>
-                            <div className={`mt-2 flex items-center justify-between gap-3 text-[0.7rem] ${mine ? "text-primary-foreground/75" : "text-muted-foreground"}`}>
+                        <div key={message._id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
+                          <div
+                            className={cn(
+                              "max-w-[88%] rounded-2xl border px-3 py-2.5 text-sm shadow-sm sm:max-w-[76%]",
+                              mine
+                                ? "rounded-br-md border-primary/30 bg-primary text-primary-foreground shadow-primary/10"
+                                : message.readAt
+                                  ? "rounded-bl-md border-border bg-card"
+                                  : "rounded-bl-md border-primary/30 bg-muted/70"
+                            )}
+                          >
+                            {message.type === "post_share" ? (
+                              <PostShareCard message={message} mine={mine} />
+                            ) : message.type === "image" ? (
+                              <ImageMessage message={message} />
+                            ) : (
+                              <p className="whitespace-pre-wrap break-words leading-5">{message.body}</p>
+                            )}
+                            <div className={cn("mt-2 flex items-center justify-between gap-3 text-[0.7rem]", mine ? "text-primary-foreground/75" : "text-muted-foreground")}>
                               <span>{new Date(message.createdAt).toLocaleString("de-DE")}</span>
                               {mine ? <span>{message.readAt ? "Gelesen" : "Ungelesen"}</span> : (
-                                <button type="button" className="inline-flex items-center gap-1 hover:underline" onClick={() => setReportedMessage(message._id)}>
+                                <button type="button" className="inline-flex items-center gap-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setReportedMessage(message._id)}>
                                   <Flag className="h-3 w-3" />
                                   Melden
                                 </button>
@@ -661,16 +859,53 @@ export function ProfilePageClient() {
                       </div>
                     </div>
                   )}
-                  <div className="border-t border-border p-3">
+                  <div className="border-t border-border bg-card/60 p-3">
+                    {messageImageDraft && (
+                      <div className="mb-3 flex items-center gap-3 rounded-lg border border-border bg-background p-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={messageImageDraft.url} alt="" className="h-14 w-14 rounded-md object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{messageImageDraft.name}</p>
+                          <p className="text-xs text-muted-foreground">Bild wird als Nachricht gesendet.</p>
+                        </div>
+                        <Button type="button" size="icon-sm" variant="ghost" aria-label="Bild entfernen" onClick={clearMessageImageDraft}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    {messageUploadError && <p className="mb-2 text-xs text-destructive">{messageUploadError}</p>}
                     <div className="flex gap-2">
+                      <label
+                        className={cn(
+                          "inline-flex size-9 cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-sm transition-colors hover:bg-muted sm:size-8",
+                          (thread.isBlocked || uploadingMessageImage) && "pointer-events-none opacity-50"
+                        )}
+                        aria-label="Bild senden"
+                        title="Bild senden"
+                      >
+                          <Paperclip className="h-4 w-4" />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          disabled={thread.isBlocked || uploadingMessageImage}
+                          onChange={(event) => uploadMessageImage(event.target.files?.[0])}
+                        />
+                      </label>
                       <Input
                         value={messageBody}
                         disabled={thread.isBlocked}
                         placeholder={thread.isBlocked ? "Du hast diese Person blockiert." : "Nachricht schreiben..."}
                         onChange={(event) => setMessageBody(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            void submitMessage();
+                          }
+                        }}
                         maxLength={600}
                       />
-                      <Button size="icon" disabled={thread.isBlocked || !messageBody.trim()} onClick={() => submitMessage()}>
+                      <Button size="icon" disabled={thread.isBlocked || (!messageBody.trim() && !messageImageDraft)} onClick={() => submitMessage()}>
                         <Send className="h-4 w-4" />
                       </Button>
                     </div>
@@ -686,15 +921,15 @@ export function ProfilePageClient() {
         </Card>
       </div>
 
-      <aside className="space-y-5">
-        <Card>
-          <CardHeader>
+      <aside className="space-y-5 xl:sticky xl:top-20 xl:self-start">
+        <Card className="border-cyan-500/10 bg-card/95 shadow-lg shadow-cyan-950/5">
+          <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Users className="h-4 w-4" />
               Freunde
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <div className="grid gap-2">
               <Label>Per Username hinzufügen</Label>
               <div className="flex gap-2">
@@ -705,6 +940,7 @@ export function ProfilePageClient() {
                 />
                 <Button
                   size="icon"
+                  className="bg-cyan-300 text-slate-950 hover:bg-cyan-200"
                   onClick={async () => {
                     if (!userId || !friendUsername.trim()) return;
                     setFriendError("");
@@ -729,7 +965,7 @@ export function ProfilePageClient() {
               ) : (
                 friends.map((entry) =>
                   entry.friend ? (
-                    <div key={entry.friendshipId} className="flex items-center gap-3 rounded-lg border border-border p-2">
+                    <div key={entry.friendshipId} className="flex items-center gap-3 rounded-xl border border-border bg-muted/20 p-2.5 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/35">
                       <Avatar name={entry.friend.name} avatarUrl={entry.friend.avatarUrl} />
                       <div className="min-w-0 flex-1">
                         <Link href={`/profile/${entry.friend._id}`} className="flex items-center gap-1 truncate text-sm font-medium hover:underline">
@@ -753,8 +989,8 @@ export function ProfilePageClient() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="border-blue-500/10 bg-card/95 shadow-lg shadow-blue-950/5">
+          <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Search className="h-4 w-4" />
               Nutzer finden
@@ -764,7 +1000,7 @@ export function ProfilePageClient() {
             <Input placeholder="Name oder Username" value={query} onChange={(event) => setQuery(event.target.value)} />
             <div className="space-y-2">
               {searchResults?.map((result) => (
-                <div key={result._id} className="rounded-lg border border-border p-3">
+                <div key={result._id} className="rounded-xl border border-border bg-muted/20 p-3 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/35">
                   <div className="flex items-center gap-3">
                 <Avatar name={result.name} avatarUrl={result.avatarUrl} />
                     <div className="min-w-0 flex-1">
@@ -802,15 +1038,15 @@ export function ProfilePageClient() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="border-cyan-500/10 bg-card/95 shadow-lg shadow-cyan-950/5">
+          <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Eye className="h-4 w-4" />
               Datenschutzvorschau
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className={`rounded-lg bg-gradient-to-br ${accentClass} p-4 text-white`}>
+            <div className={`rounded-xl bg-gradient-to-br ${accentClass} p-4 text-white shadow-lg shadow-cyan-950/15`}>
               <div className="flex items-center gap-3">
                 <Avatar name={form.name} avatarUrl={displayAvatarUrl} />
                 <div>
@@ -845,19 +1081,24 @@ export function ProfilePageClient() {
 }
 
 function TopLogsCard({ logs }: { logs: ProfileTopLog[] | undefined }) {
+  const highlight = logs?.[0];
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Trophy className="h-5 w-5" />
+    <Card className="overflow-hidden border-cyan-500/15 bg-card/95 shadow-xl shadow-cyan-950/5">
+      <CardHeader className="border-b border-border/70 bg-muted/10">
+        <CardTitle className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+          <Trophy className="h-5 w-5 text-cyan-300" />
           Top Logs
+          </span>
           {logs?.some((log) => log.isTopFivePercent) && (
-            <Badge className="gap-1">
+            <Badge className="gap-1 bg-cyan-300 text-slate-950">
               <Sparkles className="h-3 w-3" />
               Top 5%
             </Badge>
           )}
         </CardTitle>
+        <p className="text-sm text-muted-foreground">Verified Lifts mit Leaderboard-Gefuehl und Platz fuer kuenftige Video-Highlights.</p>
       </CardHeader>
       <CardContent className="space-y-3 p-4 sm:p-6">
         {logs === undefined ? (
@@ -867,8 +1108,30 @@ function TopLogsCard({ logs }: { logs: ProfileTopLog[] | undefined }) {
             Noch keine verified Logs. Reiche ein Top-Set ein, um hier aufzutauchen.
           </p>
         ) : (
-          logs.map((log) => (
-            <div key={log.submission._id} className="rounded-lg border border-border bg-muted/30 p-3">
+          <>
+          {highlight && (
+            <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/12 via-muted/20 to-background p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-950/10">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-cyan-300">Current Highlight</p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight">{highlight.exerciseName || LIFT_LABELS[highlight.submission.liftType]}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {highlight.submission.weightKg} kg x {highlight.submission.reps} · Score {highlight.submission.score ?? "-"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {highlight.rank && <Badge variant="secondary">#{highlight.rank} von {highlight.total}</Badge>}
+                  {highlight.percentile && <Badge variant="outline">{highlight.percentile}% Percentile</Badge>}
+                  <Badge variant="outline" className="border-cyan-500/30">
+                    <ImageIcon className="h-3 w-3" />
+                    Video ready
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+          {logs.map((log) => (
+            <div key={log.submission._id} className="rounded-lg border border-border bg-muted/25 p-3 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/40">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="font-medium">{log.exerciseName || LIFT_LABELS[log.submission.liftType]}</p>
@@ -896,7 +1159,8 @@ function TopLogsCard({ logs }: { logs: ProfileTopLog[] | undefined }) {
                 {new Date(log.submission.submittedAt).toLocaleDateString("de-DE")}
               </p>
             </div>
-          ))
+          ))}
+          </>
         )}
       </CardContent>
     </Card>
@@ -911,10 +1175,10 @@ function WorkoutTemplatesCard({
   ownerView?: boolean;
 }) {
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-blue-500/10 bg-card/95 shadow-xl shadow-blue-950/5">
+      <CardHeader className="border-b border-border/70 bg-muted/10">
         <CardTitle className="flex items-center gap-2">
-          <Trophy className="h-5 w-5" />
+          <Dumbbell className="h-5 w-5 text-cyan-300" />
           Workout-Playlists
         </CardTitle>
         <p className="text-sm text-muted-foreground">
@@ -925,14 +1189,15 @@ function WorkoutTemplatesCard({
         {templates === undefined ? (
           <p className="text-sm text-muted-foreground">Workout-Playlists werden geladen...</p>
         ) : templates.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {ownerView
-              ? "Speichere ein abgeschlossenes Workout als Vorlage, um es hier anzuzeigen."
-              : "Keine sichtbaren Workout-Playlists."}
-          </p>
+          <ProfileEmpty
+            icon={PlusCircle}
+            title="Noch keine Workout-Playlists"
+            copy={ownerView ? "Speichere ein abgeschlossenes Workout als Vorlage, um es hier anzuzeigen." : "Keine sichtbaren Workout-Playlists."}
+            action={ownerView ? { href: "/workouts", label: "Playlist vorbereiten" } : undefined}
+          />
         ) : (
           templates.map((template) => (
-            <div key={template._id} className="rounded-lg border border-border bg-muted/30 p-3">
+            <div key={template._id} className="rounded-xl border border-border bg-muted/25 p-4 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/40 hover:shadow-lg hover:shadow-cyan-950/10">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="font-medium">{template.name}</p>
@@ -982,6 +1247,81 @@ function WorkoutTemplatesCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+type ChatMessageView = {
+  body: string;
+  postId?: Id<"social_posts">;
+  mediaUrl?: string | null;
+  postPreview?: {
+    _id: Id<"social_posts">;
+    author: { name: string; username?: string } | null;
+    excerpt: string;
+    mediaUrl?: string | null;
+    mediaType?: "image" | "video" | "gif" | null;
+  } | null;
+};
+
+function PostShareCard({ message, mine }: { message: ChatMessageView; mine: boolean }) {
+  const postId = message.postId ?? message.postPreview?._id;
+  const href = postId ? `/social?post=${postId}` : "/social";
+  const authorLabel = message.postPreview?.author
+    ? `@${message.postPreview.author.username ?? message.postPreview.author.name}`
+    : "Unbekannter Autor";
+
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "block overflow-hidden rounded-xl border bg-background text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        mine ? "border-primary-foreground/25 hover:bg-primary-foreground/10" : "border-border hover:bg-muted/40"
+      )}
+    >
+      <div className="flex gap-3 p-3">
+        {message.postPreview?.mediaUrl ? (
+          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+            {message.postPreview.mediaType === "video" ? (
+              <video src={message.postPreview.mediaUrl} className="h-full w-full object-cover" muted />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={message.postPreview.mediaUrl} alt="" className="h-full w-full object-cover" />
+            )}
+          </div>
+        ) : (
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <MessageCircle className="h-5 w-5 text-muted-foreground" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Beitrag geteilt</p>
+          <p className="mt-1 truncate text-sm font-medium">{authorLabel}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+            {message.postPreview?.excerpt || "Dieser Beitrag ist nicht mehr verfuegbar oder hat keinen Text."}
+          </p>
+          <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
+            Beitrag ansehen
+            <ExternalLink className="h-3 w-3" />
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function ImageMessage({ message }: { message: ChatMessageView }) {
+  return (
+    <div className="space-y-2">
+      {message.mediaUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={message.mediaUrl} alt="" className="max-h-72 w-full rounded-xl object-contain" />
+      ) : (
+        <div className="flex min-h-32 items-center justify-center rounded-xl border border-dashed border-border bg-muted/40">
+          <ImageIcon className="h-6 w-6 text-muted-foreground" />
+        </div>
+      )}
+      {message.body && <p className="whitespace-pre-wrap break-words leading-5">{message.body}</p>}
+    </div>
   );
 }
 
@@ -1055,11 +1395,77 @@ function PrivacyToggle({ label, checked, onChange }: { label: string; checked: b
   );
 }
 
-function QuickStat({ label, value }: { label: string; value: string }) {
+function IdentityChip({ icon: Icon, label }: { icon: ComponentType<{ className?: string }>; label: string }) {
   return (
-    <div className="min-h-[4.75rem] rounded-lg border border-border bg-muted/25 p-3">
-      <p className="text-[0.72rem] font-medium uppercase leading-none tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-2 text-base font-semibold leading-tight">{value}</p>
+    <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 text-xs font-medium text-cyan-100">
+      <Icon className="h-3.5 w-3.5 text-cyan-300" />
+      {label}
+    </span>
+  );
+}
+
+function ProfileEmpty({
+  icon: Icon,
+  title,
+  copy,
+  action,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  copy: string;
+  action?: { href: string; label: string };
+}) {
+  return (
+    <div className="rounded-xl border border-dashed border-cyan-500/20 bg-cyan-500/5 p-4 text-sm">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-300">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-medium">{title}</p>
+          <p className="mt-1 leading-5 text-muted-foreground">{copy}</p>
+          {action && (
+            <Link href={action.href}>
+              <Button size="sm" variant="outline" className="mt-3 gap-1.5">
+                {action.label}
+                <MoveRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuickStat({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  featured = false,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  icon?: ComponentType<{ className?: string }>;
+  featured?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "min-h-[6rem] rounded-xl border p-3.5 transition-all hover:-translate-y-0.5 hover:shadow-lg",
+        featured
+          ? "border-cyan-500/30 bg-cyan-500/10 shadow-cyan-950/10"
+          : "border-border bg-muted/20 hover:border-cyan-500/25 hover:bg-muted/35"
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[0.7rem] font-medium uppercase leading-none tracking-wide text-muted-foreground">{label}</p>
+        {Icon && <Icon className="h-4 w-4 text-cyan-300" />}
+      </div>
+      <p className="mt-3 text-xl font-semibold leading-tight tracking-tight">{value}</p>
+      {detail && <p className="mt-1 truncate text-xs text-muted-foreground">{detail}</p>}
     </div>
   );
 }

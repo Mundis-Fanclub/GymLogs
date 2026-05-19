@@ -6,6 +6,8 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 const MAX_MESSAGE_LENGTH = 600;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const MAX_MESSAGES_PER_WINDOW = 8;
+const sharedPostPattern = /Shared a post with you:\s*\/social\?post=([a-z0-9]+)/i;
+const messageType = v.union(v.literal("text"), v.literal("post_share"), v.literal("image"));
 
 function orderedPair(a: Id<"users">, b: Id<"users">) {
   return a < b ? { userAId: a, userBId: b } : { userAId: b, userBId: a };
@@ -13,6 +15,15 @@ function orderedPair(a: Id<"users">, b: Id<"users">) {
 
 function preview(body: string) {
   return body.length > 90 ? `${body.slice(0, 87)}...` : body;
+}
+
+function messagePreview(args: {
+  type?: "text" | "post_share" | "image";
+  body: string;
+}) {
+  if (args.type === "post_share" || sharedPostPattern.test(args.body)) return "Beitrag geteilt";
+  if (args.type === "image") return args.body ? `Bild: ${preview(args.body)}` : "Bild gesendet";
+  return preview(args.body);
 }
 
 async function userPreview(ctx: QueryCtx, user: Doc<"users"> | null) {
@@ -28,6 +39,47 @@ async function userPreview(ctx: QueryCtx, user: Doc<"users"> | null) {
     profileAccent: user.profileAccent ?? "emerald",
     isPro: user.isPro ?? false,
     allowMessages: user.allowMessages ?? true,
+  };
+}
+
+async function postPreview(ctx: QueryCtx, postId: Id<"social_posts"> | undefined) {
+  if (!postId) return null;
+  const post = await ctx.db.get(postId);
+  if (!post) return null;
+  const author = await ctx.db.get(post.authorId);
+  const mediaUrl = post.mediaStorageId ? await ctx.storage.getUrl(post.mediaStorageId) : post.mediaUrl;
+  const text = [post.body, post.bodyAfter].filter(Boolean).join(" ").trim();
+
+  return {
+    _id: post._id,
+    author: author
+      ? {
+          _id: author._id,
+          name: author.name,
+          username: author.username,
+        }
+      : null,
+    excerpt: text.length > 140 ? `${text.slice(0, 137)}...` : text,
+    mediaUrl: mediaUrl ?? null,
+    mediaType: post.mediaType ?? null,
+  };
+}
+
+function legacyPostId(message: Doc<"messages">) {
+  const match = message.body.match(sharedPostPattern);
+  return match?.[1] as Id<"social_posts"> | undefined;
+}
+
+async function renderMessage(ctx: QueryCtx, message: Doc<"messages">) {
+  const derivedPostId = message.postId ?? legacyPostId(message);
+  const derivedType = message.type ?? (derivedPostId ? "post_share" : "text");
+
+  return {
+    ...message,
+    type: derivedType,
+    postId: derivedPostId,
+    postPreview: await postPreview(ctx, derivedPostId),
+    mediaUrl: (message.mediaStorageId ? await ctx.storage.getUrl(message.mediaStorageId) : message.mediaUrl) ?? null,
   };
 }
 
@@ -49,10 +101,22 @@ export const send = mutation({
     senderId: v.id("users"),
     recipientId: v.id("users"),
     body: v.string(),
+    type: v.optional(messageType),
+    postId: v.optional(v.id("social_posts")),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(v.literal("image")),
   },
   handler: async (ctx, args) => {
+    const type = args.type ?? "text";
     const body = args.body.trim().replace(/\s+/g, " ");
-    if (body.length === 0) throw new Error("Message cannot be empty.");
+    if (body.length === 0 && type === "text") throw new Error("Message cannot be empty.");
+    if (type === "image" && !args.mediaStorageId && !args.mediaUrl) {
+      throw new Error("Image messages need an uploaded image.");
+    }
+    if (type === "post_share" && !args.postId) {
+      throw new Error("Shared post messages need a post.");
+    }
     if (args.senderId === args.recipientId) {
       throw new Error("You cannot message yourself.");
     }
@@ -109,16 +173,23 @@ export const send = mutation({
         updatedAt: now,
       }));
 
-    const messageId = await ctx.db.insert("messages", {
+    const message = {
       conversationId,
       senderId: args.senderId,
       recipientId: args.recipientId,
       body,
+      type,
       createdAt: now,
-    });
+      ...(args.postId ? { postId: args.postId } : {}),
+      ...(args.mediaStorageId ? { mediaStorageId: args.mediaStorageId } : {}),
+      ...(args.mediaUrl ? { mediaUrl: args.mediaUrl } : {}),
+      ...(args.mediaStorageId || args.mediaUrl || args.mediaType ? { mediaType: "image" as const } : {}),
+    };
+
+    const messageId = await ctx.db.insert("messages", message);
 
     await ctx.db.patch(conversationId, {
-      lastMessagePreview: preview(body),
+      lastMessagePreview: messagePreview({ type, body }),
       lastSenderId: args.senderId,
       updatedAt: now,
     });
@@ -202,10 +273,23 @@ export const thread = query({
       conversation,
       otherUser: await userPreview(ctx, otherUser),
       isBlocked: Boolean(block),
-      messages: messages.filter((message) =>
-        message.senderId === args.userId ? !message.hiddenForSender : !message.hiddenForRecipient
+      messages: await Promise.all(
+        messages
+          .filter((message) =>
+            message.senderId === args.userId ? !message.hiddenForSender : !message.hiddenForRecipient
+          )
+          .map((message) => renderMessage(ctx, message))
       ),
     };
+  },
+});
+
+export const generateUploadUrl = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("User not found.");
+    return await ctx.storage.generateUploadUrl();
   },
 });
 
