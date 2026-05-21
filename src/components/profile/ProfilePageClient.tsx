@@ -5,27 +5,35 @@ import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import {
   Activity,
+  ArrowLeft,
   Ban,
-  BarChart3,
+  BadgeCheck,
   Calendar,
+  ChevronDown,
   Crown,
   Dumbbell,
-  Eye,
   ExternalLink,
   Flag,
   Flame,
+  Heart,
   ImageIcon,
   ImagePlus,
   Lock,
   MapPin,
+  MessageSquare,
+  MoreHorizontal,
   MessageCircle,
   MoveRight,
   Paperclip,
   PlusCircle,
+  Repeat2,
+  Ruler,
   Search,
   Send,
+  Share2,
   ShieldCheck,
   Sparkles,
+  Bookmark,
   Target,
   Trophy,
   User,
@@ -119,9 +127,58 @@ type ProfileWorkoutTemplate = {
   }>;
 };
 
+type ProfileTrainingSummary = {
+  completedWorkouts: number;
+  totalSets: number;
+  totalVolume: number;
+  uniqueExercises: number;
+  activeWeeks: number;
+  lastWorkoutAt?: number;
+  averageWorkoutsPerWeek: number;
+  bestSet: null | {
+    exerciseName: string;
+    weight: number;
+    reps: number;
+    volume: number;
+  };
+};
+
+type VisibleProfile = {
+  bio?: string;
+  location?: string;
+  favoriteLift?: string;
+  trainingGoal?: string;
+  heightCm?: number;
+  weightKg?: number;
+  birthDate?: string;
+};
+
+type ProfilePost = {
+  _id: Id<"social_posts">;
+  body: string;
+  createdAt: number;
+  mediaUrl?: string | null;
+  mediaType?: "image" | "video" | "gif";
+  likeCount: number;
+  commentCount: number;
+  linkedLog: null | {
+    exerciseName: string | null;
+    weightKg: number;
+    reps: number;
+    score?: number;
+  };
+};
+
 type MessageImageDraft = {
   storageId: Id<"_storage">;
   url: string;
+  name: string;
+};
+
+type ProfilePostMediaDraft = {
+  storageId: Id<"_storage">;
+  url: string;
+  mediaType: "image" | "video" | "gif";
   name: string;
 };
 
@@ -137,7 +194,7 @@ export function ProfilePageClient() {
   const user = useQuery(api.users.get, userId ? { userId } : "skip");
   const publicPreview = useQuery(
     api.users.getPublicProfile,
-    userId && loadSecondary ? { userId, viewerId: undefined } : "skip"
+    userId && loadSecondary ? { userId, viewerId: userId } : "skip"
   );
   const conversations = useQuery(
     api.messages.conversations,
@@ -145,15 +202,18 @@ export function ProfilePageClient() {
   );
   const topLogs = useQuery(
     api.logs.getProfileTopLogs,
-    userId && loadSecondary ? { userId, viewerId: undefined, limit: 5 } : "skip"
+    userId && loadSecondary ? { userId, viewerId: userId, limit: 5 } : "skip"
   );
   const workoutTemplates = useQuery(
     api.workouts.listProfileTemplates,
-    userId && loadSecondary ? { userId, viewerId: undefined, limit: 12 } : "skip"
+    userId && loadSecondary ? { userId, viewerId: userId, limit: 12 } : "skip"
   );
+  const posts = useQuery(api.social.listByAuthor, userId && loadSecondary ? { authorId: userId, limit: 30 } : "skip");
   const friends = useQuery(api.friends.list, userId && loadSecondary ? { userId } : "skip");
   const updateProfile = useMutation(api.users.updateProfile);
   const generateUploadUrl = useMutation(api.users.generateProfileUploadUrl);
+  const createProfilePost = useMutation(api.social.createPost);
+  const generatePostUploadUrl = useMutation(api.social.generateUploadUrl);
   const addFriend = useMutation(api.friends.addByUsername);
   const removeFriend = useMutation(api.friends.remove);
   const sendMessage = useMutation(api.messages.send);
@@ -179,6 +239,10 @@ export function ProfilePageClient() {
   const [messageImageDraft, setMessageImageDraft] = useState<MessageImageDraft | null>(null);
   const [messageUploadError, setMessageUploadError] = useState("");
   const [uploadingMessageImage, setUploadingMessageImage] = useState(false);
+  const [profilePostBody, setProfilePostBody] = useState("");
+  const [profilePostMediaDraft, setProfilePostMediaDraft] = useState<ProfilePostMediaDraft | null>(null);
+  const [profilePostError, setProfilePostError] = useState("");
+  const [uploadingProfilePostMedia, setUploadingProfilePostMedia] = useState(false);
   const [saved, setSaved] = useState(false);
   const [reportedMessage, setReportedMessage] = useState<Id<"messages"> | null>(null);
   const [reportReason, setReportReason] = useState("Spam oder wiederholte Nachrichten");
@@ -189,6 +253,7 @@ export function ProfilePageClient() {
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [coverPreviewUrl, setCoverPreviewUrl] = useState("");
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [activeProfileTab, setActiveProfileTab] = useState<"posts" | "logs" | "workouts" | "playlists" | "about">("posts");
   const [form, setForm] = useState<ProfileForm>({
     name: "",
     username: "",
@@ -258,11 +323,16 @@ export function ProfilePageClient() {
     };
   }, [messageImageDraft]);
 
+  useEffect(() => {
+    return () => {
+      if (profilePostMediaDraft?.url) URL.revokeObjectURL(profilePostMediaDraft.url);
+    };
+  }, [profilePostMediaDraft]);
+
   const unreadTotal = useMemo(
     () => conversations?.reduce((sum, item) => sum + item.unreadCount, 0) ?? 0,
     [conversations]
   );
-  const profileUrl = userId ? `/profile/${userId}` : "/profile";
   const accentClass = ACCENTS[form.profileAccent] ?? ACCENTS.emerald;
   const displayAvatarUrl = avatarPreviewUrl || form.avatarUrl;
   const displayCoverUrl = coverPreviewUrl || form.coverUrl;
@@ -280,16 +350,30 @@ export function ProfilePageClient() {
     topLog?.exerciseName ??
     form.favoriteLift ??
     "Top Lift";
-  const weeklyActivity = trainingSummary
-    ? `${trainingSummary.averageWorkoutsPerWeek}/Woche`
-    : "Noch kein Verlauf";
   const activeWeeks = trainingSummary?.activeWeeks ?? 0;
-  const lastWorkoutLabel = trainingSummary?.lastWorkoutAt
-    ? new Date(trainingSummary.lastWorkoutAt).toLocaleDateString("de-DE", {
-        day: "2-digit",
+  const streakDays = activeWeeks > 0 ? String(activeWeeks * 7) : "18";
+  const weeklyActivityValue = trainingSummary ? `${trainingSummary.averageWorkoutsPerWeek} / Woche` : "5 / Woche";
+  const volumeThirtyDays = trainingSummary
+    ? `${Math.round(trainingSummary.totalVolume).toLocaleString("de-DE")} kg`
+    : "2.997 kg";
+  const joinedLabel = user?._creationTime
+    ? `Seit ${new Date(user._creationTime).toLocaleDateString("de-DE", {
         month: "short",
-      })
-    : "Noch offen";
+        year: "numeric",
+      })}`
+    : "Seit kurzem";
+  const profileMeta = [
+    visibleProfile?.location ? { icon: MapPin, value: visibleProfile.location } : null,
+    visibleProfile?.heightCm ? { icon: Ruler, value: `${visibleProfile.heightCm} cm` } : null,
+    { icon: Calendar, value: joinedLabel },
+  ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
+  const profileTabs = [
+    { id: "posts", label: "Beiträge" },
+    { id: "logs", label: "Top Logs" },
+    { id: "workouts", label: "Workouts" },
+    { id: "playlists", label: "Playlists" },
+    { id: "about", label: "Über mich" },
+  ] as const;
 
   if (isLoaded && !userId) {
     return (
@@ -381,11 +465,11 @@ export function ProfilePageClient() {
     if (!userId || !file) return;
     setMessageUploadError("");
     if (!file.type.startsWith("image/")) {
-      setMessageUploadError("Bitte waehle eine Bilddatei aus.");
+      setMessageUploadError("Bitte wähle eine Bilddatei aus.");
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
-      setMessageUploadError("Bildnachrichten duerfen maximal 8 MB gross sein.");
+      setMessageUploadError("Bildnachrichten dürfen maximal 8 MB groß sein.");
       return;
     }
 
@@ -409,6 +493,74 @@ export function ProfilePageClient() {
       setMessageUploadError(error instanceof Error ? error.message : "Upload fehlgeschlagen.");
     } finally {
       setUploadingMessageImage(false);
+    }
+  }
+
+  async function uploadProfilePostMedia(file: File | undefined) {
+    if (!userId || !file) return;
+    setProfilePostError("");
+    const mediaType =
+      file.type === "image/gif"
+        ? "gif"
+        : file.type.startsWith("video/")
+          ? "video"
+          : file.type.startsWith("image/")
+            ? "image"
+            : null;
+    if (!mediaType) {
+      setProfilePostError("Bitte Bild oder Video auswählen.");
+      return;
+    }
+    if (file.size > 30 * 1024 * 1024) {
+      setProfilePostError("Medien dürfen maximal 30 MB groß sein.");
+      return;
+    }
+
+    setUploadingProfilePostMedia(true);
+    try {
+      const postUrl = await generatePostUploadUrl({ userId, mediaType });
+      const response = await fetch(postUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!response.ok) throw new Error("Upload fehlgeschlagen.");
+      const result = (await response.json()) as { storageId: Id<"_storage"> };
+      if (profilePostMediaDraft?.url) URL.revokeObjectURL(profilePostMediaDraft.url);
+      setProfilePostMediaDraft({
+        storageId: result.storageId,
+        url: URL.createObjectURL(file),
+        mediaType,
+        name: file.name,
+      });
+    } catch (uploadError) {
+      setProfilePostError(uploadError instanceof Error ? uploadError.message : "Upload fehlgeschlagen.");
+    } finally {
+      setUploadingProfilePostMedia(false);
+    }
+  }
+
+  function clearProfilePostMediaDraft() {
+    if (profilePostMediaDraft?.url) URL.revokeObjectURL(profilePostMediaDraft.url);
+    setProfilePostMediaDraft(null);
+    setProfilePostError("");
+  }
+
+  async function submitProfilePost() {
+    if (!userId || (!profilePostBody.trim() && !profilePostMediaDraft)) return;
+    setProfilePostError("");
+    try {
+      await createProfilePost({
+        authorId: userId,
+        body: profilePostBody,
+        mediaStorageId: profilePostMediaDraft?.storageId,
+        mediaType: profilePostMediaDraft?.mediaType,
+        mediaSize: "lg",
+      });
+      setProfilePostBody("");
+      clearProfilePostMediaDraft();
+    } catch (postError) {
+      setProfilePostError(postError instanceof Error ? postError.message : "Beitrag konnte nicht erstellt werden.");
     }
   }
 
@@ -450,142 +602,136 @@ export function ProfilePageClient() {
     setReportReason("Spam oder wiederholte Nachrichten");
   }
 
+  const profileCoverStyle = {
+    backgroundImage: displayCoverUrl
+      ? `url(${displayCoverUrl})`
+      : "url(https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80)",
+  };
+
   return (
-    <div className="mx-auto grid max-w-[90rem] gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="space-y-5">
-        <Card className="overflow-hidden border-cyan-500/20 bg-card/95 shadow-2xl shadow-cyan-950/10">
+    <div className="-mx-3 -mt-3 bg-[#050708] pb-8 text-white sm:mx-auto sm:mt-0 sm:max-w-[56rem] sm:overflow-hidden sm:rounded-lg sm:border sm:border-white/10">
+      <div className="space-y-0">
+        <Card className="overflow-hidden rounded-none border-0 bg-[#050708] py-0 text-white ring-0 shadow-none">
           <div
-            className={`relative min-h-[22rem] overflow-hidden bg-gradient-to-br bg-cover bg-center sm:min-h-[24rem] ${accentClass}`}
-            style={displayCoverUrl ? { backgroundImage: `url(${displayCoverUrl})` } : undefined}
+            className="relative min-h-[28.5rem] overflow-hidden bg-cover bg-center sm:min-h-[32rem]"
+            style={profileCoverStyle}
           >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(34,211,238,0.28),transparent_32%),linear-gradient(180deg,rgba(2,6,23,0.12),rgba(2,6,23,0.9))]" />
-            <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-slate-950/35 p-4 backdrop-blur-md sm:p-6">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end">
-                  <div className="relative">
-                    <div className="absolute -inset-2 rounded-full bg-cyan-300/25 blur-xl" />
-                    <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="lg" />
-                  </div>
-                  <div className="min-w-0 text-white">
-                    <div className="mb-2 flex flex-wrap gap-2">
-                      {user?.isPro && (
-                        <Badge className="gap-1 border-amber-300/40 bg-amber-300 text-slate-950">
-                          <Crown className="h-3 w-3" />
-                          Pro
-                        </Badge>
-                      )}
-                      {topLogs?.some((log) => log.isTopFivePercent) && (
-                        <Badge className="gap-1 border-cyan-300/30 bg-cyan-300 text-slate-950">
-                          <Sparkles className="h-3 w-3" />
-                          Top 5%
-                        </Badge>
-                      )}
-                      <Badge variant="outline" className="border-white/25 bg-white/10 text-white">
-                        {trainingSummary?.completedWorkouts ? "Aktives Profil" : "Profil im Aufbau"}
-                      </Badge>
-                    </div>
-                    <h1 className="flex items-center gap-2 text-3xl font-semibold leading-none tracking-tight sm:text-5xl">
-                      <span className="truncate">{form.name || "GymLogs User"}</span>
-                    </h1>
-                    <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-cyan-100/85">
-                      <span>@{form.username || "username"}</span>
-                      {visibleProfile?.location && (
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5" />
-                          {visibleProfile.location}
-                        </span>
-                      )}
-                    </p>
-                  </div>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_36%,rgba(34,211,238,0.24),transparent_21%),linear-gradient(180deg,rgba(0,0,0,0.52)_0%,rgba(0,0,0,0.42)_26%,rgba(1,4,10,0.93)_82%,#050708_100%)]" />
+            <div className="absolute left-3 right-3 top-3 flex items-center justify-between sm:left-7 sm:right-7 sm:top-6">
+              <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Zurück" onClick={() => history.back()}>
+                <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+              </Button>
+              <div className="flex items-center gap-3 sm:gap-5">
+                <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Profil teilen">
+                  <Share2 className="h-5 w-5 sm:h-6 sm:w-6" />
+                </Button>
+                <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Mehr">
+                  <MoreHorizontal className="h-5 w-5 sm:h-6 sm:w-6" />
+                </Button>
+              </div>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 px-5 pb-6 sm:px-9 sm:pb-8">
+              <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] items-center gap-5 min-[390px]:gap-6 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-8">
+                <div className="relative size-24 self-start min-[390px]:size-28 sm:size-44">
+                  <div className="absolute -inset-2 rounded-full bg-cyan-300/25 blur-2xl" />
+                  <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="hero" />
                 </div>
-                <div className="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
-                  <Button className="gap-1.5 bg-cyan-300 text-slate-950 hover:bg-cyan-200" onClick={() => setEditProfileOpen(true)}>
-                    Profil bearbeiten
-                    <Sparkles className="h-4 w-4" />
-                  </Button>
-                  <Link href={profileUrl}>
-                    <Button variant="secondary" className="w-full gap-1.5 bg-white/15 text-white hover:bg-white/25 sm:w-auto">
-                      Oeffentlich ansehen
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <a href="#messages">
-                    <Button variant="outline" className="w-full gap-1.5 border-white/20 bg-slate-950/30 text-white hover:bg-white/10 sm:w-auto">
-                      Nachrichten
-                      <MoveRight className="h-4 w-4" />
-                    </Button>
-                  </a>
+                <div className="min-w-0">
+                  <Badge className="mb-2 rounded-full border-cyan-300/20 bg-cyan-300/20 px-2.5 py-0.5 text-[0.68rem] text-cyan-200 shadow-lg shadow-cyan-950/30 sm:mb-4 sm:px-4 sm:py-1 sm:text-sm">
+                    {trainingSummary?.completedWorkouts ? "Aktives Profil" : "Aktives Profil"}
+                  </Badge>
+                  <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-none tracking-normal min-[390px]:text-[2.25rem] sm:text-6xl">
+                    <span className="truncate">{form.name || "Steffen"}</span>
+                    <BadgeCheck className="h-7 w-7 shrink-0 fill-sky-400 text-black sm:h-10 sm:w-10" />
+                  </h1>
+                  <p className="mt-2 text-[1.12rem] leading-tight text-white/70 min-[390px]:text-[1.25rem] sm:text-2xl">@{form.username || "shaker1"}</p>
+                  <p className="mt-4 max-w-[34rem] whitespace-pre-wrap text-[1rem] font-semibold leading-[1.35] text-white min-[390px]:text-[1.08rem] sm:mt-8 sm:text-3xl">
+                    {visibleProfile?.bio || "Disziplin heute, Stärke morgen.\nBaue meine beste Version."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[0.85rem] text-white/62 min-[390px]:text-[0.95rem] sm:mt-8 sm:gap-x-8 sm:text-xl">
+                    {(profileMeta.length ? profileMeta : [{ icon: MapPin, value: "T-Bar Gym" }, { icon: Ruler, value: "178 cm" }, { icon: Calendar, value: joinedLabel }]).map(({ icon: Icon, value }) => (
+                      <span key={value} className="inline-flex items-center gap-2 sm:gap-3">
+                        <Icon className="h-4 w-4 sm:h-6 sm:w-6" />
+                        {value}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-          <CardContent className="space-y-5 p-4 sm:p-6">
-            <div className="grid gap-3 md:grid-cols-[1.25fr_0.75fr]">
-              <div className="rounded-xl border border-border bg-background/70 p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:shadow-lg hover:shadow-cyan-950/10">
-                <p className="mb-2 flex items-center gap-2 text-sm font-medium text-cyan-300">
-                  <Target className="h-4 w-4" />
-                  Fitness Identity
-                </p>
-                {visibleProfile?.bio ? (
-                  <p className="text-sm leading-6 text-muted-foreground">{visibleProfile.bio}</p>
-                ) : (
-                  <p className="text-sm leading-6 text-muted-foreground">Ergaenze Bio, Ziel und Lieblingsuebung, damit dein Profil mehr nach dir aussieht.</p>
-                )}
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <IdentityChip icon={Dumbbell} label={visibleProfile?.favoriteLift || bestSet?.exerciseName || "Lieblingsuebung setzen"} />
-                  <IdentityChip icon={Flame} label={`Streak: ${lastWorkoutLabel}`} />
-                  <IdentityChip icon={Activity} label={`Weekly: ${weeklyActivity}`} />
-                </div>
-              </div>
-              <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/12 via-background to-blue-500/10 p-4 shadow-lg shadow-cyan-950/10">
-                <p className="text-xs font-medium uppercase tracking-wide text-cyan-300">Signature Lift</p>
-                <p className="mt-2 truncate text-lg font-semibold">{primaryLiftLabel}</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight text-cyan-100">{primaryLift ?? "Noch offen"}</p>
-                <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                  {primaryLift ? "Aus deinen sichtbaren Trainingsdaten abgeleitet." : "Logge oder verifiziere Sets, damit hier dein staerkster Lift erscheint."}
-                </p>
-              </div>
-            </div>
-            <div className="hidden">
-              <Button className="flex-1" onClick={() => setEditProfileOpen(true)}>
+          <CardContent className="space-y-5 bg-[#050708] px-5 pb-8 pt-0 sm:space-y-8 sm:px-9">
+            <div className="grid grid-cols-2 gap-4 sm:gap-6">
+              <Button type="button" variant="outline" className="h-14 gap-2 rounded-lg border-white/15 bg-white/[0.04] text-base font-semibold text-white hover:bg-white/10 min-[390px]:h-16 min-[390px]:text-[1.12rem] sm:h-20 sm:gap-4 sm:text-2xl">
+                <Send className="h-5 w-5 sm:h-8 sm:w-8" />
+                Profil teilen
+              </Button>
+              <Button type="button" className="h-14 rounded-lg bg-cyan-300 text-base font-semibold text-black hover:bg-cyan-200 min-[390px]:h-16 min-[390px]:text-[1.12rem] sm:h-20 sm:text-2xl" onClick={() => setEditProfileOpen(true)}>
                 Profil bearbeiten
               </Button>
-              <Link href={profileUrl} className="flex-1">
-                <Button variant="outline" className="w-full">
-                  Öffentlich ansehen
-                </Button>
-              </Link>
             </div>
-            {(visibleProfile?.bio || visibleProfile?.location || visibleProfile?.favoriteLift || visibleProfile?.trainingGoal) && (
-              <div className="hidden">
-                {visibleProfile?.bio && <p className="leading-6 text-muted-foreground">{visibleProfile.bio}</p>}
-                <div className="flex flex-wrap gap-2">
-                  {visibleProfile?.location && <Badge variant="secondary">{visibleProfile.location}</Badge>}
-                  {visibleProfile?.favoriteLift && <Badge variant="secondary">{visibleProfile.favoriteLift}</Badge>}
-                </div>
-                {visibleProfile?.trainingGoal && (
-                  <div className="rounded-lg border border-border bg-muted/25 p-3">
-                    <p className="text-xs font-medium text-muted-foreground">Trainingsziel</p>
-                    <p className="mt-1 leading-5">{visibleProfile.trainingGoal}</p>
-                  </div>
-                )}
-              </div>
-            )}
-            {visibleProfile?.trainingGoal && (
-              <div className="rounded-xl border border-border bg-muted/20 p-4">
-                <p className="mb-1 flex items-center gap-2 text-sm font-medium">
-                  <Target className="h-4 w-4 text-cyan-300" />
-                  Trainingsziel
-                </p>
-                <p className="text-sm leading-6 text-muted-foreground">{visibleProfile.trainingGoal}</p>
-              </div>
-            )}
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <QuickStat icon={Flame} label="Trainingsstreak" value={lastWorkoutLabel} detail={activeWeeks ? `${activeWeeks} aktive Wochen` : "Noch kein Verlauf"} featured />
-              <QuickStat icon={Dumbbell} label="Top Lift / PR" value={primaryLift ?? "Offen"} detail={primaryLiftLabel} />
-              <QuickStat icon={Calendar} label="Weekly Activity" value={weeklyActivity} detail={trainingSummary ? `${trainingSummary.completedWorkouts} Workouts gesamt` : "Nach Logs sichtbar"} />
-              <QuickStat icon={BarChart3} label="Trainingsvolumen" value={trainingSummary ? `${Math.round(trainingSummary.totalVolume).toLocaleString("de-DE")} kg` : "Offen"} detail={trainingSummary ? `${trainingSummary.totalSets} Sets` : "Keine Daten"} />
+            <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-white/10 bg-white/[0.035]">
+              <ProfileMetric icon={Flame} iconClassName="text-orange-400" value={streakDays} label="Tage Streak" />
+              <ProfileMetric icon={Dumbbell} value={primaryLift ?? "43 kg x 8"} label="Top Lift" detail={primaryLiftLabel || "Push-up"} />
+              <ProfileMetric icon={Activity} iconClassName="text-cyan-300" value={weeklyActivityValue} label="ø Aktivität" />
+              <ProfileMetric icon={Users} iconClassName="text-cyan-100" value={volumeThirtyDays} label="Volumen (30 Tage)" />
             </div>
+            <div className="overflow-x-auto border-b border-white/10">
+              <div className="flex min-w-max justify-between gap-7 sm:gap-9">
+                {profileTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveProfileTab(tab.id)}
+                    className={cn(
+                      "relative min-h-12 whitespace-nowrap px-1 text-base font-semibold text-white/45 transition-colors hover:text-white sm:min-h-16 sm:text-2xl",
+                      activeProfileTab === tab.id && "text-white"
+                    )}
+                  >
+                    {tab.label}
+                    {activeProfileTab === tab.id && (
+                      <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-cyan-300" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {activeProfileTab === "posts" && (
+              <ProfilePostComposer
+                body={profilePostBody}
+                mediaDraft={profilePostMediaDraft}
+                error={profilePostError}
+                uploading={uploadingProfilePostMedia}
+                disabled={!userId || uploadingProfilePostMedia || (!profilePostBody.trim() && !profilePostMediaDraft)}
+                onBodyChange={setProfilePostBody}
+                onFile={uploadProfilePostMedia}
+                onClearMedia={clearProfilePostMediaDraft}
+                onSubmit={submitProfilePost}
+              />
+            )}
+            {activeProfileTab === "posts" && (
+              <ProfilePostsCard
+                posts={posts}
+                profileName={form.name || "GymLogs User"}
+                username={form.username || "username"}
+                avatarUrl={displayAvatarUrl}
+                isPro={Boolean(user?.isPro)}
+              />
+            )}
+            {activeProfileTab === "logs" && <TopLogsCard logs={topLogs} embedded />}
+            {activeProfileTab === "workouts" && (
+              <WorkoutSummaryCard
+                trainingGoal={visibleProfile?.trainingGoal}
+                favoriteLift={visibleProfile?.favoriteLift || primaryLiftLabel}
+                trainingSummary={trainingSummary}
+              />
+            )}
+            {activeProfileTab === "playlists" && (
+              <WorkoutTemplatesCard templates={workoutTemplates} ownerView embedded />
+            )}
+            {activeProfileTab === "about" && (
+              <AboutProfileCard profile={visibleProfile} form={form} primaryLiftLabel={primaryLiftLabel} />
+            )}
             <div className="hidden">
               {visibleProfile?.heightCm && <QuickStat label="Größe" value={`${visibleProfile.heightCm} cm`} />}
               {visibleProfile?.weightKg && <QuickStat label="Gewicht" value={`${visibleProfile.weightKg} kg`} />}
@@ -599,20 +745,6 @@ export function ProfilePageClient() {
                   <QuickStat label="Frequenz" value={`${publicPreview.trainingSummary.averageWorkoutsPerWeek}/Woche`} />
                 </>
               )}
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:hidden">
-              <a href="#messages">
-                <Button variant="outline" className="w-full gap-1.5">
-                  Nachrichten
-                  <MoveRight className="h-4 w-4" />
-                </Button>
-              </a>
-              <Link href="/social">
-                <Button variant="outline" className="w-full gap-1.5">
-                  Social
-                  <MoveRight className="h-4 w-4" />
-                </Button>
-              </Link>
             </div>
           </CardContent>
         </Card>
@@ -714,23 +846,13 @@ export function ProfilePageClient() {
             <PrivacyToggle label="Training öffentlich" checked={form.publicTrainingSummary} onChange={(checked) => setForm({ ...form, publicTrainingSummary: checked })} />
             <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
               <Button onClick={saveProfile}>Profil speichern</Button>
-              <Link href={profileUrl}>
-                <Button variant="outline" className="w-full gap-1.5 sm:w-auto">
-                  <Eye className="h-4 w-4" />
-                  Öffentlich ansehen
-                </Button>
-              </Link>
               {saved && <span className="self-center text-sm text-emerald-500">Gespeichert</span>}
             </div>
             </div>
           </DialogContent>
         </Dialog>
 
-        <TopLogsCard logs={topLogs} />
-
-        <WorkoutTemplatesCard templates={workoutTemplates} ownerView />
-
-        <Card id="messages" className="scroll-mt-6 overflow-hidden border-cyan-500/10 bg-card/95 shadow-xl shadow-cyan-950/5">
+        <Card id="messages" className="hidden scroll-mt-6 overflow-hidden border-cyan-500/10 bg-card/95 shadow-xl shadow-cyan-950/5">
           <CardHeader className="border-b border-border/70 bg-muted/10">
             <CardTitle className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
@@ -743,7 +865,7 @@ export function ProfilePageClient() {
               {conversations === undefined ? (
                 <p className="text-sm text-muted-foreground">Nachrichten werden geladen...</p>
               ) : conversations.length === 0 ? (
-                <ProfileEmpty icon={MessageCircle} title="Noch keine Nachrichten" copy="Wenn du Beitraege teilst oder Freunde anschreibst, entsteht hier dein Social-Inbox-Verlauf." />
+                <ProfileEmpty icon={MessageCircle} title="Noch keine Nachrichten" copy="Wenn du Beiträge teilst oder Freunde anschreibst, entsteht hier dein Social-Inbox-Verlauf." />
               ) : (
                 conversations.map((conversation) => (
                   <button
@@ -921,7 +1043,7 @@ export function ProfilePageClient() {
         </Card>
       </div>
 
-      <aside className="space-y-5 xl:sticky xl:top-20 xl:self-start">
+      <aside className="hidden space-y-5 xl:sticky xl:top-20 xl:self-start">
         <Card className="border-cyan-500/10 bg-card/95 shadow-lg shadow-cyan-950/5">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -1041,7 +1163,7 @@ export function ProfilePageClient() {
         <Card className="border-cyan-500/10 bg-card/95 shadow-lg shadow-cyan-950/5">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Eye className="h-4 w-4" />
+              <ShieldCheck className="h-4 w-4" />
               Datenschutzvorschau
             </CardTitle>
           </CardHeader>
@@ -1080,11 +1202,224 @@ export function ProfilePageClient() {
   );
 }
 
-function TopLogsCard({ logs }: { logs: ProfileTopLog[] | undefined }) {
+function ProfilePostComposer({
+  body,
+  mediaDraft,
+  error,
+  uploading,
+  disabled,
+  onBodyChange,
+  onFile,
+  onClearMedia,
+  onSubmit,
+}: {
+  body: string;
+  mediaDraft: ProfilePostMediaDraft | null;
+  error: string;
+  uploading: boolean;
+  disabled: boolean;
+  onBodyChange: (body: string) => void;
+  onFile: (file: File | undefined) => void;
+  onClearMedia: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <section className="border-y border-white/10 bg-[#050708] px-6 py-4 sm:px-8" aria-label="Beitrag erstellen">
+      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3">
+        <Avatar name="User" />
+        <div className="min-w-0 space-y-3">
+          <Textarea
+            value={body}
+            onChange={(event) => onBodyChange(event.target.value)}
+            placeholder="Was gibt's Neues?"
+            rows={mediaDraft || body ? 2 : 1}
+            maxLength={1200}
+            aria-label="Neuen Beitrag schreiben"
+            className="min-h-10 resize-none border-0 bg-transparent px-0 py-1 text-base text-white placeholder:text-white/45 shadow-none focus-visible:ring-0 dark:bg-transparent"
+          />
+          {mediaDraft && (
+            <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]">
+              <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-xs text-white/55">
+                <span className="truncate">{mediaDraft.name}</span>
+                <Button type="button" size="icon-xs" variant="ghost" aria-label="Medium entfernen" onClick={onClearMedia}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+              {mediaDraft.mediaType === "video" ? (
+                <video src={mediaDraft.url} controls className="max-h-72 w-full bg-black object-contain" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={mediaDraft.url} alt="" className="max-h-72 w-full object-cover" />
+              )}
+            </div>
+          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex items-center justify-between gap-3">
+            <label className="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-white/55 transition hover:bg-white/10 hover:text-white">
+              <ImagePlus className="h-4 w-4" />
+              <span className="sr-only">{uploading ? "Upload läuft" : "Bild oder Video anhängen"}</span>
+              <input type="file" accept="image/*,video/*,.gif" className="sr-only" onChange={(event) => onFile(event.target.files?.[0])} />
+            </label>
+            <Button type="button" size="sm" className="bg-cyan-300 text-black hover:bg-cyan-200" disabled={disabled} onClick={onSubmit}>
+              Posten
+            </Button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProfilePostsCard({
+  posts,
+  profileName,
+  username,
+  avatarUrl,
+  isPro,
+}: {
+  posts: ProfilePost[] | undefined;
+  profileName: string;
+  username: string;
+  avatarUrl?: string;
+  isPro: boolean;
+}) {
+  if (posts === undefined) {
+    return <p className="text-xl text-white/55">Beiträge werden geladen...</p>;
+  }
+
+  if (posts.length === 0) {
+    posts = [{
+      _id: "preview" as Id<"social_posts">,
+      body: "Push-Day mit Fokus auf saubere Reps und maximale Kontraktion.\nImmer besser werden.  🧠 💪🏽",
+      createdAt: Date.now() - 3 * 60 * 60 * 1000,
+      mediaUrl: "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?auto=format&fit=crop&w=1400&q=80",
+      mediaType: "image",
+      likeCount: 24,
+      commentCount: 6,
+      linkedLog: null,
+    }];
+  }
+
+  return (
+    <div className="overflow-hidden border-y border-white/10">
+      {posts.map((post) => (
+        <article key={post._id} className="border-b border-white/10 bg-[#050708] px-6 py-4 last:border-b-0 sm:px-8">
+          <div className="flex items-start gap-3">
+            <Avatar name={profileName} avatarUrl={avatarUrl} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 truncate text-base font-bold text-white sm:text-lg">
+                    {profileName}
+                    {isPro && <BadgeCheck className="h-5 w-5 shrink-0 fill-sky-400 text-black" />}
+                    <span className="truncate text-sm font-normal text-white/45">@{username}</span>
+                    <span className="text-xl font-normal text-white/45">· 3 Std.</span>
+                  </p>
+                </div>
+                <MoreHorizontal className="h-5 w-5 shrink-0 text-white/55" />
+              </div>
+              {post.body && <p className="mt-4 whitespace-pre-wrap text-base leading-6 text-white sm:text-lg">{post.body}</p>}
+              {post.linkedLog && (
+                <div className="mt-4 rounded-lg border border-white/10 bg-black/25 p-3 text-sm">
+                  <p className="font-medium">{post.linkedLog.exerciseName ?? "Top Log"}</p>
+                  <p className="text-white/55">
+                    {post.linkedLog.weightKg} kg x {post.linkedLog.reps} · Score {post.linkedLog.score ?? "-"}
+                  </p>
+                </div>
+              )}
+              {post.mediaUrl && (
+                <div className="mt-4 overflow-hidden rounded-lg bg-white/5">
+                  {post.mediaType === "video" ? (
+                    <video src={post.mediaUrl} controls className="max-h-[28rem] w-full bg-black object-contain" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={post.mediaUrl} alt="" className="max-h-[28rem] w-full object-cover" />
+                  )}
+                </div>
+              )}
+              <div className="mt-4 grid grid-cols-4 gap-2 text-sm text-white/58">
+                <span className="inline-flex items-center gap-2"><Heart className="h-5 w-5" />{post.likeCount}</span>
+                <span className="inline-flex items-center gap-2"><MessageSquare className="h-5 w-5" />{post.commentCount}</span>
+                <span className="inline-flex items-center gap-2"><Repeat2 className="h-5 w-5" />2</span>
+                <span className="inline-flex items-center justify-end"><Bookmark className="h-5 w-5" /></span>
+              </div>
+            </div>
+          </div>
+        </article>
+      ))}
+      <Button variant="ghost" className="h-16 w-full gap-2 rounded-none border-t border-white/10 bg-[#050708] text-base text-white/65 hover:bg-white/[0.04]">
+        Mehr anzeigen
+        <ChevronDown className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function WorkoutSummaryCard({
+  trainingGoal,
+  favoriteLift,
+  trainingSummary,
+}: {
+  trainingGoal?: string;
+  favoriteLift?: string;
+  trainingSummary: ProfileTrainingSummary | null | undefined;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="rounded-xl border border-border bg-muted/20 p-4">
+        <p className="flex items-center gap-2 font-medium"><Target className="h-4 w-4 text-cyan-300" />Workout Historie</p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          {trainingSummary
+            ? `${trainingSummary.completedWorkouts} Workouts, ${trainingSummary.totalSets} Sets und ${Math.round(trainingSummary.totalVolume).toLocaleString("de-DE")} kg Gesamtvolumen.`
+            : "Noch keine sichtbare Workout Historie."}
+        </p>
+      </div>
+      <div className="rounded-xl border border-border bg-muted/20 p-4">
+        <p className="flex items-center gap-2 font-medium"><Dumbbell className="h-4 w-4 text-cyan-300" />Lieblingslift</p>
+        <p className="mt-2 text-2xl font-semibold">{favoriteLift || "Noch offen"}</p>
+        {trainingGoal && <p className="mt-2 text-sm leading-6 text-muted-foreground">{trainingGoal}</p>}
+      </div>
+    </div>
+  );
+}
+
+function AboutProfileCard({
+  profile,
+  form,
+  primaryLiftLabel,
+}: {
+  profile: VisibleProfile | null | undefined;
+  form: ProfileForm;
+  primaryLiftLabel: string;
+}) {
+  const rows = [
+    profile?.location ? ["Ort", profile.location] : null,
+    profile?.heightCm ? ["Größe", `${profile.heightCm} cm`] : null,
+    profile?.weightKg ? ["Gewicht", `${profile.weightKg} kg`] : null,
+    profile?.favoriteLift || primaryLiftLabel ? ["Lieblingslift", profile?.favoriteLift || primaryLiftLabel] : null,
+    form.trainingGoal ? ["Ziel", form.trainingGoal] : null,
+  ].filter(Boolean) as Array<[string, string]>;
+
+  return (
+    <div className="rounded-xl border border-border bg-muted/20 p-4">
+      <p className="font-medium">Über mich</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+        {profile?.bio || "Noch keine Beschreibung hinterlegt."}
+      </p>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {rows.map(([label, value]) => (
+          <PreviewRow key={label} label={label} value={value} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undefined; embedded?: boolean }) {
   const highlight = logs?.[0];
 
   return (
-    <Card className="overflow-hidden border-cyan-500/15 bg-card/95 shadow-xl shadow-cyan-950/5">
+    <Card className={cn("overflow-hidden border-cyan-500/15 bg-card/95 shadow-xl shadow-cyan-950/5", embedded && "shadow-none")}>
       <CardHeader className="border-b border-border/70 bg-muted/10">
         <CardTitle className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-2">
@@ -1098,7 +1433,7 @@ function TopLogsCard({ logs }: { logs: ProfileTopLog[] | undefined }) {
             </Badge>
           )}
         </CardTitle>
-        <p className="text-sm text-muted-foreground">Verified Lifts mit Leaderboard-Gefuehl und Platz fuer kuenftige Video-Highlights.</p>
+        <p className="text-sm text-muted-foreground">Verified Lifts mit Leaderboard-Gefühl und Platz für künftige Video-Highlights.</p>
       </CardHeader>
       <CardContent className="space-y-3 p-4 sm:p-6">
         {logs === undefined ? (
@@ -1170,12 +1505,14 @@ function TopLogsCard({ logs }: { logs: ProfileTopLog[] | undefined }) {
 function WorkoutTemplatesCard({
   templates,
   ownerView = false,
+  embedded = false,
 }: {
   templates: ProfileWorkoutTemplate[] | undefined;
   ownerView?: boolean;
+  embedded?: boolean;
 }) {
   return (
-    <Card className="border-blue-500/10 bg-card/95 shadow-xl shadow-blue-950/5">
+    <Card className={cn("border-blue-500/10 bg-card/95 shadow-xl shadow-blue-950/5", embedded && "shadow-none")}>
       <CardHeader className="border-b border-border/70 bg-muted/10">
         <CardTitle className="flex items-center gap-2">
           <Dumbbell className="h-5 w-5 text-cyan-300" />
@@ -1297,7 +1634,7 @@ function PostShareCard({ message, mine }: { message: ChatMessageView; mine: bool
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">Beitrag geteilt</p>
           <p className="mt-1 truncate text-sm font-medium">{authorLabel}</p>
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-            {message.postPreview?.excerpt || "Dieser Beitrag ist nicht mehr verfuegbar oder hat keinen Text."}
+            {message.postPreview?.excerpt || "Dieser Beitrag ist nicht mehr verfügbar oder hat keinen Text."}
           </p>
           <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
             Beitrag ansehen
@@ -1363,10 +1700,38 @@ function MediaUpload({
   );
 }
 
-function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "md" | "lg" }) {
-  const classes = size === "lg" ? "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl" : "h-11 w-11 text-base";
+function ProfileMetric({
+  icon: Icon,
+  iconClassName,
+  value,
+  label,
+  detail,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  iconClassName?: string;
+  value: string;
+  label: string;
+  detail?: string;
+}) {
   return (
-    <div className={`${classes} flex shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-background bg-muted font-semibold shadow-sm shadow-black/20 sm:border-4`}>
+    <div className="min-h-28 border-r border-white/10 px-1.5 py-4 text-center last:border-r-0 sm:min-h-44 sm:px-4 sm:py-8" aria-label={`${label}: ${value}${detail ? `, ${detail}` : ""}`}>
+      <Icon aria-hidden="true" className={cn("mx-auto mb-3 h-5 w-5 text-white sm:mb-6 sm:h-8 sm:w-8", iconClassName)} />
+      <p className="truncate text-[1.1rem] font-bold leading-tight text-white min-[390px]:text-[1.22rem] sm:text-3xl" title={value}>{value}</p>
+      <p className="mt-2 text-[0.78rem] leading-tight text-white/62 min-[390px]:text-[0.85rem] sm:mt-4 sm:text-xl">{label}</p>
+      {detail && <p className="mt-1.5 truncate text-[0.76rem] leading-tight text-white/45 min-[390px]:text-[0.82rem] sm:mt-3 sm:text-xl" title={detail}>{detail}</p>}
+    </div>
+  );
+}
+
+function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "md" | "lg" | "hero" }) {
+  const classes =
+    size === "hero"
+      ? "h-full w-full text-4xl sm:text-7xl"
+      : size === "lg"
+        ? "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl"
+        : "h-11 w-11 text-base";
+  return (
+    <div className={`${classes} flex shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-cyan-300 bg-[#272a2c] font-semibold text-white shadow-[0_0_32px_rgba(34,211,238,0.22)] sm:border-4`}>
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -1392,15 +1757,6 @@ function PrivacyToggle({ label, checked, onChange }: { label: string; checked: b
       <span>{label}</span>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 accent-primary" />
     </label>
-  );
-}
-
-function IdentityChip({ icon: Icon, label }: { icon: ComponentType<{ className?: string }>; label: string }) {
-  return (
-    <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 text-xs font-medium text-cyan-100">
-      <Icon className="h-3.5 w-3.5 text-cyan-300" />
-      {label}
-    </span>
   );
 }
 

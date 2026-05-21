@@ -4,26 +4,23 @@ import { useClerk, useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Crown, LogOut, MessageCircle, Moon, Settings, Sun, User } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Crown, LogOut, MessageCircle, Plus, Settings, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/Logo";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
-import {
-  LOCALE_FLAGS,
-  LOCALES,
-  useAppPreferences,
-} from "@/components/providers/AppPreferencesProvider";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 export function TopBar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { userId } = useConvexUser();
   const { user } = useUser();
   const { signOut } = useClerk();
   const profileImageUrl = user?.imageUrl;
-  const { locale, setLocale, theme, toggleTheme, t } = useAppPreferences();
+  const { t } = useAppPreferences();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -60,9 +57,13 @@ export function TopBar() {
     };
   }, [profileMenuOpen]);
 
-  function toggleLocale() {
-    const nextLocale = LOCALES.find((item) => item !== locale) ?? "en";
-    setLocale(nextLocale);
+  if (pathname.startsWith("/profile")) {
+    return null;
+  }
+
+  function handleNewWorkout() {
+    if (!userId) return;
+    router.push("/workouts/new");
   }
 
   function goToProfileMenuItem(href: string) {
@@ -106,34 +107,26 @@ export function TopBar() {
       </div>
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
         <Button
-          type="button"
           size="icon-sm"
           variant="outline"
-          onClick={toggleLocale}
-          aria-label={t("common.openLanguageMenu")}
-          title={t("common.openLanguageMenu")}
-          className="hidden rounded-full font-heading text-[0.65rem] lg:inline-flex"
-        >
-          <span aria-hidden="true">{LOCALE_FLAGS[locale]}</span>
-        </Button>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="outline"
-          onClick={toggleTheme}
-          aria-label={theme === "dark" ? t("common.switchToLight") : t("common.switchToDark")}
-          title={theme === "dark" ? t("common.switchToLight") : t("common.switchToDark")}
-          className="hidden rounded-full lg:inline-flex"
-        >
-          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="hidden gap-1.5 !border-amber-300 !bg-amber-300 !text-slate-950 hover:!bg-amber-200 lg:inline-flex"
+          aria-label={t("common.proPrice")}
+          title={t("common.proPrice")}
+          className="gap-1.5 !border-amber-300 !bg-amber-300 !text-slate-950 hover:!bg-amber-200 sm:w-auto sm:px-3 lg:inline-flex"
         >
           <Crown className="h-4 w-4" />
           <span className="hidden sm:inline">{t("common.proPrice")}</span>
+        </Button>
+        <Button
+          size="icon-sm"
+          onClick={handleNewWorkout}
+          aria-label={t("common.newWorkout")}
+          className="order-1 lg:hidden"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+        <Button size="sm" onClick={handleNewWorkout} className="hidden gap-1.5 lg:inline-flex">
+          <Plus className="h-4 w-4" />
+          <span>{t("common.newWorkout")}</span>
         </Button>
         <div className="relative order-2" ref={profileMenuRef}>
           <Button
@@ -174,7 +167,7 @@ export function TopBar() {
               <ProfileMenuItem
                 icon={User}
                 label="Profil anzeigen"
-                onClick={() => goToProfileMenuItem(userId ? `/profile/${userId}` : "/profile")}
+                onClick={() => goToProfileMenuItem("/profile")}
               />
               <ProfileMenuItem
                 icon={MessageCircle}

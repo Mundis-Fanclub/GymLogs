@@ -25,6 +25,7 @@ import {
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { useConvexUser } from "@/hooks/useConvexUser";
+import { ProfilePageIsland } from "@/components/profile/ProfilePageIsland";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -100,26 +101,42 @@ export default function PublicProfilePage() {
   const params = useParams<{ userId: string }>();
   const viewedUserId = params.userId as Id<"users">;
   const { userId } = useConvexUser();
+  if (userId === viewedUserId) {
+    return <ProfilePageIsland />;
+  }
+  return <PublicProfileContent viewedUserId={viewedUserId} userId={userId} />;
+}
+
+function PublicProfileContent({
+  viewedUserId,
+  userId,
+}: {
+  viewedUserId: Id<"users">;
+  userId: Id<"users"> | null | undefined;
+}) {
   const profile = useQuery(api.users.getPublicProfile, {
     userId: viewedUserId,
-    viewerId: undefined,
+    ...(userId ? { viewerId: userId } : {}),
   });
   const topLogs = useQuery(api.logs.getProfileTopLogs, {
     userId: viewedUserId,
-    viewerId: undefined,
+    ...(userId ? { viewerId: userId } : {}),
     limit: 5,
   });
   const workoutTemplates = useQuery(api.workouts.listProfileTemplates, {
     userId: viewedUserId,
-    viewerId: undefined,
+    ...(userId ? { viewerId: userId } : {}),
     limit: 12,
   });
   const posts = useQuery(api.social.listByAuthor, {
     authorId: viewedUserId,
-    viewerId: userId,
+    ...(userId ? { viewerId: userId } : {}),
     limit: 30,
   });
   const sendMessage = useMutation(api.messages.send);
+  const friends = useQuery(api.friends.list, userId ? { userId } : "skip");
+  const addFriend = useMutation(api.friends.addByUsername);
+  const removeFriend = useMutation(api.friends.remove);
   const blockUser = useMutation(api.messages.blockUser);
   const reportUser = useMutation(api.messages.reportUser);
   const [body, setBody] = useState("");
@@ -156,6 +173,7 @@ export default function PublicProfilePage() {
   }
 
   const isSelf = userId === viewedUserId;
+  const friendship = friends?.find((entry) => entry.friend?._id === viewedUserId);
   const accent = ACCENTS[(profile.profileAccent ?? "emerald") as keyof typeof ACCENTS] ?? ACCENTS.emerald;
   const visibleMetrics = [
     profile.heightCm ? { icon: Ruler, label: "Größe", value: `${profile.heightCm} cm` } : null,
@@ -202,6 +220,18 @@ export default function PublicProfilePage() {
                         Nachricht senden
                       </Button>
                     )}
+                    <Button
+                      variant={friendship ? "secondary" : "outline"}
+                      onClick={() =>
+                        friendship
+                          ? removeFriend({ userId, friendId: viewedUserId })
+                          : addFriend({ userId, username: profile.username ?? "" })
+                      }
+                      disabled={!profile.username}
+                    >
+                      <User className="h-4 w-4" />
+                      {friendship ? "Befreundet" : "Freund hinzufuegen"}
+                    </Button>
                     <Button variant="outline" onClick={() => blockUser({ blockerId: userId, blockedId: viewedUserId })}>
                       <Ban className="h-4 w-4" />
                       Blockieren
