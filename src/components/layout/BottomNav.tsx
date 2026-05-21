@@ -32,13 +32,13 @@ export function BottomNav() {
               active={active}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-[3.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-[0.62rem] font-medium leading-none transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] min-[390px]:text-[0.66rem]",
+                "flex min-h-[3.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-xs font-semibold leading-none transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] min-[390px]:text-[0.8rem]",
                 active
                   ? "bg-primary text-primary-foreground shadow-sm shadow-black/15"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              <Icon className="h-[1.05rem] w-[1.05rem]" />
+              <Icon className="h-5 w-5" />
               <span className="max-w-full truncate">{t(labelKey)}</span>
             </AppNavLink>
           );
