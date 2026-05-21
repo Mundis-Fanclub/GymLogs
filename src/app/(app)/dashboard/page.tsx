@@ -7,9 +7,10 @@ import { RecentPRs } from "@/components/dashboard/RecentPRs";
 import { RecentWorkouts } from "@/components/dashboard/RecentWorkouts";
 import { StatsCard } from "@/components/dashboard/StatsCard";
 import { useConvexUser } from "@/hooks/useConvexUser";
-import { FEATURED_LOGS, PRICING_PLANS } from "@/lib/product";
+import { FEATURED_LOGS, MVP_EXERCISES, PRICING_PLANS } from "@/lib/product";
 import { formatVolume } from "@/lib/pr-utils";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { AlertCircle, ArrowRight, Crown, Dumbbell, ShieldCheck, Trophy, User, Video } from "lucide-react";
+import { AlertCircle, Crown, Dumbbell, ShieldCheck, Trophy, User, Video } from "lucide-react";
 
 export default function DashboardPage() {
   const { userId, isLoaded } = useConvexUser();
@@ -85,10 +86,10 @@ export default function DashboardPage() {
                 {t("dashboard.copy")}
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href="/logs">
+                <Link href="/workouts/new">
                   <Button className="gap-2 bg-white text-slate-950 hover:bg-white/90">
-                    <Trophy className="h-4 w-4" />
-                    {t("dashboard.exploreLogs")}
+                    <Dumbbell className="h-4 w-4" />
+                    {t("common.startWorkout")}
                   </Button>
                 </Link>
                 <Button
@@ -224,13 +225,49 @@ export default function DashboardPage() {
                 {t("dashboard.proSensibleCopy")}
               </p>
             </div>
-            <Link href="/logs" className="inline-flex items-center gap-2 text-sm font-medium">
-              {t("dashboard.logsConcept")}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("logsPage.leaderboardTitle")}</CardTitle>
+          <CardDescription>{t("logsPage.leaderboardCopy")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 px-4 sm:px-6">
+          {FEATURED_LOGS.map((entry) => (
+            <div
+              key={`${entry.athlete}-${entry.rank}`}
+              className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-3 sm:px-4"
+            >
+              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-semibold">
+                  #{entry.rank}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <p className="truncate font-medium">{entry.athlete}</p>
+                    <Badge variant={entry.status === "verified" ? "default" : "secondary"}>
+                      {entry.status === "verified"
+                        ? t("common.verified")
+                        : t("common.pendingReview")}
+                    </Badge>
+                  </div>
+                  <p className="truncate text-sm text-muted-foreground">
+                    {entry.exercise} / {entry.lift} / {entry.bodyweightClass}
+                  </p>
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-xl font-semibold">{entry.score}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  {t("common.logScore")}
+                </p>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -253,6 +290,20 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("logsPage.exercisePoolTitle")}</CardTitle>
+          <CardDescription>{t("logsPage.exercisePoolCopy")}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {MVP_EXERCISES.map((exercise) => (
+            <Badge key={exercise} variant="secondary" className="rounded-full px-3 py-1">
+              {exercise}
+            </Badge>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }
