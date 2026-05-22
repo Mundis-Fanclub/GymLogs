@@ -49,30 +49,30 @@ const PREDEFINED_EXERCISES = [
   { name: "Dips (Triceps)", muscleGroup: "triceps", category: "push" },
   { name: "Cable Overhead Tricep Extension", muscleGroup: "triceps", category: "push" },
 
-  // QUADS - legs
-  { name: "Squat", muscleGroup: "legs", category: "legs" },
-  { name: "Front Squat", muscleGroup: "legs", category: "legs" },
-  { name: "Hack Squat", muscleGroup: "legs", category: "legs" },
-  { name: "Leg Press", muscleGroup: "legs", category: "legs" },
-  { name: "Leg Extension", muscleGroup: "legs", category: "legs" },
-  { name: "Bulgarian Split Squat", muscleGroup: "legs", category: "legs" },
-  { name: "Lunge", muscleGroup: "legs", category: "legs" },
+  // QUADS - legs (compound bleibt "legs", Isolation -> quads)
+  { name: "Squat", muscleGroup: "legs", category: "legs", bodygraphZones: ["quads", "glutes"] },
+  { name: "Front Squat", muscleGroup: "legs", category: "legs", bodygraphZones: ["quads", "glutes"] },
+  { name: "Hack Squat", muscleGroup: "legs", category: "legs", bodygraphZones: ["quads", "glutes"] },
+  { name: "Leg Press", muscleGroup: "legs", category: "legs", bodygraphZones: ["quads", "hamstrings", "glutes"] },
+  { name: "Leg Extension", muscleGroup: "quads", category: "legs" },
+  { name: "Bulgarian Split Squat", muscleGroup: "legs", category: "legs", bodygraphZones: ["quads", "glutes", "hamstrings"] },
+  { name: "Lunge", muscleGroup: "legs", category: "legs", bodygraphZones: ["quads", "glutes"] },
 
-  // HAMSTRINGS - legs
-  { name: "Leg Curl", muscleGroup: "legs", category: "legs" },
-  { name: "Nordic Curl", muscleGroup: "legs", category: "legs" },
-  { name: "Stiff Leg Deadlift", muscleGroup: "legs", category: "legs" },
-  { name: "Good Morning", muscleGroup: "legs", category: "legs" },
+  // HAMSTRINGS - legs (compound bleibt "legs", Isolation -> hamstrings)
+  { name: "Leg Curl", muscleGroup: "hamstrings", category: "legs" },
+  { name: "Nordic Curl", muscleGroup: "hamstrings", category: "legs" },
+  { name: "Stiff Leg Deadlift", muscleGroup: "legs", category: "legs", bodygraphZones: ["hamstrings", "glutes"] },
+  { name: "Good Morning", muscleGroup: "legs", category: "legs", bodygraphZones: ["hamstrings", "glutes"] },
 
   // GLUTES - legs
-  { name: "Hip Thrust", muscleGroup: "legs", category: "legs" },
-  { name: "Glute Bridge", muscleGroup: "legs", category: "legs" },
-  { name: "Cable Kickback", muscleGroup: "legs", category: "legs" },
+  { name: "Hip Thrust", muscleGroup: "glutes", category: "legs" },
+  { name: "Glute Bridge", muscleGroup: "glutes", category: "legs" },
+  { name: "Cable Kickback", muscleGroup: "glutes", category: "legs" },
 
   // CALVES - legs
-  { name: "Standing Calf Raise", muscleGroup: "legs", category: "legs" },
-  { name: "Seated Calf Raise", muscleGroup: "legs", category: "legs" },
-  { name: "Donkey Calf Raise", muscleGroup: "legs", category: "legs" },
+  { name: "Standing Calf Raise", muscleGroup: "calves", category: "legs" },
+  { name: "Seated Calf Raise", muscleGroup: "calves", category: "legs" },
+  { name: "Donkey Calf Raise", muscleGroup: "calves", category: "legs" },
 
   // CORE - other
   { name: "Plank", muscleGroup: "core", category: "other" },
@@ -127,6 +127,9 @@ export const seedExercises = internalMutation({
         isCustom: false,
         isLeaderboardLift: Boolean(leaderboardLiftType),
         ...(leaderboardLiftType ? { leaderboardLiftType } : {}),
+        ...("bodygraphZones" in exercise && exercise.bodygraphZones
+          ? { bodygraphZones: [...exercise.bodygraphZones] }
+          : { bodygraphZones: undefined }),
       };
 
       if (existing) {
@@ -142,6 +145,44 @@ export const seedExercises = internalMutation({
     }
 
     return `Seeded ${inserted} exercises, updated ${updated} exercises`;
+  },
+});
+
+export const patchCustomBodygraphZones = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const customExercises = await ctx.db
+      .query("exercises")
+      .filter((q) => q.eq(q.field("isCustom"), true))
+      .collect();
+
+    type Zone =
+      | "chest"
+      | "back"
+      | "shoulders"
+      | "biceps"
+      | "triceps"
+      | "quads"
+      | "hamstrings"
+      | "glutes"
+      | "calves"
+      | "core"
+      | "legs";
+    const zonesByName: Record<string, Zone[]> = {
+      Beinpresse: ["quads", "hamstrings", "glutes"],
+      Beinbeuger: ["hamstrings"],
+    };
+
+    let patched = 0;
+    for (const ex of customExercises) {
+      const zones = zonesByName[ex.name];
+      if (!zones) continue;
+      if (ex.bodygraphZones && ex.bodygraphZones.length > 0) continue;
+      await ctx.db.patch(ex._id, { bodygraphZones: zones });
+      patched += 1;
+    }
+
+    return `Patched ${patched} custom exercises`;
   },
 });
 

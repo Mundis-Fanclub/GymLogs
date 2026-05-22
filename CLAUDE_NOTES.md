@@ -122,6 +122,53 @@ Source-Body-Image per `scipy.ndimage.label` auf den Body-Fill-Pixeln analysiert.
 
 ---
 
+## 2026-05-22 — Bein-Sub-Zonen (Quads / Hamstrings / Calves) eingeführt
+
+### Problem
+`toBodyPart()` kollabierte `quads | hamstrings | calves` → `legs`. Eine Isolation wie Beinstrecker (Leg Extension) färbte deshalb das ganze Bein inkl. Waden, statt nur den Quadrizeps.
+
+### Lösung
+Quads/Hamstrings/Calves als eigene BodyParts eingeführt (parallel zur Glutes-Vorlage, wie im Forearms-Hinweis am Eintrag 2026-05-17 dokumentiert).
+
+- [src/lib/muscle-groups.ts](src/lib/muscle-groups.ts): `BODY_PARTS` um `quads | hamstrings | calves` erweitert; `BODY_PART_COLORS` analog (Bein-Family-Töne); `toBodyPart()` lässt die drei jetzt durch statt → legs
+- [src/components/workout/WorkoutMuscleMap.tsx](src/components/workout/WorkoutMuscleMap.tsx): `BODY_LABELS` + `BODY_PART_MASKS` erweitert (Labels: Quads / Beinbeuger / Waden)
+- [src/components/workout/WorkoutMuscleAvatar.tsx](src/components/workout/WorkoutMuscleAvatar.tsx): `BODY_LABELS` erweitert + `LEG_SUBPARTS`-Set, das im Mini-Avatar quads/hamstrings/calves zusätzlich auf "legs" mappt (das Avatar-SVG hat keine eigenen Sub-Pfade, soll aber weiter aufleuchten wenn ein Bein-Teil getroffen wurde)
+- [convex/analytics.ts](convex/analytics.ts): eigene `BODY_PARTS`-Liste + `toBodyPart()` analog synchronisiert (Backend hatte eigene Kopie der Konstanten)
+- [convex/seed.ts](convex/seed.ts) + [src/lib/default-exercises.ts](src/lib/default-exercises.ts): nur **eindeutige Isolationen** umgetaggt — Leg Extension → quads, Leg Curl + Nordic Curl → hamstrings, alle Calf Raises → calves, Hip Thrust + Glute Bridge + Cable Kickback → glutes. **Compounds bleiben "legs"** (Squat, Lunge, Leg Press, Bulgarian Split Squat, Front/Hack Squat, Stiff Leg Deadlift, Good Morning) — sie treffen anatomisch mehrere Muskelgruppen, würden bei Sub-Tagging falsch wirken.
+- `category` bleibt überall `"legs"` — die Trainings-Kategorie ist unverändert, nur die Bodygraph-Zone wird feiner.
+
+### Masken-Build (Sub-Masken aus bestehender legs.png)
+[scripts/bodygraph_analyze_legs.py](scripts/bodygraph_analyze_legs.py) + [scripts/bodygraph_build_leg_masks.py](scripts/bodygraph_build_leg_masks.py):
+
+- Bestehende `legs.png` (alpha=150, 22 Komponenten) per Pixel-Klassifikation aufgeteilt nach **Y-Cut bei y=740** (saubere Lücke zwischen Oberschenkel-Komponenten Ende y=728/739 und Calf-Komponenten Start y=741/748) und **X-Cut bei x=720** (Front/Back).
+- Resultat: `quads.png` (34644 px, Front+Oben), `hamstrings.png` (23595 px, Back+Oben), `calves.png` (31785 px, beide Seiten unten). Summe = 90024 px = original-legs-Pixel (verlustfrei aufgeteilt).
+- Alle drei mit alpha=150 und Roter Farbe (239,68,68) wie alle anderen Masken.
+
+### legs.png bleibt unverändert
+Compound-Übungen wie Squat haben weiter `muscleGroup: "legs"` → `legs.png` deckt weiter das gesamte Bein. Wenn ein Workout sowohl Squat als auch Beinstrecker enthält, werden `legs.png` + `quads.png` überlagert (Squat färbt alles, Beinstrecker zusätzlich nur den Quad-Bereich nochmal stärker) — das ist gewünschtes Verhalten.
+
+### Wichtig für zukünftige Änderungen
+- **Y-Cut 740 ist der sauberste Trenner** — wenn die `legs.png` jemals neu gebaut wird, diese Lücke beibehalten.
+- **Compounds bewusst nicht auf Sub-Muskelgruppe taggen** — User-Entscheidung: nur Isolationen kriegen die Sub-Zone. Wenn neue Übungen dazukommen, im selben Stil entscheiden (Maschine/Isolation → sub, Compound mit Stab → legs).
+- **Backend und Frontend müssen synchron bleiben**: [convex/analytics.ts](convex/analytics.ts) hat eine **eigene Kopie** von `BODY_PARTS` + `toBodyPart` — beim nächsten Erweitern beide Stellen anpassen.
+- Die Hüft-Übergangs-Komponenten (L5/L6 y=545-608) sind weiter in der `hamstrings.png` enthalten — Erbschaft aus legs.png. Falls das später als störend auffällt: Pixel mit y<565 raus.
+- **Avatar-SVG (`WorkoutMuscleAvatar`) hat keine Sub-Bein-Pfade** — das `LEG_SUBPARTS`-Mapping muss bleiben, sonst leuchten Sub-Bein-Übungen im Avatar nicht. Falls jemand ein detaillierteres Avatar will: SVG-Pfade für Quad/Hamstring/Calf-Regionen ergänzen und Mapping rückbauen.
+
+### Betroffene Dateien
+- `src/lib/muscle-groups.ts`
+- `src/components/workout/WorkoutMuscleMap.tsx`
+- `src/components/workout/WorkoutMuscleAvatar.tsx`
+- `convex/analytics.ts`
+- `convex/seed.ts`
+- `src/lib/default-exercises.ts`
+- `public/bodygraph-masks/quads.png` (neu)
+- `public/bodygraph-masks/hamstrings.png` (neu)
+- `public/bodygraph-masks/calves.png` (neu)
+- `scripts/bodygraph_analyze_legs.py` (neu, reproduzierbares Analyse-Tool)
+- `scripts/bodygraph_build_leg_masks.py` (neu, reproduzierbarer Masken-Builder)
+
+---
+
 ## Verwandte Dokumente
 
 - [docs/bodygraph-session-notes.md](docs/bodygraph-session-notes.md) — Frühere Session-Notes, beschreibt die ursprüngliche Mask-Komposition (Stand 2026-05-15). **Achtung**: dort dokumentierte ConvexHull-Lösung für Back-Calves ist seit 2026-05-17 überholt — siehe Eintrag oben.

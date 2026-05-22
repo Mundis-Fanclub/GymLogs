@@ -13,10 +13,11 @@ import {
 } from "recharts";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import {
-  BODY_PARTS,
+  DISPLAY_BODY_PARTS,
   getWeeklySetVolumeColor,
   toBodyPart,
-  type BodyPart,
+  toDisplayBodyPart,
+  type DisplayBodyPart,
 } from "@/lib/muscle-groups";
 
 interface WeekData {
@@ -29,7 +30,7 @@ interface VolumeBarChartProps {
 }
 
 interface FormattedVolumeDatum {
-  key: BodyPart;
+  key: DisplayBodyPart;
   label: string;
   sets: number;
   volume: number;
@@ -103,7 +104,7 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
   const totals = data.reduce(
     (acc, week) => {
       for (const [group, rawValue] of Object.entries(week.volumes)) {
-        const part = toBodyPart(group);
+        const part = toDisplayBodyPart(toBodyPart(group));
         const value =
           typeof rawValue === "number"
             ? { sets: rawValue > 0 ? 1 : 0, volume: rawValue }
@@ -114,14 +115,14 @@ export function VolumeBarChart({ data }: VolumeBarChartProps) {
       return acc;
     },
     Object.fromEntries(
-      BODY_PARTS.map((part) => [part, { sets: 0, volume: 0 }])
+      DISPLAY_BODY_PARTS.map((part) => [part, { sets: 0, volume: 0 }])
     ) as Record<
-      BodyPart,
+      DisplayBodyPart,
       { sets: number; volume: number }
     >
   );
 
-  const formatted = BODY_PARTS.filter((part) => part !== "other").map((part) => ({
+  const formatted = DISPLAY_BODY_PARTS.filter((part) => part !== "other").map((part) => ({
     key: part,
     label: t(`muscleGroups.${part}`),
     sets: totals[part].sets,

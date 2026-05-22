@@ -7,12 +7,51 @@ export const BODY_PARTS = [
   "triceps",
   "core",
   "legs",
+  "quads",
+  "hamstrings",
+  "calves",
   "glutes",
   "shoulders",
   "other",
 ] as const;
 
 export type BodyPart = (typeof BODY_PARTS)[number];
+
+export const SUB_LEG_PARTS = ["quads", "hamstrings", "calves"] as const;
+export type SubLegPart = (typeof SUB_LEG_PARTS)[number];
+
+export const DISPLAY_BODY_PARTS = BODY_PARTS.filter(
+  (part): part is Exclude<BodyPart, SubLegPart> =>
+    !(SUB_LEG_PARTS as readonly string[]).includes(part)
+);
+export type DisplayBodyPart = (typeof DISPLAY_BODY_PARTS)[number];
+
+export function toDisplayBodyPart(part: BodyPart): DisplayBodyPart {
+  return (SUB_LEG_PARTS as readonly string[]).includes(part)
+    ? "legs"
+    : (part as DisplayBodyPart);
+}
+
+export function legsAggregatedSetCount(
+  setCounts: Partial<Record<BodyPart, number>>
+): number {
+  return (
+    (setCounts.legs ?? 0) +
+    (setCounts.quads ?? 0) +
+    (setCounts.hamstrings ?? 0) +
+    (setCounts.calves ?? 0)
+  );
+}
+
+export function exerciseBodygraphParts(exercise: {
+  muscleGroup: string;
+  bodygraphZones?: string[];
+}): BodyPart[] {
+  if (exercise.bodygraphZones && exercise.bodygraphZones.length > 0) {
+    return exercise.bodygraphZones.map(toBodyPart);
+  }
+  return [toBodyPart(exercise.muscleGroup)];
+}
 
 export const BODY_PART_COLORS: Record<BodyPart, string> = {
   chest: "#ef4444",
@@ -21,6 +60,9 @@ export const BODY_PART_COLORS: Record<BodyPart, string> = {
   triceps: "#ec4899",
   core: "#06b6d4",
   legs: "#22c55e",
+  quads: "#10b981",
+  hamstrings: "#84cc16",
+  calves: "#65a30d",
   glutes: "#f59e0b",
   shoulders: "#a855f7",
   other: "#94a3b8",
@@ -81,9 +123,6 @@ export function getWeeklySetVolumeColor(setCount: number) {
 }
 
 export function toBodyPart(muscleGroup: string): BodyPart {
-  if (muscleGroup === "quads") return "legs";
-  if (muscleGroup === "hamstrings") return "legs";
-  if (muscleGroup === "calves") return "legs";
   if (muscleGroup === "full_body") return "other";
   if (muscleGroup === "cardio") return "other";
   if (BODY_PARTS.includes(muscleGroup as BodyPart)) {

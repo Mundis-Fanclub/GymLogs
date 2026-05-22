@@ -113,6 +113,23 @@ export const createCustom = mutation({
       v.literal("legs"),
       v.literal("other")
     ),
+    bodygraphZones: v.optional(
+      v.array(
+        v.union(
+          v.literal("chest"),
+          v.literal("back"),
+          v.literal("shoulders"),
+          v.literal("biceps"),
+          v.literal("triceps"),
+          v.literal("quads"),
+          v.literal("hamstrings"),
+          v.literal("glutes"),
+          v.literal("calves"),
+          v.literal("core"),
+          v.literal("legs")
+        )
+      )
+    ),
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
@@ -122,6 +139,9 @@ export const createCustom = mutation({
       category: args.category,
       isCustom: true,
       createdBy: args.userId,
+      ...(args.bodygraphZones && args.bodygraphZones.length > 0
+        ? { bodygraphZones: args.bodygraphZones }
+        : {}),
     });
   },
 });

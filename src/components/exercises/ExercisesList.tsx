@@ -11,7 +11,12 @@ import {
   filterDefaultExercises,
   type DefaultExercise,
 } from "@/lib/default-exercises";
-import { BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
+import {
+  DISPLAY_BODY_PARTS,
+  toBodyPart,
+  toDisplayBodyPart,
+  type DisplayBodyPart,
+} from "@/lib/muscle-groups";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 export function ExercisesList() {
@@ -26,12 +31,12 @@ export function ExercisesList() {
 
   const grouped = displayExercises.reduce(
     (acc, ex) => {
-      const group = toBodyPart(ex.muscleGroup);
+      const group = toDisplayBodyPart(toBodyPart(ex.muscleGroup));
       if (!acc[group]) acc[group] = [];
       acc[group].push(ex);
       return acc;
     },
-    {} as Record<BodyPart, Array<ConvexExercise | DefaultExercise>>
+    {} as Record<DisplayBodyPart, Array<ConvexExercise | DefaultExercise>>
   );
 
   return (
@@ -60,7 +65,7 @@ export function ExercisesList() {
         </p>
       ) : (
         <div className="space-y-6">
-          {BODY_PARTS.filter((mg) => grouped[mg]?.length).map((mg) => (
+          {DISPLAY_BODY_PARTS.filter((mg) => grouped[mg]?.length).map((mg) => (
             <div key={mg}>
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t(`muscleGroups.${mg}`)}
@@ -88,7 +93,7 @@ export function ExercisesList() {
                           </Badge>
                         )}
                         <Badge variant="secondary" className="text-xs capitalize">
-                          {t(`muscleGroups.${toBodyPart(ex.muscleGroup)}`)}
+                          {t(`muscleGroups.${toDisplayBodyPart(toBodyPart(ex.muscleGroup))}`)}
                         </Badge>
                       </div>
                     </>
