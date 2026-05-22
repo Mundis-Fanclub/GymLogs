@@ -11,13 +11,6 @@ function startOfWeek(ts: number): number {
 }
 
 function toBodyPart(muscleGroup: string): string {
-  if (
-    muscleGroup === "quads" ||
-    muscleGroup === "hamstrings" ||
-    muscleGroup === "calves"
-  ) {
-    return "legs";
-  }
   if (muscleGroup === "full_body" || muscleGroup === "cardio") {
     return "other";
   }
@@ -28,6 +21,9 @@ function toBodyPart(muscleGroup: string): string {
     muscleGroup === "triceps" ||
     muscleGroup === "core" ||
     muscleGroup === "legs" ||
+    muscleGroup === "quads" ||
+    muscleGroup === "hamstrings" ||
+    muscleGroup === "calves" ||
     muscleGroup === "glutes" ||
     muscleGroup === "shoulders"
   ) {
@@ -43,6 +39,9 @@ const BODY_PARTS = [
   "triceps",
   "core",
   "legs",
+  "quads",
+  "hamstrings",
+  "calves",
   "glutes",
   "shoulders",
   "other",
@@ -238,9 +237,20 @@ export const getMuscleAnalytics = query({
 
     const current = emptyMuscleTotals();
     const previous = emptyMuscleTotals();
+    const bodyGraphZoneCurrent = Object.fromEntries(
+      BODY_PARTS.map((part) => [part, 0])
+    ) as Record<BodyPart, number>;
 
     const workoutCompletionCache = new Map<string, boolean>();
-    const exerciseCache = new Map<string, { name: string; muscleGroup: string } | null>();
+    const exerciseCache = new Map<
+      string,
+      | {
+          name: string;
+          muscleGroup: string;
+          bodygraphZones?: string[];
+        }
+      | null
+    >();
 
     for (const set of sets) {
       let isCompleted = workoutCompletionCache.get(set.workoutId);
@@ -255,7 +265,11 @@ export const getMuscleAnalytics = query({
       if (exercise === undefined) {
         const exerciseDoc = await ctx.db.get(set.exerciseId);
         exercise = exerciseDoc
-          ? { name: exerciseDoc.name, muscleGroup: exerciseDoc.muscleGroup }
+          ? {
+              name: exerciseDoc.name,
+              muscleGroup: exerciseDoc.muscleGroup,
+              bodygraphZones: exerciseDoc.bodygraphZones,
+            }
           : null;
         exerciseCache.set(set.exerciseId, exercise);
       }
@@ -265,6 +279,18 @@ export const getMuscleAnalytics = query({
       target[bodyPart].volume += set.weight * set.reps;
       if (exercise && !target[bodyPart].exercises.includes(exercise.name)) {
         target[bodyPart].exercises.push(exercise.name);
+      }
+
+      if (set.createdAt >= currentStart) {
+        const zones =
+          exercise?.bodygraphZones && exercise.bodygraphZones.length > 0
+            ? exercise.bodygraphZones.map(
+                (z) => toBodyPart(z) as BodyPart
+              )
+            : [bodyPart];
+        for (const zone of zones) {
+          bodyGraphZoneCurrent[zone] += 1;
+        }
       }
     }
 
@@ -299,6 +325,7 @@ export const getMuscleAnalytics = query({
       weekStart: currentStart,
       previousWeekStart: previousStart,
       bodyParts,
+      bodyGraphZoneSets: bodyGraphZoneCurrent,
       totalSets: bodyParts.reduce((sum, part) => sum + part.sets, 0),
       totalVolume: bodyParts.reduce((sum, part) => sum + part.volume, 0),
     };

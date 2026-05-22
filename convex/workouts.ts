@@ -107,7 +107,12 @@ export const get = query({
       Id<"exercises">,
       {
         exerciseId: Id<"exercises">;
-        exercise: { name: string; muscleGroup: string; category: string } | null;
+        exercise: {
+          name: string;
+          muscleGroup: string;
+          category: string;
+          bodygraphZones?: string[];
+        } | null;
         sets: Array<
           typeof sets[number] & {
             previous?: { weight: number; reps: number };
@@ -124,7 +129,12 @@ export const get = query({
         exerciseMap.set(eid, {
           exerciseId: eid,
           exercise: exercise
-            ? { name: exercise.name, muscleGroup: exercise.muscleGroup, category: exercise.category }
+            ? {
+                name: exercise.name,
+                muscleGroup: exercise.muscleGroup,
+                category: exercise.category,
+                bodygraphZones: exercise.bodygraphZones,
+              }
             : null,
           sets: [],
         });

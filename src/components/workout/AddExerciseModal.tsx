@@ -23,8 +23,25 @@ import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
 import { CATEGORIES, type Category } from "@/lib/constants";
 import { getDefaultCategoriesForMuscleGroup } from "@/lib/default-exercises";
-import { BODY_PARTS, toBodyPart, toSchemaMuscleGroup, type BodyPart } from "@/lib/muscle-groups";
+import {
+  DISPLAY_BODY_PARTS,
+  toBodyPart,
+  toDisplayBodyPart,
+  toSchemaMuscleGroup,
+  type BodyPart,
+} from "@/lib/muscle-groups";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
+import { cn } from "@/lib/utils";
+
+const LEG_ZONE_OPTIONS = ["quads", "hamstrings", "glutes", "calves"] as const;
+type LegZone = (typeof LEG_ZONE_OPTIONS)[number];
+
+const LEG_ZONE_LABELS: Record<LegZone, string> = {
+  quads: "Quadrizeps",
+  hamstrings: "Beinbeuger",
+  glutes: "Gesäß",
+  calves: "Waden",
+};
 
 interface AddExerciseModalProps {
   open: boolean;
@@ -50,6 +67,13 @@ export function AddExerciseModal({
   const [newName, setNewName] = useState("");
   const [newMuscle, setNewMuscle] = useState<string>("");
   const [newCategory, setNewCategory] = useState<string>("");
+  const [newBodygraphZones, setNewBodygraphZones] = useState<LegZone[]>([]);
+
+  function toggleZone(zone: LegZone) {
+    setNewBodygraphZones((prev) =>
+      prev.includes(zone) ? prev.filter((z) => z !== zone) : [...prev, zone]
+    );
+  }
 
   const exercises = useQuery(api.exercises.search, { query, limit: 30 });
   const createCustom = useMutation(api.exercises.createCustom);
@@ -76,6 +100,9 @@ export function AddExerciseModal({
       muscleGroup: toSchemaMuscleGroup(newMuscle as BodyPart) as never,
       category: newCategory as never,
       userId,
+      ...(newMuscle === "legs" && newBodygraphZones.length > 0
+        ? { bodygraphZones: newBodygraphZones }
+        : {}),
     });
     onSelect({ id, name: newName.trim(), muscleGroup: newMuscle, category: newCategory });
     onClose();
@@ -83,6 +110,7 @@ export function AddExerciseModal({
     setNewName("");
     setNewMuscle("");
     setNewCategory("");
+    setNewBodygraphZones([]);
   }
 
   function handleSelect(ex: NonNullable<typeof exercises>[number]) {
@@ -117,7 +145,7 @@ export function AddExerciseModal({
                 >
                   <span className="min-w-0 truncate">{ex.name}</span>
                   <span className="shrink-0 text-xs capitalize text-muted-foreground">
-                    {t(`muscleGroups.${toBodyPart(ex.muscleGroup)}`)}
+                    {t(`muscleGroups.${toDisplayBodyPart(toBodyPart(ex.muscleGroup))}`)}
                   </span>
                 </button>
               ))}
@@ -157,10 +185,12 @@ export function AddExerciseModal({
                 onValueChange={(value) => setNewMuscle(value ?? "")}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={t("exercises.selectMuscle")} />
+                  <SelectValue placeholder={t("exercises.selectMuscle")}>
+                    {newMuscle ? t(`muscleGroups.${newMuscle}`) : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {BODY_PARTS.map((mg) => (
+                  {DISPLAY_BODY_PARTS.map((mg) => (
                     <SelectItem key={mg} value={mg}>
                       {t(`muscleGroups.${mg}`)}
                     </SelectItem>
@@ -170,14 +200,16 @@ export function AddExerciseModal({
             </div>
 
             <div className="space-y-1.5">
-              <Label>{t("exercises.category")}</Label>
+              <Label>Trainingstyp / Kategorie</Label>
               <Select
                 value={newCategory}
                 onValueChange={(value) => setNewCategory(value ?? "")}
                 disabled={!newMuscle}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={t("exercises.selectCategory")} />
+                  <SelectValue placeholder={t("exercises.selectCategory")}>
+                    {newCategory ? t(`categories.${newCategory}`) : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {availableCategories.map((cat) => (
@@ -188,6 +220,35 @@ export function AddExerciseModal({
                 </SelectContent>
               </Select>
             </div>
+
+            {newMuscle === "legs" && (
+              <div className="space-y-1.5">
+                <Label>Markierung im Körperdiagramm</Label>
+                <div className="flex flex-wrap gap-2">
+                  {LEG_ZONE_OPTIONS.map((zone) => {
+                    const active = newBodygraphZones.includes(zone);
+                    return (
+                      <button
+                        key={zone}
+                        type="button"
+                        onClick={() => toggleZone(zone)}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs transition-colors",
+                          active
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-background hover:bg-accent"
+                        )}
+                      >
+                        {LEG_ZONE_LABELS[zone]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Optional: Lege fest, welche Bereiche im Körperdiagramm hervorgehoben werden. Ohne Auswahl wird die gesamte Muskelgruppe markiert.
+                </p>
+              </div>
+            )}
 
             <div className="flex gap-2 pt-2">
               <Button

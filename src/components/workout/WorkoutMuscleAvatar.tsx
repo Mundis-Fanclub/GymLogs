@@ -15,10 +15,15 @@ const BODY_LABELS: Record<BodyPart, string> = {
   triceps: "Trizeps",
   core: "Core",
   legs: "Beine",
+  quads: "Quads",
+  hamstrings: "Beinbeuger",
+  calves: "Waden",
   glutes: "Glutes",
   shoulders: "Schultern",
   other: "Sonstiges",
 };
+
+const LEG_SUBPARTS = new Set<BodyPart>(["quads", "hamstrings", "calves"]);
 
 interface WorkoutMuscleAvatarProps {
   muscleGroups: string[];
@@ -40,6 +45,9 @@ export function WorkoutMuscleAvatar({
   className,
 }: WorkoutMuscleAvatarProps) {
   const active = new Set(muscleGroups.map(toBodyPart));
+  for (const part of active) {
+    if (LEG_SUBPARTS.has(part)) active.add("legs");
+  }
   const activeLabel = BODY_PARTS.filter((part) => active.has(part))
     .map((part) => BODY_LABELS[part])
     .join(", ");

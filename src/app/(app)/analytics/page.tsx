@@ -19,6 +19,7 @@ import { WorkoutsList } from "@/components/workout/WorkoutsList";
 import { ExercisesList } from "@/components/exercises/ExercisesList";
 import {
   BODY_PARTS,
+  SUB_LEG_PARTS,
   getWeeklySetVolumeColor,
   type BodyPart,
 } from "@/lib/muscle-groups";
@@ -74,11 +75,13 @@ export default function AnalyticsPage() {
     muscleAnalytics !== undefined &&
     (muscleAnalytics.totalSets > 0 || workoutFrequency.total > 0);
   const muscleGroupSets =
-    muscleAnalytics?.bodyParts.reduce((totals, part) => {
-      totals[part.part as BodyPart] = part.sets;
-      return totals;
-    }, Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<BodyPart, number>) ??
-    (Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<BodyPart, number>);
+    (muscleAnalytics?.bodyGraphZoneSets as
+      | Record<BodyPart, number>
+      | undefined) ??
+    (Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<
+      BodyPart,
+      number
+    >);
   const weeklyVolume = muscleAnalytics
     ? [
         {
@@ -174,7 +177,7 @@ export default function AnalyticsPage() {
                     <div className="space-y-4">
                       <VolumeBarChart data={weeklyVolume} />
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {muscleAnalytics.bodyParts
+                        {aggregateLegsForDisplay(muscleAnalytics.bodyParts)
                           .filter((part) => part.part !== "other")
                           .map((part) => (
                             <MuscleInsight key={part.part} part={part} />
@@ -247,21 +250,64 @@ export default function AnalyticsPage() {
   );
 }
 
-function MuscleInsight({
-  part,
-}: {
-  part: {
-    part: BodyPart;
-    sets: number;
-    volume: number;
-    previousSets: number;
-    setDelta: number;
-    targetMin: number;
-    targetMax: number;
-    status: string;
-    exercises: string[];
+type BodyPartSummary = {
+  part: BodyPart;
+  sets: number;
+  volume: number;
+  previousSets: number;
+  setDelta: number;
+  targetMin: number;
+  targetMax: number;
+  status: string;
+  exercises: string[];
+};
+
+function aggregateLegsForDisplay(
+  parts: readonly BodyPartSummary[]
+): BodyPartSummary[] {
+  const isSubLeg = (p: BodyPartSummary) =>
+    (SUB_LEG_PARTS as readonly string[]).includes(p.part);
+  const subLegSummaries = parts.filter(isSubLeg);
+  if (subLegSummaries.length === 0) return parts.filter((p) => !isSubLeg(p));
+  const legsEntry = parts.find((p) => p.part === "legs");
+  if (!legsEntry) return parts.filter((p) => !isSubLeg(p));
+
+  const aggSets =
+    legsEntry.sets + subLegSummaries.reduce((s, p) => s + p.sets, 0);
+  const aggPrev =
+    legsEntry.previousSets +
+    subLegSummaries.reduce((s, p) => s + p.previousSets, 0);
+  const aggVolume =
+    legsEntry.volume + subLegSummaries.reduce((s, p) => s + p.volume, 0);
+  const aggExercises = [
+    ...legsEntry.exercises,
+    ...subLegSummaries.flatMap((p) => p.exercises),
+  ].slice(0, 5);
+  const status =
+    aggSets === 0
+      ? "missing"
+      : aggSets < legsEntry.targetMin
+        ? "low"
+        : aggSets > legsEntry.targetMax
+          ? "high"
+          : "balanced";
+
+  const aggregatedLegs: BodyPartSummary = {
+    ...legsEntry,
+    sets: aggSets,
+    previousSets: aggPrev,
+    setDelta: aggSets - aggPrev,
+    volume: aggVolume,
+    exercises: aggExercises,
+    status,
   };
-}) {
+
+  return parts
+    .filter((p) => !isSubLeg(p))
+    .map((p) => (p.part === "legs" ? aggregatedLegs : p));
+}
+
+function MuscleInsight({ part }: { part: BodyPartSummary }) {
   const label = {
     chest: "Brust",
     back: "Rücken",
@@ -269,6 +315,9 @@ function MuscleInsight({
     triceps: "Trizeps",
     core: "Core",
     legs: "Beine",
+    quads: "Quads",
+    hamstrings: "Beinbeuger",
+    calves: "Waden",
     glutes: "Glutes",
     shoulders: "Schultern",
     other: "Sonstiges",

@@ -23,7 +23,13 @@ import { useAppPreferences } from "@/components/providers/AppPreferencesProvider
 import { formatVolume } from "@/lib/pr-utils";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 import { ActiveWorkout } from "@/components/workout/ActiveWorkout";
-import { BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
+import {
+  BODY_PARTS,
+  exerciseBodygraphParts,
+  toBodyPart,
+  toDisplayBodyPart,
+  type BodyPart,
+} from "@/lib/muscle-groups";
 import { BookmarkPlus, Pencil, Trash2 } from "lucide-react";
 
 export default function WorkoutDetailPage() {
@@ -60,8 +66,10 @@ export default function WorkoutDetailPage() {
   const muscleGroupSets = workout.exercises.reduce(
     (counts, ex) => {
       if (!ex.exercise) return counts;
-      const part = toBodyPart(ex.exercise.muscleGroup);
-      counts[part] += ex.sets.length;
+      const zones = exerciseBodygraphParts(ex.exercise);
+      for (const zone of zones) {
+        counts[zone] += ex.sets.length;
+      }
       return counts;
     },
     Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<
@@ -188,7 +196,7 @@ export default function WorkoutDetailPage() {
                     {ex.exercise.name}
                   </CardTitle>
                   <Badge variant="secondary" className="text-xs capitalize">
-                    {t(`muscleGroups.${toBodyPart(ex.exercise.muscleGroup)}`)}
+                    {t(`muscleGroups.${toDisplayBodyPart(toBodyPart(ex.exercise.muscleGroup))}`)}
                   </Badge>
                 </div>
               </CardHeader>

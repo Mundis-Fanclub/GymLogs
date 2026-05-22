@@ -3,7 +3,9 @@
 import Image from "next/image";
 import {
   BODY_PARTS,
+  DISPLAY_BODY_PARTS,
   getWeeklySetVolumeColor,
+  legsAggregatedSetCount,
   toBodyPart,
   type BodyPart,
 } from "@/lib/muscle-groups";
@@ -18,6 +20,9 @@ const BODY_LABELS: Record<BodyPart, string> = {
   triceps: "Trizeps",
   core: "Core",
   legs: "Beine",
+  quads: "Quads",
+  hamstrings: "Beinbeuger",
+  calves: "Waden",
   glutes: "Glutes",
   shoulders: "Schultern",
   other: "Sonstiges",
@@ -30,6 +35,9 @@ const BODY_PART_MASKS: Record<BodyPart, string> = {
   triceps: "/bodygraph-masks/triceps.png",
   core: "/bodygraph-masks/core.png",
   legs: "/bodygraph-masks/legs.png",
+  quads: "/bodygraph-masks/quads.png",
+  hamstrings: "/bodygraph-masks/hamstrings.png",
+  calves: "/bodygraph-masks/calves.png",
   glutes: "/bodygraph-masks/glutes.png",
   shoulders: "/bodygraph-masks/shoulders.png",
   other: "/bodygraph-masks/other.png",
@@ -83,9 +91,13 @@ export function WorkoutMuscleMap({
       muscleGroupSets?.[part] ?? (fallbackActive.has(part) ? 1 : 0),
     ])
   ) as Record<BodyPart, number>;
-  const activeParts = BODY_PARTS.filter((part) => setCounts[part] > 0);
+  const captionSetCount = (part: (typeof DISPLAY_BODY_PARTS)[number]) =>
+    part === "legs" ? legsAggregatedSetCount(setCounts) : setCounts[part];
+  const activeParts = DISPLAY_BODY_PARTS.filter(
+    (part) => captionSetCount(part) > 0
+  );
   const activeLabel = activeParts
-    .map((part) => `${BODY_LABELS[part]}: ${setCounts[part]} Sätze`)
+    .map((part) => `${BODY_LABELS[part]}: ${captionSetCount(part)} Sätze`)
     .join(", ");
 
   return (
@@ -130,8 +142,8 @@ export function WorkoutMuscleMap({
       </div>
       {!compact && (
         <figcaption className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-          {BODY_PARTS.filter((part) => part !== "other").map((part) => {
-            const setCount = setCounts[part];
+          {DISPLAY_BODY_PARTS.filter((part) => part !== "other").map((part) => {
+            const setCount = captionSetCount(part);
             const color = getWeeklySetVolumeColor(setCount);
 
             return (
