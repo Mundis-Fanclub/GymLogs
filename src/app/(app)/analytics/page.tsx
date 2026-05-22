@@ -174,6 +174,7 @@ export default function AnalyticsPage() {
                     muscleGroups={[]}
                     muscleGroupSets={muscleGroupSets}
                     captionSetCounts={captionSetCounts}
+                    exercisesByZone={muscleAnalytics.exercisesByZone}
                     hideHeader
                     className="mx-auto w-full max-w-[540px] border-0 p-0 shadow-none"
                   />
@@ -346,6 +347,14 @@ const BODY_PART_LABELS: Record<BodyPart, string> = {
   other: "Sonstiges",
 };
 
+const PLURAL_GROUPS = new Set<BodyPart>([
+  "legs",
+  "shoulders",
+  "quads",
+  "hamstrings",
+  "calves",
+]);
+
 type LoadStatus = "missing" | "low" | "balanced" | "high" | "very_high";
 
 function loadStatus(part: BodyPartSummary): LoadStatus {
@@ -443,15 +452,25 @@ function WeeklySummary({
       {overTarget.length > 0 && (
         <div className="flex items-start gap-2 border-t border-amber-500/20 bg-amber-500/5 px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            <span className="font-semibold">Über Ziel:</span>{" "}
-            {overTarget
-              .map(
-                (part) =>
-                  `${BODY_PART_LABELS[part.part]} ${part.sets} / ${part.targetMax} Sätze`
-              )
-              .join(" · ")}
-          </span>
+          {overTarget.length === 1 ? (
+            <span>
+              <span className="font-semibold">
+                {BODY_PART_LABELS[overTarget[0].part]}{" "}
+                {PLURAL_GROUPS.has(overTarget[0].part) ? "liegen" : "liegt"} über
+                dem empfohlenen Wochenziel:
+              </span>{" "}
+              {overTarget[0].sets} / {overTarget[0].targetMax} Sätze
+            </span>
+          ) : (
+            <span>
+              <span className="font-semibold">
+                Über dem empfohlenen Wochenziel ({overTarget[0].targetMax} Sätze):
+              </span>{" "}
+              {overTarget
+                .map((part) => `${BODY_PART_LABELS[part.part]} ${part.sets}`)
+                .join(" · ")}
+            </span>
+          )}
         </div>
       )}
     </Card>

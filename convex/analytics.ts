@@ -240,6 +240,9 @@ export const getMuscleAnalytics = query({
     const bodyGraphZoneCurrent = Object.fromEntries(
       BODY_PARTS.map((part) => [part, 0])
     ) as Record<BodyPart, number>;
+    const zoneExercisesCurrent = Object.fromEntries(
+      BODY_PARTS.map((part) => [part, new Map<string, number>()])
+    ) as Record<BodyPart, Map<string, number>>;
 
     const workoutCompletionCache = new Map<string, boolean>();
     const exerciseCache = new Map<
@@ -290,6 +293,10 @@ export const getMuscleAnalytics = query({
             : [bodyPart];
         for (const zone of zones) {
           bodyGraphZoneCurrent[zone] += 1;
+          if (exercise) {
+            const map = zoneExercisesCurrent[zone];
+            map.set(exercise.name, (map.get(exercise.name) ?? 0) + 1);
+          }
         }
       }
     }
@@ -321,11 +328,21 @@ export const getMuscleAnalytics = query({
       };
     });
 
+    const exercisesByZone = Object.fromEntries(
+      Object.entries(zoneExercisesCurrent).map(([zone, map]) => [
+        zone,
+        Array.from(map.entries())
+          .map(([name, sets]) => ({ name, sets }))
+          .sort((a, b) => b.sets - a.sets),
+      ])
+    ) as Record<BodyPart, Array<{ name: string; sets: number }>>;
+
     return {
       weekStart: currentStart,
       previousWeekStart: previousStart,
       bodyParts,
       bodyGraphZoneSets: bodyGraphZoneCurrent,
+      exercisesByZone,
       totalSets: bodyParts.reduce((sum, part) => sum + part.sets, 0),
       totalVolume: bodyParts.reduce((sum, part) => sum + part.volume, 0),
     };
