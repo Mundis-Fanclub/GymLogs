@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { BarChart3, Dumbbell, TrendingDown, TrendingUp, User } from "lucide-react";
+import { AlertTriangle, BarChart3, Dumbbell, TrendingDown, TrendingUp, User } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 import { WorkoutsList } from "@/components/workout/WorkoutsList";
@@ -20,17 +20,9 @@ import { ExercisesList } from "@/components/exercises/ExercisesList";
 import {
   BODY_PARTS,
   SUB_LEG_PARTS,
-  getWeeklySetVolumeColor,
   type BodyPart,
 } from "@/lib/muscle-groups";
-
-const VolumeBarChart = dynamic(
-  () => import("@/components/charts/VolumeBarChart").then((mod) => mod.VolumeBarChart),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-[320px] w-full" />,
-  }
-);
+import { cn } from "@/lib/utils";
 
 const WorkoutsPerWeekChart = dynamic(
   () =>
@@ -82,19 +74,20 @@ export default function AnalyticsPage() {
       BodyPart,
       number
     >);
-  const weeklyVolume = muscleAnalytics
-    ? [
-        {
-          weekStart: muscleAnalytics.weekStart,
-          volumes: Object.fromEntries(
-            muscleAnalytics.bodyParts.map((part) => [
-              part.part,
-              { sets: part.sets, volume: part.volume },
-            ])
-          ),
-        },
-      ]
+  const displayBodyParts = muscleAnalytics
+    ? aggregateLegsForDisplay(muscleAnalytics.bodyParts).filter(
+        (part) => part.part !== "other"
+      )
     : [];
+  const captionSetCounts = Object.fromEntries(
+    displayBodyParts.map((part) => [part.part, part.sets])
+  ) as Partial<Record<BodyPart, number>>;
+  const overTargetParts = displayBodyParts.filter(
+    (part) => part.sets > part.targetMax
+  );
+  const topFocus = [...displayBodyParts]
+    .filter((part) => part.sets > 0)
+    .sort((a, b) => b.sets - a.sets)[0];
 
   if (isLoaded && !userId) {
     return (
@@ -151,40 +144,58 @@ export default function AnalyticsPage() {
               />
             )}
 
+            {muscleAnalytics === undefined ? (
+              <Skeleton className="h-[80px] w-full" />
+            ) : (
+              <WeeklySummary
+                workoutsCount={workoutFrequency?.total ?? 0}
+                period={frequencyPeriod}
+                totalSets={muscleAnalytics.totalSets}
+                totalVolume={muscleAnalytics.totalVolume}
+                topFocus={topFocus}
+                overTarget={overTargetParts}
+              />
+            )}
+
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm font-medium">
+                  Körperdiagramm
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Sätze pro Muskelgruppe in dieser Woche
+                </p>
+              </CardHeader>
+              <CardContent className="px-4 pb-5 sm:px-6">
+                {muscleAnalytics === undefined ? (
+                  <Skeleton className="h-[480px] w-full" />
+                ) : (
+                  <WorkoutMuscleMap
+                    muscleGroups={[]}
+                    muscleGroupSets={muscleGroupSets}
+                    captionSetCounts={captionSetCounts}
+                    hideHeader
+                    className="mx-auto w-full max-w-[540px] border-0 p-0 shadow-none"
+                  />
+                )}
+              </CardContent>
+            </Card>
+
             <Card className="overflow-hidden">
               <CardHeader className="pb-2">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                  <CardTitle className="text-sm font-medium">
-                    Wochenanalyse pro Muskelgruppe
-                  </CardTitle>
-                  {muscleAnalytics && (
-                    <p className="text-xs text-muted-foreground">
-                      {muscleAnalytics.totalSets} Sätze · {Math.round(muscleAnalytics.totalVolume).toLocaleString("de-DE")} kg Volumen
-                    </p>
-                  )}
-                </div>
+                <CardTitle className="text-sm font-medium">
+                  Muskelgruppen
+                </CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-4 px-3 pb-4 sm:px-6 xl:grid-cols-[minmax(240px,320px)_1fr] xl:items-start">
+              <CardContent className="px-3 pb-4 sm:px-6">
                 {muscleAnalytics === undefined ? (
-                  <Skeleton className="h-[220px] w-full" />
+                  <Skeleton className="h-[180px] w-full" />
                 ) : (
-                  <>
-                    <WorkoutMuscleMap
-                      muscleGroups={[]}
-                      muscleGroupSets={muscleGroupSets}
-                      className="mx-auto w-full"
-                    />
-                    <div className="space-y-4">
-                      <VolumeBarChart data={weeklyVolume} />
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {aggregateLegsForDisplay(muscleAnalytics.bodyParts)
-                          .filter((part) => part.part !== "other")
-                          .map((part) => (
-                            <MuscleInsight key={part.part} part={part} />
-                          ))}
-                      </div>
-                    </div>
-                  </>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
+                    {displayBodyParts.map((part) => (
+                      <CompactMuscleCard key={part.part} part={part} />
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -214,7 +225,20 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent className="px-3 pb-4 sm:px-6">
                 {workoutFrequency === undefined ? (
-                  <Skeleton className="h-[180px] w-full" />
+                  <Skeleton className="h-[140px] w-full" />
+                ) : workoutFrequency.total <= 1 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      {workoutFrequency.total === 0
+                        ? "Noch kein Workout in diesem Zeitraum."
+                        : `Bisher 1 Workout — noch keine regelmäßige Verteilung erkennbar.`}
+                    </p>
+                    <WorkoutsPerWeekChart
+                      data={workoutFrequency}
+                      period={frequencyPeriod}
+                      compact
+                    />
+                  </div>
                 ) : (
                   <WorkoutsPerWeekChart
                     data={workoutFrequency}
@@ -307,74 +331,149 @@ function aggregateLegsForDisplay(
     .map((p) => (p.part === "legs" ? aggregatedLegs : p));
 }
 
-function MuscleInsight({ part }: { part: BodyPartSummary }) {
-  const label = {
-    chest: "Brust",
-    back: "Rücken",
-    biceps: "Bizeps",
-    triceps: "Trizeps",
-    core: "Core",
-    legs: "Beine",
-    quads: "Quads",
-    hamstrings: "Beinbeuger",
-    calves: "Waden",
-    glutes: "Glutes",
-    shoulders: "Schultern",
-    other: "Sonstiges",
-  }[part.part];
-  const statusText =
-    part.status === "missing"
-      ? "fehlt diese Woche"
-      : part.status === "low"
-        ? "unter Zielbereich"
-        : part.status === "high"
-          ? "sehr viel Volumen"
-          : "im Zielbereich";
-  const statusClass =
-    part.status === "balanced"
-      ? "border-emerald-500/30 bg-emerald-500/10"
-      : part.status === "high"
-        ? "border-amber-500/30 bg-amber-500/10"
-        : "border-border bg-muted/30";
-  const volumeColor = getWeeklySetVolumeColor(part.sets);
+const BODY_PART_LABELS: Record<BodyPart, string> = {
+  chest: "Brust",
+  back: "Rücken",
+  biceps: "Bizeps",
+  triceps: "Trizeps",
+  core: "Core",
+  legs: "Beine",
+  quads: "Quads",
+  hamstrings: "Beinbeuger",
+  calves: "Waden",
+  glutes: "Gesäß",
+  shoulders: "Schultern",
+  other: "Sonstiges",
+};
+
+type LoadStatus = "missing" | "low" | "balanced" | "high" | "very_high";
+
+function loadStatus(part: BodyPartSummary): LoadStatus {
+  if (part.sets === 0) return "missing";
+  if (part.sets < part.targetMin) return "low";
+  if (part.sets > part.targetMax * 1.5) return "very_high";
+  if (part.sets > part.targetMax) return "high";
+  return "balanced";
+}
+
+const STATUS_STYLES: Record<LoadStatus, string> = {
+  missing:
+    "border-border bg-muted/30 text-muted-foreground",
+  low: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  balanced:
+    "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  high: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500",
+  very_high:
+    "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400",
+};
+
+function CompactMuscleCard({ part }: { part: BodyPartSummary }) {
+  const status = loadStatus(part);
+  const label = BODY_PART_LABELS[part.part];
+  const isInactive = status === "missing";
 
   return (
-    <div className={`rounded-lg border p-3 ${statusClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-medium" style={{ color: volumeColor }}>
-            {label}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Ziel: {part.targetMin}-{part.targetMax} Sätze
-          </p>
-        </div>
-        <div className="flex items-center gap-1 text-xs">
-          {part.setDelta >= 0 ? (
-            <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
-          ) : (
-            <TrendingDown className="h-3.5 w-3.5 text-destructive" />
-          )}
-          {part.setDelta > 0 ? "+" : ""}
-          {part.setDelta}
-        </div>
-      </div>
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <div>
-          <p className="text-2xl font-semibold" style={{ color: volumeColor }}>
-            {part.sets}
-          </p>
-          <p className="text-xs text-muted-foreground">{statusText}</p>
-        </div>
-        <p className="text-right text-xs text-muted-foreground">
-          {Math.round(part.volume).toLocaleString("de-DE")} kg
-        </p>
-      </div>
-      {part.exercises.length > 0 && (
-        <p className="mt-2 truncate text-xs text-muted-foreground">
-          {part.exercises.join(", ")}
-        </p>
+    <div
+      className={cn(
+        "flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm transition-opacity",
+        STATUS_STYLES[status],
+        isInactive && "opacity-60"
       )}
+    >
+      <span className="truncate font-medium">{label}</span>
+      <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums">
+        <span className="text-base font-semibold leading-none">
+          {part.sets}
+        </span>
+        <span className="opacity-70">
+          / {part.targetMin}–{part.targetMax}
+        </span>
+        {part.setDelta !== 0 && (
+          <span className="inline-flex items-center gap-0.5 opacity-80">
+            {part.setDelta > 0 ? (
+              <TrendingUp className="h-3 w-3" />
+            ) : (
+              <TrendingDown className="h-3 w-3" />
+            )}
+            {part.setDelta > 0 ? "+" : ""}
+            {part.setDelta}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const PERIOD_LABELS: Record<FrequencyPeriod, string> = {
+  week: "diese Woche",
+  month: "diesen Monat",
+  year: "dieses Jahr",
+};
+
+function WeeklySummary({
+  workoutsCount,
+  period,
+  totalSets,
+  totalVolume,
+  topFocus,
+  overTarget,
+}: {
+  workoutsCount: number;
+  period: FrequencyPeriod;
+  totalSets: number;
+  totalVolume: number;
+  topFocus: BodyPartSummary | undefined;
+  overTarget: BodyPartSummary[];
+}) {
+  const topLabel = topFocus ? BODY_PART_LABELS[topFocus.part] : "—";
+  const topSub = topFocus ? `${topFocus.sets} Sätze` : "Noch keine Daten";
+
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:p-5">
+        <SummaryStat label="Workouts" sub={PERIOD_LABELS[period]} value={workoutsCount} />
+        <SummaryStat label="Sätze" sub="diese Woche" value={totalSets} />
+        <SummaryStat label="Top-Fokus" sub={topSub} value={topLabel} />
+        <SummaryStat
+          label="Volumen"
+          sub="diese Woche"
+          value={`${Math.round(totalVolume).toLocaleString("de-DE")} kg`}
+        />
+      </CardContent>
+      {overTarget.length > 0 && (
+        <div className="flex items-start gap-2 border-t border-amber-500/20 bg-amber-500/5 px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            <span className="font-semibold">Über Ziel:</span>{" "}
+            {overTarget
+              .map(
+                (part) =>
+                  `${BODY_PART_LABELS[part.part]} ${part.sets} / ${part.targetMax} Sätze`
+              )
+              .join(" · ")}
+          </span>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function SummaryStat({
+  label,
+  sub,
+  value,
+}: {
+  label: string;
+  sub?: string;
+  value: string | number;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="truncate text-lg font-semibold leading-tight sm:text-xl">
+        {value}
+      </p>
+      {sub && <p className="truncate text-[10px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }

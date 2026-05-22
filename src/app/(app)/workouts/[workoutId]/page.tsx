@@ -78,6 +78,23 @@ export default function WorkoutDetailPage() {
     >
   );
 
+  // Display counts use the primary muscle group only so the bodygraph
+  // does not paint secondary zones (e.g. glutes on a Beinpresse set that
+  // is counted as "Beine"). Mask rendering uses muscleGroupSets above for
+  // color, but a mask is only drawn when its display group has > 0 sets.
+  const captionSetCounts = workout.exercises.reduce(
+    (counts, ex) => {
+      if (!ex.exercise) return counts;
+      const displayPart = toDisplayBodyPart(toBodyPart(ex.exercise.muscleGroup));
+      counts[displayPart] += ex.sets.length;
+      return counts;
+    },
+    Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<
+      BodyPart,
+      number
+    >
+  );
+
   async function handleSaveTemplate() {
     if (!workout || !templateName.trim()) return;
     await saveAsTemplate({
@@ -179,7 +196,11 @@ export default function WorkoutDetailPage() {
         </p>
       )}
 
-      <WorkoutMuscleMap muscleGroups={[]} muscleGroupSets={muscleGroupSets} />
+      <WorkoutMuscleMap
+        muscleGroups={[]}
+        muscleGroupSets={muscleGroupSets}
+        captionSetCounts={captionSetCounts}
+      />
 
       <div className="space-y-3">
         {workout.exercises.map((ex) => {

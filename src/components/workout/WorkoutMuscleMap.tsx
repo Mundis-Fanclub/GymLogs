@@ -7,6 +7,7 @@ import {
   getWeeklySetVolumeColor,
   legsAggregatedSetCount,
   toBodyPart,
+  toDisplayBodyPart,
   type BodyPart,
 } from "@/lib/muscle-groups";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,7 @@ const BODY_LABELS: Record<BodyPart, string> = {
   quads: "Quads",
   hamstrings: "Beinbeuger",
   calves: "Waden",
-  glutes: "Glutes",
+  glutes: "Gesäß",
   shoulders: "Schultern",
   other: "Sonstiges",
 };
@@ -46,11 +47,13 @@ const BODY_PART_MASKS: Record<BodyPart, string> = {
 interface MaskOverlayProps {
   part: BodyPart;
   setCounts: Record<BodyPart, number>;
+  displayGroupActive: boolean;
 }
 
-function MaskOverlay({ part, setCounts }: MaskOverlayProps) {
+function MaskOverlay({ part, setCounts, displayGroupActive }: MaskOverlayProps) {
   const setCount = setCounts[part];
   if (setCount <= 0) return null;
+  if (!displayGroupActive) return null;
 
   return (
     <span
@@ -74,15 +77,25 @@ function MaskOverlay({ part, setCounts }: MaskOverlayProps) {
 interface WorkoutMuscleMapProps {
   muscleGroups: string[];
   muscleGroupSets?: Partial<Record<BodyPart, number>>;
+  /**
+   * Optional per-display-group counts shown in the caption chips.
+   * Lets callers decouple "what the chip text shows" (e.g. primary
+   * muscle-group statistic) from "what the mask paints" (multi-zone
+   * coloring). When omitted, falls back to the mask counts.
+   */
+  captionSetCounts?: Partial<Record<BodyPart, number>>;
   className?: string;
   compact?: boolean;
+  hideHeader?: boolean;
 }
 
 export function WorkoutMuscleMap({
   muscleGroups,
   muscleGroupSets,
+  captionSetCounts,
   className,
   compact = false,
+  hideHeader = false,
 }: WorkoutMuscleMapProps) {
   const fallbackActive = new Set(muscleGroups.map(toBodyPart));
   const setCounts = Object.fromEntries(
@@ -91,8 +104,10 @@ export function WorkoutMuscleMap({
       muscleGroupSets?.[part] ?? (fallbackActive.has(part) ? 1 : 0),
     ])
   ) as Record<BodyPart, number>;
-  const captionSetCount = (part: (typeof DISPLAY_BODY_PARTS)[number]) =>
-    part === "legs" ? legsAggregatedSetCount(setCounts) : setCounts[part];
+  const captionSetCount = (part: (typeof DISPLAY_BODY_PARTS)[number]) => {
+    if (captionSetCounts) return captionSetCounts[part] ?? 0;
+    return part === "legs" ? legsAggregatedSetCount(setCounts) : setCounts[part];
+  };
   const activeParts = DISPLAY_BODY_PARTS.filter(
     (part) => captionSetCount(part) > 0
   );
@@ -108,9 +123,9 @@ export function WorkoutMuscleMap({
         className
       )}
     >
-      {!compact && (
+      {!compact && !hideHeader && (
         <div className="mb-3">
-          <h3 className="text-sm font-semibold">Bodygraph</h3>
+          <h3 className="text-sm font-semibold">Körperdiagramm</h3>
           <p className="text-xs text-muted-foreground">
             Sätze pro Muskelgruppe in dieser Woche
           </p>
@@ -119,7 +134,7 @@ export function WorkoutMuscleMap({
       <div
         className={cn(
           "relative mx-auto aspect-[1448/1086] overflow-hidden rounded-[1.65rem] border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950",
-          compact ? "max-w-24" : "max-w-[380px]"
+          compact ? "max-w-24" : "max-w-[440px]"
         )}
         role="img"
         aria-label={
@@ -132,34 +147,47 @@ export function WorkoutMuscleMap({
           src={IMAGE_SRC}
           alt=""
           fill
-          sizes={compact ? "112px" : "(max-width: 430px) 92vw, 380px"}
+          sizes={compact ? "112px" : "(max-width: 430px) 92vw, 440px"}
           className="object-contain"
           priority={false}
         />
         {BODY_PARTS.map((part) => (
-          <MaskOverlay key={part} part={part} setCounts={setCounts} />
+          <MaskOverlay
+            key={part}
+            part={part}
+            setCounts={setCounts}
+            displayGroupActive={captionSetCount(toDisplayBodyPart(part)) > 0}
+          />
         ))}
       </div>
       {!compact && (
-        <figcaption className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+        <figcaption className="mt-3 flex flex-wrap gap-1.5 text-xs">
           {DISPLAY_BODY_PARTS.filter((part) => part !== "other").map((part) => {
             const setCount = captionSetCount(part);
+            const isInactive = setCount === 0;
             const color = getWeeklySetVolumeColor(setCount);
 
             return (
               <span
                 key={part}
-                className="inline-flex min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background/70 px-2.5 py-2"
-                style={{ color }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5",
+                  isInactive
+                    ? "border-border/40 bg-transparent text-muted-foreground/70"
+                    : "bg-background/90 font-medium shadow-sm"
+                )}
+                style={
+                  isInactive
+                    ? undefined
+                    : { color, borderColor: `${color}66` }
+                }
               >
-                <span className="inline-flex min-w-0 items-center gap-2">
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full border border-foreground/20"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="truncate">{BODY_LABELS[part]}</span>
-                </span>
-                <span className="font-semibold">{setCount}</span>
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: isInactive ? "currentColor" : color }}
+                />
+                <span>{BODY_LABELS[part]}</span>
+                <span className="font-semibold tabular-nums">{setCount}</span>
               </span>
             );
           })}

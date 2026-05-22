@@ -18,7 +18,7 @@ const BODY_LABELS: Record<BodyPart, string> = {
   quads: "Quads",
   hamstrings: "Beinbeuger",
   calves: "Waden",
-  glutes: "Glutes",
+  glutes: "Gesäß",
   shoulders: "Schultern",
   other: "Sonstiges",
 };
