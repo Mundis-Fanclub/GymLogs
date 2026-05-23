@@ -51,14 +51,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="p-3">
-        <div className="rounded-2xl border border-border bg-muted p-3 text-sm text-foreground">
-          <p className="font-medium">{t("sidebar.mvpTitle")}</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {t("sidebar.mvpCopy")}
-          </p>
-        </div>
-      </div>
     </aside>
   );
 }

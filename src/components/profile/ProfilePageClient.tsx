@@ -720,7 +720,7 @@ export function ProfilePageClient() {
                   Öffentlich ansehen
                 </Button>
               </Link>
-              {saved && <span className="self-center text-sm text-emerald-500">Gespeichert</span>}
+              {saved && <span className="self-center text-sm text-success">Gespeichert</span>}
             </div>
             </div>
           </DialogContent>

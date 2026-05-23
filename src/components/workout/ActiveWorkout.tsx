@@ -351,10 +351,10 @@ function WorkoutFinishedSummary({
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <Card className="border-emerald-500/30 bg-emerald-500/10">
+      <Card className="border-success/30 bg-success/10">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <Trophy className="h-5 w-5 text-emerald-400" />
+            <Trophy className="h-5 w-5 text-success" />
             <CardTitle>Workout abgeschlossen</CardTitle>
           </div>
         </CardHeader>

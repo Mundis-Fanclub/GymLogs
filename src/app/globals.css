@@ -39,6 +39,18 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Brand */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  /* Status / Volume-Zonen */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -55,8 +67,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -66,13 +78,25 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: var(--brand);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
+  /* Brand — Orange. Gedämpfter Ton fürs Light-Theme. */
+  --brand: oklch(0.7 0.18 55);
+  --brand-foreground: oklch(0.14 0 0);
+  /* Status-Tokens — Volume-Zonen + UI-Signal */
+  --success: oklch(0.7 0.18 145);
+  --success-foreground: oklch(0.38 0.16 145);
+  --warning: oklch(0.8 0.16 80);
+  --warning-foreground: oklch(0.5 0.18 60);
+  --danger: oklch(0.62 0.22 25);
+  --danger-foreground: oklch(0.45 0.22 25);
+  --info: oklch(0.7 0.15 230);
+  --info-foreground: oklch(0.42 0.15 230);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -80,7 +104,7 @@
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: var(--brand);
 }
 
 .dark {
@@ -90,8 +114,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -101,20 +125,173 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: var(--brand);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  /* Brand — Orange, voller im Dark-Theme. */
+  --brand: oklch(0.76 0.2 55);
+  --brand-foreground: oklch(0.14 0 0);
+  /* Status-Tokens — heller im Dark-Theme. */
+  --success: oklch(0.78 0.2 145);
+  --success-foreground: oklch(0.88 0.2 145);
+  --warning: oklch(0.85 0.18 80);
+  --warning-foreground: oklch(0.92 0.18 80);
+  --danger: oklch(0.72 0.22 25);
+  --danger-foreground: oklch(0.85 0.22 25);
+  --info: oklch(0.78 0.17 230);
+  --info-foreground: oklch(0.88 0.17 230);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: var(--brand);
+}
+
+/* ========================================================================
+ * Theme variants
+ *
+ * Apply via <html data-theme="<name>">. The ThemeSwitcher in the bottom
+ * right of the dev build sets/persists this attribute.
+ *
+ * Convention: only --brand and --brand-foreground need to be overridden —
+ * everything else (--primary, --ring, --sidebar-primary, --sidebar-ring)
+ * resolves to var(--brand) and follows automatically.
+ * ======================================================================== */
+
+/* Default theme is Orange (defined in :root / .dark above). The blocks
+ * below override --brand for the chosen theme. Each theme has slightly
+ * different lightness/chroma between light and dark for readability. */
+
+.dark[data-theme="lime"] {
+  --brand: oklch(0.9 0.3 128);
+  --brand-foreground: oklch(0.18 0 0);
+}
+:root[data-theme="lime"] {
+  --brand: oklch(0.78 0.26 128);
+  --brand-foreground: oklch(0.18 0 0);
+}
+
+.dark[data-theme="coral"] {
+  --brand: oklch(0.74 0.2 35);
+  --brand-foreground: oklch(0.14 0 0);
+}
+:root[data-theme="coral"] {
+  --brand: oklch(0.68 0.18 35);
+  --brand-foreground: oklch(0.14 0 0);
+}
+
+.dark[data-theme="amber"] {
+  --brand: oklch(0.82 0.18 80);
+  --brand-foreground: oklch(0.14 0 0);
+}
+:root[data-theme="amber"] {
+  --brand: oklch(0.76 0.16 80);
+  --brand-foreground: oklch(0.14 0 0);
+}
+
+.dark[data-theme="crimson"] {
+  --brand: oklch(0.7 0.22 22);
+  --brand-foreground: oklch(0.98 0 0);
+}
+:root[data-theme="crimson"] {
+  --brand: oklch(0.6 0.22 22);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+.dark[data-theme="magenta"] {
+  --brand: oklch(0.7 0.25 340);
+  --brand-foreground: oklch(0.98 0 0);
+}
+:root[data-theme="magenta"] {
+  --brand: oklch(0.6 0.24 340);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+.dark[data-theme="violet"] {
+  --brand: oklch(0.7 0.22 295);
+  --brand-foreground: oklch(0.98 0 0);
+}
+:root[data-theme="violet"] {
+  --brand: oklch(0.6 0.22 295);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+.dark[data-theme="indigo"] {
+  --brand: oklch(0.68 0.2 270);
+  --brand-foreground: oklch(0.98 0 0);
+}
+:root[data-theme="indigo"] {
+  --brand: oklch(0.55 0.22 270);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+.dark[data-theme="royal"] {
+  --brand: oklch(0.7 0.22 250);
+  --brand-foreground: oklch(0.98 0 0);
+}
+:root[data-theme="royal"] {
+  --brand: oklch(0.58 0.22 250);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+.dark[data-theme="sky"] {
+  --brand: oklch(0.78 0.16 230);
+  --brand-foreground: oklch(0.14 0 0);
+}
+:root[data-theme="sky"] {
+  --brand: oklch(0.68 0.18 230);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+.dark[data-theme="cyan"] {
+  --brand: oklch(0.78 0.14 200);
+  --brand-foreground: oklch(0.14 0 0);
+}
+:root[data-theme="cyan"] {
+  --brand: oklch(0.7 0.15 200);
+  --brand-foreground: oklch(0.14 0 0);
+}
+
+.dark[data-theme="teal"] {
+  --brand: oklch(0.74 0.14 180);
+  --brand-foreground: oklch(0.14 0 0);
+}
+:root[data-theme="teal"] {
+  --brand: oklch(0.66 0.14 180);
+  --brand-foreground: oklch(0.14 0 0);
+}
+
+.dark[data-theme="emerald"] {
+  --brand: oklch(0.74 0.18 160);
+  --brand-foreground: oklch(0.14 0 0);
+}
+:root[data-theme="emerald"] {
+  --brand: oklch(0.66 0.17 160);
+  --brand-foreground: oklch(0.98 0 0);
+}
+
+.dark[data-theme="mint"] {
+  --brand: oklch(0.86 0.14 155);
+  --brand-foreground: oklch(0.14 0 0);
+}
+:root[data-theme="mint"] {
+  --brand: oklch(0.78 0.13 155);
+  --brand-foreground: oklch(0.14 0 0);
+}
+
+.dark[data-theme="mono"] {
+  --brand: oklch(0.85 0 0);
+  --brand-foreground: oklch(0.14 0 0);
+}
+:root[data-theme="mono"] {
+  --brand: oklch(0.25 0 0);
+  --brand-foreground: oklch(0.98 0 0);
 }
 
 @layer base {

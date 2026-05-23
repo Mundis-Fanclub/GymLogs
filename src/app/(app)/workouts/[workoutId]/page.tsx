@@ -149,9 +149,8 @@ export default function WorkoutDetailPage() {
             {t("common.kg")}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
-            variant="outline"
             size="sm"
             className="gap-2"
             onClick={() => setIsEditing(true)}
@@ -161,8 +160,17 @@ export default function WorkoutDetailPage() {
           </Button>
           <Button
             variant="outline"
-            size="sm"
-            className="gap-2"
+            size="icon-sm"
+            aria-label={
+              savedTemplate
+                ? t("workouts.templateSaved")
+                : t("workouts.saveTemplate")
+            }
+            title={
+              savedTemplate
+                ? t("workouts.templateSaved")
+                : t("workouts.saveTemplate")
+            }
             onClick={() => {
               setTemplateName(
                 format(workout.date, "EEEE, MMMM d", {
@@ -176,16 +184,16 @@ export default function WorkoutDetailPage() {
             }}
           >
             <BookmarkPlus className="h-4 w-4" />
-            {savedTemplate ? t("workouts.templateSaved") : t("workouts.saveTemplate")}
           </Button>
           <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Workout löschen"
+            title="Workout löschen"
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={() => setShowDeleteDialog(true)}
           >
             <Trash2 className="h-4 w-4" />
-            Löschen
           </Button>
         </div>
       </div>
