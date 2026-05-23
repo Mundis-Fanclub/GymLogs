@@ -259,7 +259,7 @@ export default function PublicProfilePage() {
                   </div>
                 </div>
               )}
-              {sent && <p className="text-sm text-emerald-500">Nachricht gesendet.</p>}
+              {sent && <p className="text-sm text-success">Nachricht gesendet.</p>}
 
               {visibleMetrics.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-3">

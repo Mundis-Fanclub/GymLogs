@@ -702,7 +702,7 @@ function PostCard({
             </ActionButton>
             <ActionButton
               active={post.repostedByViewer}
-              activeClass="text-sky-500 hover:text-sky-500"
+              activeClass="text-info hover:text-info"
               disabled={!canRepost}
               onClick={() => onRepost(post._id)}
               ariaLabel={

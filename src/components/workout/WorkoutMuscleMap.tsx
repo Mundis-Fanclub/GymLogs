@@ -94,16 +94,11 @@ function zoneStatus(total: number): {
       label: "nicht trainiert",
       className: "text-muted-foreground",
     };
-  if (total < 6)
-    return { label: "unter Ziel", className: "text-sky-500 dark:text-sky-400" };
+  if (total < 6) return { label: "unter Ziel", className: "text-info" };
   if (total > 14 * 1.5)
-    return { label: "stark über Ziel", className: "text-red-500 dark:text-red-400" };
-  if (total > 14)
-    return { label: "über Ziel", className: "text-amber-500 dark:text-amber-400" };
-  return {
-    label: "im Ziel",
-    className: "text-emerald-500 dark:text-emerald-400",
-  };
+    return { label: "stark über Ziel", className: "text-danger" };
+  if (total > 14) return { label: "über Ziel", className: "text-warning" };
+  return { label: "im Ziel", className: "text-success" };
 }
 
 type ZoneExercise = { name: string; sets: number };

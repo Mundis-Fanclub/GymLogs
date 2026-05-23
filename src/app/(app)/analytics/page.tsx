@@ -366,14 +366,11 @@ function loadStatus(part: BodyPartSummary): LoadStatus {
 }
 
 const STATUS_STYLES: Record<LoadStatus, string> = {
-  missing:
-    "border-border bg-muted/30 text-muted-foreground",
-  low: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  balanced:
-    "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  high: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500",
-  very_high:
-    "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400",
+  missing: "border-border bg-muted/30 text-muted-foreground",
+  low: "border-info/25 bg-info/10 text-info-foreground",
+  balanced: "border-success/30 bg-success/10 text-success-foreground",
+  high: "border-warning/30 bg-warning/10 text-warning-foreground",
+  very_high: "border-danger/30 bg-danger/10 text-danger-foreground",
 };
 
 function CompactMuscleCard({ part }: { part: BodyPartSummary }) {
@@ -450,7 +447,7 @@ function WeeklySummary({
         />
       </CardContent>
       {overTarget.length > 0 && (
-        <div className="flex items-start gap-2 border-t border-amber-500/20 bg-amber-500/5 px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
+        <div className="flex items-start gap-2 border-t border-warning/25 bg-warning/5 px-4 py-2 text-xs text-warning-foreground">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {overTarget.length === 1 ? (
             <span>

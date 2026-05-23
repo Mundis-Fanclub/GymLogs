@@ -178,7 +178,7 @@ export default function DashboardPage() {
           <CardContent className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-border/70 bg-white/80 p-4">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <ShieldCheck className="h-4 w-4 text-success" />
                 <p className="font-medium">{t("dashboard.phase1")}</p>
               </div>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -187,7 +187,7 @@ export default function DashboardPage() {
             </div>
             <div className="rounded-2xl border border-border/70 bg-white/80 p-4">
               <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-amber-600" />
+                <Trophy className="h-4 w-4 text-warning" />
                 <p className="font-medium">{t("dashboard.phase2")}</p>
               </div>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -196,7 +196,7 @@ export default function DashboardPage() {
             </div>
             <div className="rounded-2xl border border-border/70 bg-white/80 p-4">
               <div className="flex items-center gap-2">
-                <Crown className="h-4 w-4 text-sky-600" />
+                <Crown className="h-4 w-4 text-info" />
                 <p className="font-medium">{t("dashboard.phase3")}</p>
               </div>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">

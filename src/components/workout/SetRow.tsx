@@ -158,7 +158,7 @@ export function SetRow({
             {previousLabel}
           </span>
           {hasProgress && (
-            <TrendingUp className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            <TrendingUp className="h-3.5 w-3.5 shrink-0 text-success" />
           )}
         </div>
 
@@ -276,7 +276,7 @@ export function SetRow({
               <span>min</span>
             </div>
             {isPR && saved && (
-              <span className="rounded-full bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-500">
+              <span className="rounded-full bg-brand/15 px-2 py-1 text-xs font-semibold text-brand">
                 PR {previousSet ? (prType === "1rm" ? "1RM" : "") : "neu"}
               </span>
             )}
