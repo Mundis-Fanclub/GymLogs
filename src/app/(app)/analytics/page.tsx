@@ -1,19 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "convex/react";
-import dynamic from "next/dynamic";
 import { api } from "../../../../convex/_generated/api";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { FrequencyPeriod } from "@/components/charts/WorkoutsPerWeekChart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { AlertTriangle, BarChart3, Dumbbell, TrendingDown, TrendingUp, User } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 import { PageTitle } from "@/components/ui/page-title";
 import {
@@ -23,22 +19,9 @@ import {
 } from "@/lib/muscle-groups";
 import { cn } from "@/lib/utils";
 
-const WorkoutsPerWeekChart = dynamic(
-  () =>
-    import("@/components/charts/WorkoutsPerWeekChart").then(
-      (mod) => mod.WorkoutsPerWeekChart
-    ),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-[180px] w-full" />,
-  }
-);
-
 export default function AnalyticsPage() {
   const { userId, isLoaded } = useConvexUser();
   const { t } = useAppPreferences();
-  const [frequencyPeriod, setFrequencyPeriod] =
-    useState<FrequencyPeriod>("week");
 
   const muscleAnalytics = useQuery(
     api.analytics.getMuscleAnalytics,
@@ -47,17 +30,11 @@ export default function AnalyticsPage() {
 
   const workoutFrequency = useQuery(
     api.analytics.getWorkoutFrequency,
-    userId ? { userId, period: frequencyPeriod } : "skip"
+    userId ? { userId, period: "week" } : "skip"
   );
 
-  const isLoading =
-    !isLoaded ||
-    workoutFrequency === undefined ||
-    muscleAnalytics === undefined;
-  const hasData =
-    workoutFrequency !== undefined &&
-    muscleAnalytics !== undefined &&
-    (muscleAnalytics.totalSets > 0 || workoutFrequency.total > 0);
+  const isLoading = !isLoaded || muscleAnalytics === undefined;
+  const hasData = muscleAnalytics !== undefined && muscleAnalytics.totalSets > 0;
   const muscleGroupSets =
     (muscleAnalytics?.bodyGraphZoneSets as
       | Record<BodyPart, number>
@@ -101,7 +78,6 @@ export default function AnalyticsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <PageTitle title={t("common.analytics")} />
-      <div className="space-y-5">
         {isLoading && (
           <p className="text-sm text-muted-foreground">{t("analytics.loadingCopy")}</p>
         )}
@@ -127,7 +103,6 @@ export default function AnalyticsPage() {
             ) : (
               <WeeklySummary
                 workoutsCount={workoutFrequency?.total ?? 0}
-                period={frequencyPeriod}
                 totalSets={muscleAnalytics.totalSets}
                 totalVolume={muscleAnalytics.totalVolume}
                 topFocus={topFocus}
@@ -178,53 +153,6 @@ export default function AnalyticsPage() {
                 )}
               </CardContent>
             </Card>
-
-            {workoutFrequency === undefined ? (
-              <Skeleton className="h-[160px] w-full" />
-            ) : workoutFrequency.total > 0 ? (
-              <Card className="overflow-hidden">
-                <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <CardTitle className="text-sm font-semibold">
-                      {t("analytics.workoutFrequency")}
-                    </CardTitle>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("analytics.totalWorkouts")}: {workoutFrequency.total}
-                    </p>
-                  </div>
-                  <Tabs
-                    value={frequencyPeriod}
-                    onValueChange={(value) => setFrequencyPeriod(value as FrequencyPeriod)}
-                  >
-                    <TabsList aria-label={t("analytics.period")}>
-                      <TabsTrigger value="week">{t("analytics.week")}</TabsTrigger>
-                      <TabsTrigger value="month">{t("analytics.month")}</TabsTrigger>
-                      <TabsTrigger value="year">{t("analytics.year")}</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </CardHeader>
-                <CardContent>
-                  {workoutFrequency.total === 1 ? (
-                    <div className="space-y-3">
-                      <p className="text-xs text-muted-foreground">
-                        Bisher 1 Workout — noch keine regelmäßige Verteilung erkennbar.
-                      </p>
-                      <WorkoutsPerWeekChart
-                        data={workoutFrequency}
-                        period={frequencyPeriod}
-                        compact
-                      />
-                    </div>
-                  ) : (
-                    <WorkoutsPerWeekChart
-                      data={workoutFrequency}
-                      period={frequencyPeriod}
-                    />
-                  )}
-                </CardContent>
-              </Card>
-            ) : null}
-      </div>
     </div>
   );
 }
@@ -356,22 +284,14 @@ function CompactMuscleCard({ part }: { part: BodyPartSummary }) {
   );
 }
 
-const PERIOD_LABELS: Record<FrequencyPeriod, string> = {
-  week: "diese Woche",
-  month: "diesen Monat",
-  year: "dieses Jahr",
-};
-
 function WeeklySummary({
   workoutsCount,
-  period,
   totalSets,
   totalVolume,
   topFocus,
   overTarget,
 }: {
   workoutsCount: number;
-  period: FrequencyPeriod;
   totalSets: number;
   totalVolume: number;
   topFocus: BodyPartSummary | undefined;
@@ -383,7 +303,7 @@ function WeeklySummary({
   return (
     <Card className="overflow-hidden">
       <CardContent className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:p-5">
-        <SummaryStat label="Workouts" sub={PERIOD_LABELS[period]} value={workoutsCount} />
+        <SummaryStat label="Workouts" sub="diese Woche" value={workoutsCount} />
         <SummaryStat label="Sätze" sub="diese Woche" value={totalSets} />
         <SummaryStat label="Top-Fokus" sub={topSub} value={topLabel} />
         <SummaryStat
