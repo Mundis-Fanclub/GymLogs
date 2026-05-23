@@ -54,7 +54,8 @@ export function ExercisesList() {
       </div>
 
       {isFallback && (
-        <p className="rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+        <p className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-1 text-[11px] text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
           {t("exercises.fallbackNotice")}
         </p>
       )}
@@ -75,7 +76,7 @@ export function ExercisesList() {
                   const content = (
                     <>
                       <span className="min-w-0 truncate font-medium">{ex.name}</span>
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         {ex.isLeaderboardLift && (
                           <Badge variant="default" className="gap-1 text-xs">
                             <Trophy className="h-3 w-3" />
@@ -87,14 +88,6 @@ export function ExercisesList() {
                             {t("exercises.custom")}
                           </Badge>
                         )}
-                        {"isFallback" in ex && ex.isFallback && (
-                          <Badge variant="outline" className="text-xs">
-                            Demo
-                          </Badge>
-                        )}
-                        <Badge variant="secondary" className="text-xs capitalize">
-                          {t(`muscleGroups.${toDisplayBodyPart(toBodyPart(ex.muscleGroup))}`)}
-                        </Badge>
                       </div>
                     </>
                   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import dynamic from "next/dynamic";
 import { api } from "../../../../convex/_generated/api";
@@ -13,10 +13,9 @@ import { useAppPreferences } from "@/components/providers/AppPreferencesProvider
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { AlertTriangle, BarChart3, Dumbbell, TrendingDown, TrendingUp, User } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
-import { WorkoutsList } from "@/components/workout/WorkoutsList";
-import { ExercisesList } from "@/components/exercises/ExercisesList";
+import { PageTitle } from "@/components/ui/page-title";
 import {
   BODY_PARTS,
   SUB_LEG_PARTS,
@@ -35,14 +34,11 @@ const WorkoutsPerWeekChart = dynamic(
   }
 );
 
-type AnalyticsTab = "overview" | "workouts" | "exercises";
-
 export default function AnalyticsPage() {
   const { userId, isLoaded } = useConvexUser();
   const { t } = useAppPreferences();
   const [frequencyPeriod, setFrequencyPeriod] =
     useState<FrequencyPeriod>("week");
-  const [tab, setTab] = useState<AnalyticsTab>("overview");
 
   const muscleAnalytics = useQuery(
     api.analytics.getMuscleAnalytics,
@@ -53,10 +49,6 @@ export default function AnalyticsPage() {
     api.analytics.getWorkoutFrequency,
     userId ? { userId, period: frequencyPeriod } : "skip"
   );
-
-  useEffect(() => {
-    document.querySelector("main")?.scrollTo({ top: 0 });
-  }, [tab]);
 
   const isLoading =
     !isLoaded ||
@@ -107,28 +99,14 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div data-flush className="mx-auto max-w-5xl">
-      <h1 className="sr-only">{t("common.analytics")}</h1>
-      <Tabs
-        value={tab}
-        onValueChange={(value) => setTab(value as AnalyticsTab)}
-        className="gap-0"
-      >
-        <div className="sticky top-0 z-20 border-b border-border bg-background pb-2 pt-2">
-          <TabsList variant="line" className="flex w-full">
-            <TabsTrigger value="overview">Übersicht</TabsTrigger>
-            <TabsTrigger value="workouts">{t("common.workouts")}</TabsTrigger>
-            <TabsTrigger value="exercises">{t("common.exercises")}</TabsTrigger>
-          </TabsList>
-        </div>
+    <div className="mx-auto max-w-5xl space-y-5">
+      <PageTitle title={t("common.analytics")} />
+      <div className="space-y-5">
+        {isLoading && (
+          <p className="text-sm text-muted-foreground">{t("analytics.loadingCopy")}</p>
+        )}
 
-        <div>
-          <TabsContent value="overview" className="space-y-6">
-            {isLoading && (
-              <p className="text-sm text-muted-foreground">{t("analytics.loadingCopy")}</p>
-            )}
-
-            {!isLoading && !hasData && (
+        {!isLoading && !hasData && (
               <EmptyState
                 icon={BarChart3}
                 title={t("analytics.emptyTitle")}
@@ -201,76 +179,52 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
 
-            <Card className="overflow-hidden">
-              <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle className="text-sm font-medium">
-                    {t("analytics.workoutFrequency")}
-                  </CardTitle>
-                  {workoutFrequency && (
+            {workoutFrequency === undefined ? (
+              <Skeleton className="h-[160px] w-full" />
+            ) : workoutFrequency.total > 0 ? (
+              <Card className="overflow-hidden">
+                <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-semibold">
+                      {t("analytics.workoutFrequency")}
+                    </CardTitle>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {t("analytics.totalWorkouts")}: {workoutFrequency.total}
                     </p>
-                  )}
-                </div>
-                <Tabs
-                  value={frequencyPeriod}
-                  onValueChange={(value) => setFrequencyPeriod(value as FrequencyPeriod)}
-                >
-                  <TabsList aria-label={t("analytics.period")}>
-                    <TabsTrigger value="week">{t("analytics.week")}</TabsTrigger>
-                    <TabsTrigger value="month">{t("analytics.month")}</TabsTrigger>
-                    <TabsTrigger value="year">{t("analytics.year")}</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </CardHeader>
-              <CardContent className="px-3 pb-4 sm:px-6">
-                {workoutFrequency === undefined ? (
-                  <Skeleton className="h-[140px] w-full" />
-                ) : workoutFrequency.total <= 1 ? (
-                  <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground">
-                      {workoutFrequency.total === 0
-                        ? "Noch kein Workout in diesem Zeitraum."
-                        : `Bisher 1 Workout — noch keine regelmäßige Verteilung erkennbar.`}
-                    </p>
+                  </div>
+                  <Tabs
+                    value={frequencyPeriod}
+                    onValueChange={(value) => setFrequencyPeriod(value as FrequencyPeriod)}
+                  >
+                    <TabsList aria-label={t("analytics.period")}>
+                      <TabsTrigger value="week">{t("analytics.week")}</TabsTrigger>
+                      <TabsTrigger value="month">{t("analytics.month")}</TabsTrigger>
+                      <TabsTrigger value="year">{t("analytics.year")}</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </CardHeader>
+                <CardContent>
+                  {workoutFrequency.total === 1 ? (
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground">
+                        Bisher 1 Workout — noch keine regelmäßige Verteilung erkennbar.
+                      </p>
+                      <WorkoutsPerWeekChart
+                        data={workoutFrequency}
+                        period={frequencyPeriod}
+                        compact
+                      />
+                    </div>
+                  ) : (
                     <WorkoutsPerWeekChart
                       data={workoutFrequency}
                       period={frequencyPeriod}
-                      compact
                     />
-                  </div>
-                ) : (
-                  <WorkoutsPerWeekChart
-                    data={workoutFrequency}
-                    period={frequencyPeriod}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="workouts" className="space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <p className="text-sm text-muted-foreground">{t("workouts.copy")}</p>
-              {userId && (
-                <Link href="/workouts/new">
-                  <Button size="sm" className="gap-2">
-                    <Dumbbell className="h-4 w-4" />
-                    {t("common.startWorkout")}
-                  </Button>
-                </Link>
-              )}
-            </div>
-            <WorkoutsList userId={userId} />
-          </TabsContent>
-
-          <TabsContent value="exercises" className="space-y-4">
-            <p className="text-sm text-muted-foreground">{t("exercises.copy")}</p>
-            <ExercisesList />
-          </TabsContent>
-        </div>
-      </Tabs>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+      </div>
     </div>
   );
 }
@@ -346,14 +300,6 @@ const BODY_PART_LABELS: Record<BodyPart, string> = {
   shoulders: "Schultern",
   other: "Sonstiges",
 };
-
-const PLURAL_GROUPS = new Set<BodyPart>([
-  "legs",
-  "shoulders",
-  "quads",
-  "hamstrings",
-  "calves",
-]);
 
 type LoadStatus = "missing" | "low" | "balanced" | "high" | "very_high";
 
@@ -449,25 +395,15 @@ function WeeklySummary({
       {overTarget.length > 0 && (
         <div className="flex items-start gap-2 border-t border-warning/25 bg-warning/5 px-4 py-2 text-xs text-warning-foreground">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {overTarget.length === 1 ? (
-            <span>
-              <span className="font-semibold">
-                {BODY_PART_LABELS[overTarget[0].part]}{" "}
-                {PLURAL_GROUPS.has(overTarget[0].part) ? "liegen" : "liegt"} über
-                dem empfohlenen Wochenziel:
-              </span>{" "}
-              {overTarget[0].sets} / {overTarget[0].targetMax} Sätze
-            </span>
-          ) : (
-            <span>
-              <span className="font-semibold">
-                Über dem empfohlenen Wochenziel ({overTarget[0].targetMax} Sätze):
-              </span>{" "}
-              {overTarget
-                .map((part) => `${BODY_PART_LABELS[part.part]} ${part.sets}`)
-                .join(" · ")}
-            </span>
-          )}
+          <span>
+            <span className="font-semibold">Über Zielbereich:</span>{" "}
+            {overTarget
+              .map(
+                (part) =>
+                  `${BODY_PART_LABELS[part.part]} ${part.sets} / ${part.targetMax} Sätze`
+              )
+              .join(" · ")}
+          </span>
         </div>
       )}
     </Card>
