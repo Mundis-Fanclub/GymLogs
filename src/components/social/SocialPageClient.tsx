@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowLeft,
+  Bookmark,
   CheckCircle2,
   Heart,
   ImagePlus,
@@ -49,6 +50,7 @@ export function SocialPageClient() {
   const [loadFeed, setLoadFeed] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<Id<"social_posts"> | null>(null);
   const posts = useQuery(api.social.listFeed, loadFeed ? { viewerId: userId, limit: 12 } : "skip");
+  const currentUser = useQuery(api.users.get, userId ? { userId } : "skip");
   const thread = useQuery(
     api.social.getPostThread,
     selectedPostId ? { postId: selectedPostId, viewerId: userId, commentLimit: 40, replyLimit: 12 } : "skip"
@@ -59,6 +61,7 @@ export function SocialPageClient() {
   const deletePost = useMutation(api.social.deletePost);
   const generateUploadUrl = useMutation(api.social.generateUploadUrl);
   const toggleLike = useMutation(api.social.toggleLike);
+  const toggleSave = useMutation(api.social.toggleSave);
   const toggleCommentLike = useMutation(api.social.toggleCommentLike);
   const addComment = useMutation(api.social.addComment);
   const updateComment = useMutation(api.social.updateComment);
@@ -279,7 +282,7 @@ export function SocialPageClient() {
 
   const composer = (
     <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3 border-b border-border p-3 sm:p-4">
-      <Avatar name="User" />
+      <Avatar name={currentUser?.name ?? "User"} avatarUrl={currentUser?.avatarUrl ?? undefined} />
       <div className="min-w-0 space-y-3">
         <Textarea
           value={body}
@@ -378,6 +381,7 @@ export function SocialPageClient() {
                   document.getElementById(`comment-input-${postId}`)?.focus();
                 }}
                 onRepost={repost}
+                onSave={(postId) => userId && toggleSave({ userId, postId })}
                 onShare={(postId) => {
                   setShareDialogPostId(postId);
                   setShareMessage("");
@@ -521,6 +525,7 @@ export function SocialPageClient() {
               onLike={(postId) => userId && toggleLike({ userId, postId })}
               onComment={setSelectedPostId}
               onRepost={repost}
+              onSave={(postId) => userId && toggleSave({ userId, postId })}
               onShare={(postId) => {
                 setShareDialogPostId(postId);
                 setShareMessage("");
@@ -563,6 +568,7 @@ function PostCard({
   onLike,
   onComment,
   onRepost,
+  onSave,
   onShare,
 }: {
   post: {
@@ -580,6 +586,7 @@ function PostCard({
     repostOfPostId?: Id<"social_posts">;
     author: null | { _id: Id<"users">; name: string; username?: string; avatarUrl?: string | null; isPro: boolean };
     likedByViewer: boolean;
+    savedByViewer: boolean;
     likeCount: number;
     commentCount: number;
     repostCount: number;
@@ -612,6 +619,7 @@ function PostCard({
   onLike: (postId: Id<"social_posts">) => void;
   onComment: (postId: Id<"social_posts">) => void;
   onRepost: (postId: Id<"social_posts">) => void;
+  onSave: (postId: Id<"social_posts">) => void;
   onShare: (postId: Id<"social_posts">) => void;
 }) {
   const isOwnPost = Boolean(userId && post.author?._id === userId);
@@ -715,6 +723,15 @@ function PostCard({
             >
               <Repeat2 className="h-4 w-4" />
               <span>{post.repostCount}</span>
+            </ActionButton>
+            <ActionButton
+              active={post.savedByViewer}
+              activeClass="text-cyan-500 hover:text-cyan-500"
+              disabled={!userId}
+              onClick={() => onSave(post._id)}
+              ariaLabel={post.savedByViewer ? "Gespeicherten Beitrag entfernen" : "Post speichern"}
+            >
+              <Bookmark className={`h-4 w-4 ${post.savedByViewer ? "fill-current" : ""}`} />
             </ActionButton>
             <ActionButton onClick={() => onShare(post._id)} ariaLabel="Teilen">
               <Share2 className="h-4 w-4" />

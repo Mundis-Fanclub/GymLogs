@@ -43,6 +43,7 @@ export default defineSchema({
     name: v.string(),
     email: v.string(),
     username: v.optional(v.string()),
+    searchText: v.optional(v.string()),
     bio: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
     avatarStorageId: v.optional(v.id("_storage")),
@@ -62,6 +63,10 @@ export default defineSchema({
     showTrainingSummary: v.optional(v.boolean()),
     publicFields: v.optional(
       v.object({
+        bio: v.optional(v.boolean()),
+        location: v.optional(v.boolean()),
+        favoriteLift: v.optional(v.boolean()),
+        trainingGoal: v.optional(v.boolean()),
         heightCm: v.boolean(),
         weightKg: v.boolean(),
         birthDate: v.boolean(),
@@ -71,7 +76,11 @@ export default defineSchema({
     updatedAt: v.optional(v.number()),
   })
     .index("by_clerk_id", ["clerkId"])
-    .index("by_username", ["username"]),
+    .index("by_username", ["username"])
+    .searchIndex("search_profile", {
+      searchField: "searchText",
+      filterFields: ["isPublic"],
+    }),
 
   username_reservations: defineTable({
     username: v.string(),
@@ -282,6 +291,15 @@ export default defineSchema({
     .index("by_author", ["authorId", "createdAt"]),
 
   social_likes: defineTable({
+    postId: v.id("social_posts"),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_post", ["postId", "createdAt"])
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_post_and_user", ["postId", "userId"]),
+
+  social_saves: defineTable({
     postId: v.id("social_posts"),
     userId: v.id("users"),
     createdAt: v.number(),

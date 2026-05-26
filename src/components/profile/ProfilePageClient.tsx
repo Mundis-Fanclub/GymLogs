@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import {
@@ -9,10 +9,11 @@ import {
   Ban,
   BadgeCheck,
   Calendar,
-  ChevronDown,
+  ChevronRight,
   Crown,
   Dumbbell,
   ExternalLink,
+  Eye,
   Flag,
   Flame,
   Heart,
@@ -35,7 +36,9 @@ import {
   Sparkles,
   Bookmark,
   Target,
+  Trash2,
   Trophy,
+  Upload,
   User,
   UserPlus,
   Users,
@@ -56,6 +59,13 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +78,14 @@ const ACCENTS = {
 } as const;
 
 type Accent = keyof typeof ACCENTS;
+
+const ACCENT_OPTIONS: Array<{ value: Accent; label: string }> = [
+  { value: "emerald", label: "Emerald Pulse" },
+  { value: "sky", label: "Arctic Sky" },
+  { value: "rose", label: "Rose Heat" },
+  { value: "amber", label: "Amber Sprint" },
+  { value: "violet", label: "Violet Neon" },
+];
 
 type ProfileForm = {
   name: string;
@@ -87,6 +105,10 @@ type ProfileForm = {
   isPublic: boolean;
   allowMessages: boolean;
   showTrainingSummary: boolean;
+  publicBio: boolean;
+  publicLocation: boolean;
+  publicFavoriteLift: boolean;
+  publicTrainingGoal: boolean;
   publicHeight: boolean;
   publicWeight: boolean;
   publicBirthDate: boolean;
@@ -133,6 +155,7 @@ type ProfileTrainingSummary = {
   totalVolume: number;
   uniqueExercises: number;
   activeWeeks: number;
+  currentStreakDays: number;
   lastWorkoutAt?: number;
   averageWorkoutsPerWeek: number;
   bestSet: null | {
@@ -159,8 +182,11 @@ type ProfilePost = {
   createdAt: number;
   mediaUrl?: string | null;
   mediaType?: "image" | "video" | "gif";
+  likedByViewer: boolean;
+  savedByViewer: boolean;
   likeCount: number;
   commentCount: number;
+  repostCount: number;
   linkedLog: null | {
     exerciseName: string | null;
     weightKg: number;
@@ -188,6 +214,8 @@ const LIFT_LABELS = {
   deadlift: "Deadlift",
 } as const;
 
+type ProfileTab = "posts" | "saved" | "logs" | "workouts" | "playlists" | "about" | "messages" | "network";
+
 export function ProfilePageClient() {
   const { userId, isLoaded } = useConvexUser();
   const [loadSecondary, setLoadSecondary] = useState(false);
@@ -208,12 +236,17 @@ export function ProfilePageClient() {
     api.workouts.listProfileTemplates,
     userId && loadSecondary ? { userId, viewerId: userId, limit: 12 } : "skip"
   );
-  const posts = useQuery(api.social.listByAuthor, userId && loadSecondary ? { authorId: userId, limit: 30 } : "skip");
+  const isOwnProfile = Boolean(userId && user?._id === userId);
+  const posts = useQuery(api.social.listByAuthor, userId && loadSecondary ? { authorId: userId, viewerId: userId, limit: 30 } : "skip");
+  const savedPosts = useQuery(api.social.listSaved, userId && isOwnProfile && loadSecondary ? { userId, limit: 30 } : "skip");
   const friends = useQuery(api.friends.list, userId && loadSecondary ? { userId } : "skip");
   const updateProfile = useMutation(api.users.updateProfile);
   const generateUploadUrl = useMutation(api.users.generateProfileUploadUrl);
   const createProfilePost = useMutation(api.social.createPost);
   const generatePostUploadUrl = useMutation(api.social.generateUploadUrl);
+  const togglePostLike = useMutation(api.social.toggleLike);
+  const togglePostSave = useMutation(api.social.toggleSave);
+  const addProfilePostComment = useMutation(api.social.addComment);
   const addFriend = useMutation(api.friends.addByUsername);
   const removeFriend = useMutation(api.friends.remove);
   const sendMessage = useMutation(api.messages.send);
@@ -240,6 +273,8 @@ export function ProfilePageClient() {
   const [messageUploadError, setMessageUploadError] = useState("");
   const [uploadingMessageImage, setUploadingMessageImage] = useState(false);
   const [profilePostBody, setProfilePostBody] = useState("");
+  const [profilePostCommentBodies, setProfilePostCommentBodies] = useState<Record<string, string>>({});
+  const [activeProfileCommentPostId, setActiveProfileCommentPostId] = useState<string | null>(null);
   const [profilePostMediaDraft, setProfilePostMediaDraft] = useState<ProfilePostMediaDraft | null>(null);
   const [profilePostError, setProfilePostError] = useState("");
   const [uploadingProfilePostMedia, setUploadingProfilePostMedia] = useState(false);
@@ -253,7 +288,11 @@ export function ProfilePageClient() {
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [coverPreviewUrl, setCoverPreviewUrl] = useState("");
   const [editProfileOpen, setEditProfileOpen] = useState(false);
-  const [activeProfileTab, setActiveProfileTab] = useState<"posts" | "logs" | "workouts" | "playlists" | "about">("posts");
+  const [profileEditMode, setProfileEditMode] = useState<"edit" | "preview">("edit");
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [activeProfileTab, setActiveProfileTab] = useState<ProfileTab>("posts");
+  const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<ProfileForm>({
     name: "",
     username: "",
@@ -272,6 +311,10 @@ export function ProfilePageClient() {
     isPublic: true,
     allowMessages: true,
     showTrainingSummary: true,
+    publicBio: true,
+    publicLocation: true,
+    publicFavoriteLift: true,
+    publicTrainingGoal: true,
     publicHeight: false,
     publicWeight: false,
     publicBirthDate: false,
@@ -281,6 +324,18 @@ export function ProfilePageClient() {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setLoadSecondary(true), 120);
     return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    function selectTabFromHash() {
+      const hash = window.location.hash;
+      if (hash === "#messages") setActiveProfileTab("messages");
+      if (hash === "#network" || hash === "#friends") setActiveProfileTab("network");
+    }
+
+    selectTabFromHash();
+    window.addEventListener("hashchange", selectTabFromHash);
+    return () => window.removeEventListener("hashchange", selectTabFromHash);
   }, []);
 
   useEffect(() => {
@@ -303,6 +358,10 @@ export function ProfilePageClient() {
       isPublic: user.isPublic ?? true,
       allowMessages: user.allowMessages ?? true,
       showTrainingSummary: user.showTrainingSummary ?? true,
+      publicBio: user.publicFields?.bio ?? true,
+      publicLocation: user.publicFields?.location ?? true,
+      publicFavoriteLift: user.publicFields?.favoriteLift ?? true,
+      publicTrainingGoal: user.publicFields?.trainingGoal ?? true,
       publicHeight: user.publicFields?.heightCm ?? false,
       publicWeight: user.publicFields?.weightKg ?? false,
       publicBirthDate: user.publicFields?.birthDate ?? false,
@@ -316,6 +375,12 @@ export function ProfilePageClient() {
     if (!userId || !activeConversation) return;
     void markRead({ userId, conversationId: activeConversation });
   }, [activeConversation, markRead, userId, thread?.messages.length]);
+
+  useEffect(() => {
+    if (!isOwnProfile && activeProfileTab === "saved") {
+      setActiveProfileTab("posts");
+    }
+  }, [activeProfileTab, isOwnProfile]);
 
   useEffect(() => {
     return () => {
@@ -350,8 +415,7 @@ export function ProfilePageClient() {
     topLog?.exerciseName ??
     form.favoriteLift ??
     "Top Lift";
-  const activeWeeks = trainingSummary?.activeWeeks ?? 0;
-  const streakDays = activeWeeks > 0 ? String(activeWeeks * 7) : "18";
+  const streakDays = String(trainingSummary?.currentStreakDays ?? 0);
   const weeklyActivityValue = trainingSummary ? `${trainingSummary.averageWorkoutsPerWeek} / Woche` : "5 / Woche";
   const volumeThirtyDays = trainingSummary
     ? `${Math.round(trainingSummary.totalVolume).toLocaleString("de-DE")} kg`
@@ -369,11 +433,14 @@ export function ProfilePageClient() {
   ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
   const profileTabs = [
     { id: "posts", label: "Beiträge" },
+    ...(isOwnProfile ? [{ id: "saved", label: "Gespeichert" } as const] : []),
     { id: "logs", label: "Top Logs" },
     { id: "workouts", label: "Workouts" },
     { id: "playlists", label: "Playlists" },
+    { id: "messages", label: "Nachrichten" },
+    { id: "network", label: "Netzwerk" },
     { id: "about", label: "Über mich" },
-  ] as const;
+  ] satisfies Array<{ id: ProfileTab; label: string }>;
 
   if (isLoaded && !userId) {
     return (
@@ -412,6 +479,10 @@ export function ProfilePageClient() {
       allowMessages: form.allowMessages,
       showTrainingSummary: form.showTrainingSummary,
       publicFields: {
+        bio: form.publicBio,
+        location: form.publicLocation,
+        favoriteLift: form.publicFavoriteLift,
+        trainingGoal: form.publicTrainingGoal,
         heightCm: form.publicHeight,
         weightKg: form.publicWeight,
         birthDate: form.publicBirthDate,
@@ -448,11 +519,14 @@ export function ProfilePageClient() {
       const { storageId } = (await result.json()) as { storageId: Id<"_storage"> };
       const previewUrl = URL.createObjectURL(file);
       if (kind === "avatar") {
+        if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
         setAvatarPreviewUrl(previewUrl);
-        setForm((current) => ({ ...current, avatarStorageId: storageId }));
+        setForm((current) => ({ ...current, avatarUrl: "", avatarStorageId: storageId }));
+        setAvatarMenuOpen(false);
       } else {
+        if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
         setCoverPreviewUrl(previewUrl);
-        setForm((current) => ({ ...current, coverStorageId: storageId }));
+        setForm((current) => ({ ...current, coverUrl: "", coverStorageId: storageId }));
       }
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Upload fehlgeschlagen.");
@@ -540,6 +614,20 @@ export function ProfilePageClient() {
     }
   }
 
+  function removeProfileImage(kind: "avatar" | "cover") {
+    if (kind === "avatar") {
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+      setAvatarPreviewUrl("");
+      setAvatarMenuOpen(false);
+      setForm((current) => ({ ...current, avatarUrl: "", avatarStorageId: undefined }));
+      return;
+    }
+
+    if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+    setCoverPreviewUrl("");
+    setForm((current) => ({ ...current, coverUrl: "", coverStorageId: undefined }));
+  }
+
   function clearProfilePostMediaDraft() {
     if (profilePostMediaDraft?.url) URL.revokeObjectURL(profilePostMediaDraft.url);
     setProfilePostMediaDraft(null);
@@ -562,6 +650,15 @@ export function ProfilePageClient() {
     } catch (postError) {
       setProfilePostError(postError instanceof Error ? postError.message : "Beitrag konnte nicht erstellt werden.");
     }
+  }
+
+  async function submitProfilePostComment(postId: Id<"social_posts">) {
+    if (!userId) return;
+    const body = profilePostCommentBodies[postId]?.trim();
+    if (!body) return;
+    await addProfilePostComment({ userId, postId, body });
+    setProfilePostCommentBodies((current) => ({ ...current, [postId]: "" }));
+    setActiveProfileCommentPostId(null);
   }
 
   function clearMessageImageDraft() {
@@ -602,6 +699,26 @@ export function ProfilePageClient() {
     setReportReason("Spam oder wiederholte Nachrichten");
   }
 
+  async function shareProfile() {
+    const profilePath = userId ? `/profile/${userId}` : "/profile";
+    const profileUrl = `${window.location.origin}${profilePath}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: form.name || "GymLogs Profil",
+          text: form.bio || "Mein GymLogs Profil",
+          url: profileUrl,
+        });
+        return;
+      }
+      await navigator.clipboard?.writeText(profileUrl);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2200);
+    } catch {
+      // Closing the native share sheet should not break the profile UI.
+    }
+  }
+
   const profileCoverStyle = {
     backgroundImage: displayCoverUrl
       ? `url(${displayCoverUrl})`
@@ -616,29 +733,29 @@ export function ProfilePageClient() {
             className="relative min-h-[28.5rem] overflow-hidden bg-cover bg-center sm:min-h-[32rem]"
             style={profileCoverStyle}
           >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_36%,rgba(34,211,238,0.24),transparent_21%),linear-gradient(180deg,rgba(0,0,0,0.52)_0%,rgba(0,0,0,0.42)_26%,rgba(1,4,10,0.93)_82%,#050708_100%)]" />
-            <div className="absolute left-3 right-3 top-3 flex items-center justify-between sm:left-7 sm:right-7 sm:top-6">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_36%,rgba(34,211,238,0.24),transparent_21%),linear-gradient(180deg,rgba(0,0,0,0.52)_0%,rgba(0,0,0,0.42)_26%,rgba(1,4,10,0.93)_82%,#050708_100%)]" />
+            <div className="absolute left-3 right-3 top-3 z-20 flex items-center justify-between sm:left-7 sm:right-7 sm:top-6">
               <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Zurück" onClick={() => history.back()}>
                 <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
               </Button>
               <div className="flex items-center gap-3 sm:gap-5">
-                <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Profil teilen">
+                <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Profil teilen" onClick={shareProfile}>
                   <Share2 className="h-5 w-5 sm:h-6 sm:w-6" />
                 </Button>
-                <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Mehr">
-                  <MoreHorizontal className="h-5 w-5 sm:h-6 sm:w-6" />
+                <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Freunde anzeigen" onClick={() => setActiveProfileTab("network")}>
+                  <Users className="h-5 w-5 sm:h-6 sm:w-6" />
                 </Button>
               </div>
             </div>
-            <div className="absolute inset-x-0 bottom-0 px-5 pb-6 sm:px-9 sm:pb-8">
+            <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-6 sm:px-9 sm:pb-8">
               <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] items-center gap-5 min-[390px]:gap-6 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-8">
                 <div className="relative size-24 self-start min-[390px]:size-28 sm:size-44">
-                  <div className="absolute -inset-2 rounded-full bg-cyan-300/25 blur-2xl" />
+                  <div className="pointer-events-none absolute -inset-2 rounded-full bg-cyan-300/25 blur-2xl" />
                   <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="hero" />
                 </div>
                 <div className="min-w-0">
                   <Badge className="mb-2 rounded-full border-cyan-300/20 bg-cyan-300/20 px-2.5 py-0.5 text-[0.68rem] text-cyan-200 shadow-lg shadow-cyan-950/30 sm:mb-4 sm:px-4 sm:py-1 sm:text-sm">
-                    {trainingSummary?.completedWorkouts ? "Aktives Profil" : "Aktives Profil"}
+                    Öffentliches Profil
                   </Badge>
                   <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-none tracking-normal min-[390px]:text-[2.25rem] sm:text-6xl">
                     <span className="truncate">{form.name || "Steffen"}</span>
@@ -660,17 +777,13 @@ export function ProfilePageClient() {
               </div>
             </div>
           </div>
-          <CardContent className="space-y-5 bg-[#050708] px-5 pb-8 pt-0 sm:space-y-8 sm:px-9">
-            <div className="grid grid-cols-2 gap-4 sm:gap-6">
-              <Button type="button" variant="outline" className="h-14 gap-2 rounded-lg border-white/15 bg-white/[0.04] text-base font-semibold text-white hover:bg-white/10 min-[390px]:h-16 min-[390px]:text-[1.12rem] sm:h-20 sm:gap-4 sm:text-2xl">
-                <Send className="h-5 w-5 sm:h-8 sm:w-8" />
-                Profil teilen
-              </Button>
-              <Button type="button" className="h-14 rounded-lg bg-cyan-300 text-base font-semibold text-black hover:bg-cyan-200 min-[390px]:h-16 min-[390px]:text-[1.12rem] sm:h-20 sm:text-2xl" onClick={() => setEditProfileOpen(true)}>
+          <CardContent className="relative z-10 space-y-4 bg-[#050708] px-5 pb-7 pt-0 sm:space-y-6 sm:px-9">
+            <div className="grid gap-2.5 sm:max-w-xl sm:gap-3">
+              <Button type="button" className="h-12 rounded-lg bg-cyan-300 text-base font-semibold text-black shadow-sm shadow-cyan-950/20 transition-all hover:-translate-y-0.5 hover:bg-cyan-200 sm:h-14 sm:text-lg" onClick={() => setEditProfileOpen(true)}>
                 Profil bearbeiten
               </Button>
             </div>
-            <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-white/10 bg-white/[0.035]">
+            <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] shadow-sm shadow-black/10 min-[420px]:grid-cols-4">
               <ProfileMetric icon={Flame} iconClassName="text-orange-400" value={streakDays} label="Tage Streak" />
               <ProfileMetric icon={Dumbbell} value={primaryLift ?? "43 kg x 8"} label="Top Lift" detail={primaryLiftLabel || "Push-up"} />
               <ProfileMetric icon={Activity} iconClassName="text-cyan-300" value={weeklyActivityValue} label="ø Aktivität" />
@@ -703,6 +816,8 @@ export function ProfilePageClient() {
                 error={profilePostError}
                 uploading={uploadingProfilePostMedia}
                 disabled={!userId || uploadingProfilePostMedia || (!profilePostBody.trim() && !profilePostMediaDraft)}
+                profileName={form.name || user?.name || "GymLogs User"}
+                avatarUrl={displayAvatarUrl}
                 onBodyChange={setProfilePostBody}
                 onFile={uploadProfilePostMedia}
                 onClearMedia={clearProfilePostMediaDraft}
@@ -716,6 +831,40 @@ export function ProfilePageClient() {
                 username={form.username || "username"}
                 avatarUrl={displayAvatarUrl}
                 isPro={Boolean(user?.isPro)}
+                userId={userId}
+                commentBodies={profilePostCommentBodies}
+                activeCommentPostId={activeProfileCommentPostId}
+                onLike={(postId) => userId && togglePostLike({ userId, postId })}
+                onSave={(postId) => userId && togglePostSave({ userId, postId })}
+                onToggleComment={(postId) =>
+                  setActiveProfileCommentPostId((current) => current === postId ? null : postId)
+                }
+                onCommentBodyChange={(postId, body) =>
+                  setProfilePostCommentBodies((current) => ({ ...current, [postId]: body }))
+                }
+                onSubmitComment={submitProfilePostComment}
+              />
+            )}
+            {isOwnProfile && activeProfileTab === "saved" && (
+              <ProfilePostsCard
+                posts={savedPosts}
+                profileName={form.name || "GymLogs User"}
+                username={form.username || "username"}
+                avatarUrl={displayAvatarUrl}
+                isPro={Boolean(user?.isPro)}
+                userId={userId}
+                commentBodies={profilePostCommentBodies}
+                activeCommentPostId={activeProfileCommentPostId}
+                onLike={(postId) => userId && togglePostLike({ userId, postId })}
+                onSave={(postId) => userId && togglePostSave({ userId, postId })}
+                onToggleComment={(postId) =>
+                  setActiveProfileCommentPostId((current) => current === postId ? null : postId)
+                }
+                onCommentBodyChange={(postId, body) =>
+                  setProfilePostCommentBodies((current) => ({ ...current, [postId]: body }))
+                }
+                onSubmitComment={submitProfilePostComment}
+                emptyTitle="Noch keine gespeicherten Beitraege"
               />
             )}
             {activeProfileTab === "logs" && <TopLogsCard logs={topLogs} embedded />}
@@ -749,6 +898,200 @@ export function ProfilePageClient() {
           </CardContent>
         </Card>
 
+        <Dialog
+          open={editProfileOpen}
+          onOpenChange={(open) => {
+            setEditProfileOpen(open);
+            if (!open) setProfileEditMode("edit");
+          }}
+        >
+          <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-screen max-w-none overflow-hidden rounded-none border-white/10 bg-[#050708] p-0 text-white shadow-2xl shadow-cyan-950/25 sm:h-auto sm:max-h-[92vh] sm:w-full sm:max-w-4xl sm:rounded-xl">
+            <div className="h-full max-h-[100dvh] overflow-y-auto overflow-x-hidden sm:max-h-[92vh]">
+              <div className="relative min-h-[17rem] overflow-visible bg-cover bg-center sm:min-h-52" style={profileCoverStyle}>
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.35),#050708_92%)]" />
+                <DialogHeader className="relative z-10 flex-col items-start gap-3 space-y-0 p-4 pr-12 sm:flex-row sm:justify-between sm:p-7">
+                  <div className="min-w-0">
+                    <DialogTitle className="text-xl font-black text-white sm:text-3xl">Profil bearbeiten</DialogTitle>
+                    <p className="mt-2 max-w-xl text-xs leading-5 text-white/62 sm:text-sm">
+                      Passe Cover, Profilinfos und Sichtbarkeit an. Die Vorschau nutzt deine aktuellen Eingaben.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 shrink-0 border-white/15 bg-white/[0.04] text-white hover:bg-white/10 sm:h-10"
+                    onClick={() => setProfileEditMode((mode) => mode === "preview" ? "edit" : "preview")}
+                  >
+                    <Eye className="h-4 w-4" />
+                    {profileEditMode === "preview" ? "Bearbeiten" : "Vorschau"}
+                  </Button>
+                </DialogHeader>
+                {profileEditMode === "edit" && (
+                  <div className="absolute left-4 right-4 top-[7.35rem] z-20 flex justify-end sm:left-auto sm:right-7 sm:top-24">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="max-w-full border-white/20 bg-black/45 text-white backdrop-blur hover:bg-black/60"
+                      disabled={uploading === "cover"}
+                      onClick={() => coverFileInputRef.current?.click()}
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                      {uploading === "cover" ? "Upload läuft..." : "Hintergrund bearbeiten"}
+                    </Button>
+                  </div>
+                )}
+                <div className="relative z-10 grid grid-cols-[4.5rem_minmax(0,1fr)] items-end gap-3 px-4 pb-4 pt-16 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4 sm:px-7 sm:pb-5 sm:pt-0">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                      aria-label="Profilbild bearbeiten"
+                      onClick={() => profileEditMode === "edit" && setAvatarMenuOpen((open) => !open)}
+                    >
+                      <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="hero" />
+                    </button>
+                    {profileEditMode === "edit" && avatarMenuOpen && (
+                      <div className="absolute left-0 top-[calc(100%+0.5rem)] z-40 min-w-56 overflow-hidden rounded-lg border border-white/10 bg-[#0d1115] p-1 text-sm shadow-2xl shadow-black/50">
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-white hover:bg-white/10"
+                          onClick={() => avatarFileInputRef.current?.click()}
+                        >
+                          <Upload className="h-4 w-4" />
+                          Bild hochladen
+                        </button>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-red-400 hover:bg-red-500/10"
+                          onClick={() => removeProfileImage("avatar")}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Aktuelles Bild entfernen
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 pb-1">
+                    <h2 className="truncate text-2xl font-black leading-none sm:text-5xl">{form.name || "GymLogs User"}</h2>
+                    <p className="mt-1 truncate text-sm text-white/68 sm:text-lg">@{form.username || "username"}</p>
+                  </div>
+                </div>
+                <input
+                  ref={avatarFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  disabled={uploading === "avatar"}
+                  onChange={(event) => uploadProfileImage(event.target.files?.[0], "avatar")}
+                />
+                <input
+                  ref={coverFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  disabled={uploading === "cover"}
+                  onChange={(event) => uploadProfileImage(event.target.files?.[0], "cover")}
+                />
+              </div>
+
+              <div className="space-y-4 px-4 pb-[calc(env(safe-area-inset-bottom)+7.75rem)] sm:px-7 sm:pb-7">
+                {profileEditMode === "preview" ? (
+                  <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.025]">
+                    <div className="p-5">
+                      <p className="whitespace-pre-wrap text-lg font-semibold leading-7 text-white">
+                        {form.bio || "Noch keine Bio eingetragen."}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-2 text-sm text-white/62">
+                        {form.location && <Badge variant="secondary" className="bg-white/10 text-white"><MapPin className="h-3 w-3" />{form.location}</Badge>}
+                        {form.favoriteLift && <Badge variant="secondary" className="bg-white/10 text-white"><Dumbbell className="h-3 w-3" />{form.favoriteLift}</Badge>}
+                        {form.heightCm && <Badge variant="secondary" className="bg-white/10 text-white"><Ruler className="h-3 w-3" />{form.heightCm} cm</Badge>}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 border-t border-white/10 min-[420px]:grid-cols-4">
+                      <ProfileMetric icon={Flame} iconClassName="text-orange-400" value={streakDays} label="Tage Streak" />
+                      <ProfileMetric icon={Dumbbell} value={primaryLift ?? "0 kg"} label="Top Lift" detail={primaryLiftLabel} />
+                      <ProfileMetric icon={Activity} iconClassName="text-cyan-300" value={weeklyActivityValue} label="Aktivität" />
+                      <ProfileMetric icon={Users} iconClassName="text-cyan-100" value={volumeThirtyDays} label="Volumen" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+                    <div className="space-y-4">
+                      <div className="grid min-w-0 gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
+                        <Field label="Name">
+                          <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+                        </Field>
+                        <Field label="Username">
+                          <Input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
+                        </Field>
+                        <PublicField label="Ort" checked={form.publicLocation} onChange={(checked) => setForm({ ...form, publicLocation: checked })}>
+                          <Input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} />
+                        </PublicField>
+                        <PublicField label="Lieblingslift" checked={form.publicFavoriteLift} onChange={(checked) => setForm({ ...form, publicFavoriteLift: checked })}>
+                          <Input value={form.favoriteLift} onChange={(event) => setForm({ ...form, favoriteLift: event.target.value })} />
+                        </PublicField>
+                        <div className="sm:col-span-2">
+                          <PublicFieldLabel label="Bio" checked={form.publicBio} onChange={(checked) => setForm({ ...form, publicBio: checked })} />
+                          <Textarea value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} rows={3} maxLength={180} />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <PublicFieldLabel label="Trainingsziel" checked={form.publicTrainingGoal} onChange={(checked) => setForm({ ...form, publicTrainingGoal: checked })} />
+                          <Textarea value={form.trainingGoal} onChange={(event) => setForm({ ...form, trainingGoal: event.target.value })} rows={2} maxLength={120} />
+                        </div>
+                      </div>
+
+                      <div className="grid min-w-0 gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
+                        <Field label="Avatar URL Fallback">
+                          <Input placeholder="https://..." value={form.avatarUrl} onChange={(event) => setForm({ ...form, avatarUrl: event.target.value, avatarStorageId: undefined })} />
+                        </Field>
+                        <Field label="Cover URL Fallback">
+                          <Input placeholder="https://..." value={form.coverUrl} onChange={(event) => setForm({ ...form, coverUrl: event.target.value, coverStorageId: undefined })} />
+                        </Field>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="grid min-w-0 gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+                        <PublicField label="Größe in cm" checked={form.publicHeight} onChange={(checked) => setForm({ ...form, publicHeight: checked })}>
+                          <Input inputMode="decimal" value={form.heightCm} onChange={(event) => setForm({ ...form, heightCm: event.target.value })} />
+                        </PublicField>
+                        <PublicField label="Gewicht in kg" checked={form.publicWeight} onChange={(checked) => setForm({ ...form, publicWeight: checked })}>
+                          <Input inputMode="decimal" value={form.weightKg} onChange={(event) => setForm({ ...form, weightKg: event.target.value })} />
+                        </PublicField>
+                        <PublicField label="Geburtsdatum" checked={form.publicBirthDate} onChange={(checked) => setForm({ ...form, publicBirthDate: checked })}>
+                          <Input type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} />
+                        </PublicField>
+                        <Field label="Akzent">
+                          <AccentSelect value={form.profileAccent} onChange={(profileAccent) => setForm({ ...form, profileAccent })} />
+                        </Field>
+                      </div>
+
+                      <div className="grid min-w-0 gap-2 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+                        <ProfileVisibilitySelect value={form.isPublic ? "public" : "private"} onChange={(value) => setForm({ ...form, isPublic: value === "public" })} />
+                        <PrivacyToggle label="Nachrichten erlauben" checked={form.allowMessages} onChange={(checked) => setForm({ ...form, allowMessages: checked })} />
+                        <PrivacyToggle label="Training zeigen" checked={form.showTrainingSummary} onChange={(checked) => setForm({ ...form, showTrainingSummary: checked })} />
+                        <PrivacyToggle label="Training öffentlich" checked={form.publicTrainingSummary} onChange={(checked) => setForm({ ...form, publicTrainingSummary: checked })} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
+                <div className="fixed inset-x-0 bottom-0 z-[110] flex flex-col gap-2 border-t border-white/10 bg-[#050708]/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur sm:sticky sm:-mx-7 sm:flex-row sm:items-center sm:justify-end sm:px-7 sm:py-4">
+                  <Button type="button" variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" onClick={() => setProfileEditMode((mode) => mode === "preview" ? "edit" : "preview")}>
+                    <Eye className="h-4 w-4" />
+                    {profileEditMode === "preview" ? "Zurück bearbeiten" : "Vorschau"}
+                  </Button>
+                  <Button className="bg-cyan-300 text-black hover:bg-cyan-200" onClick={saveProfile}>Profil speichern</Button>
+                  {saved && <span className="self-center text-sm text-emerald-400">Gespeichert</span>}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {false && (
         <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
             <DialogHeader>
@@ -851,8 +1194,15 @@ export function ProfilePageClient() {
             </div>
           </DialogContent>
         </Dialog>
+        )}
 
-        <Card id="messages" className="hidden scroll-mt-6 overflow-hidden border-cyan-500/10 bg-card/95 shadow-xl shadow-cyan-950/5">
+        <Card
+          id="messages"
+          className={cn(
+            "scroll-mt-24 overflow-hidden border-cyan-500/10 bg-card/95 shadow-xl shadow-cyan-950/5",
+            activeProfileTab !== "messages" && "hidden"
+          )}
+        >
           <CardHeader className="border-b border-border/70 bg-muted/10">
             <CardTitle className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
@@ -1043,7 +1393,13 @@ export function ProfilePageClient() {
         </Card>
       </div>
 
-      <aside className="hidden space-y-5 xl:sticky xl:top-20 xl:self-start">
+      <aside
+        id="network"
+        className={cn(
+          "scroll-mt-24 space-y-5",
+          activeProfileTab !== "network" && "hidden"
+        )}
+      >
         <Card className="border-cyan-500/10 bg-card/95 shadow-lg shadow-cyan-950/5">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -1208,6 +1564,8 @@ function ProfilePostComposer({
   error,
   uploading,
   disabled,
+  profileName,
+  avatarUrl,
   onBodyChange,
   onFile,
   onClearMedia,
@@ -1218,6 +1576,8 @@ function ProfilePostComposer({
   error: string;
   uploading: boolean;
   disabled: boolean;
+  profileName: string;
+  avatarUrl?: string;
   onBodyChange: (body: string) => void;
   onFile: (file: File | undefined) => void;
   onClearMedia: () => void;
@@ -1226,7 +1586,7 @@ function ProfilePostComposer({
   return (
     <section className="border-y border-white/10 bg-[#050708] px-6 py-4 sm:px-8" aria-label="Beitrag erstellen">
       <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3">
-        <Avatar name="User" />
+        <Avatar name={profileName} avatarUrl={avatarUrl} />
         <div className="min-w-0 space-y-3">
           <Textarea
             value={body}
@@ -1276,33 +1636,64 @@ function ProfilePostsCard({
   username,
   avatarUrl,
   isPro,
+  userId,
+  commentBodies,
+  activeCommentPostId,
+  onLike,
+  onSave,
+  onToggleComment,
+  onCommentBodyChange,
+  onSubmitComment,
+  emptyTitle = "Noch keine Beitraege",
 }: {
   posts: ProfilePost[] | undefined;
   profileName: string;
   username: string;
   avatarUrl?: string;
   isPro: boolean;
+  userId: Id<"users"> | null | undefined;
+  commentBodies: Record<string, string>;
+  activeCommentPostId: string | null;
+  onLike: (postId: Id<"social_posts">) => void;
+  onSave: (postId: Id<"social_posts">) => void;
+  onToggleComment: (postId: Id<"social_posts">) => void;
+  onCommentBodyChange: (postId: Id<"social_posts">, body: string) => void;
+  onSubmitComment: (postId: Id<"social_posts">) => void;
+  emptyTitle?: string;
 }) {
   if (posts === undefined) {
     return <p className="text-xl text-white/55">Beiträge werden geladen...</p>;
   }
 
-  if (posts.length === 0) {
+  if (posts.length === 0 && emptyTitle === "Noch keine Beitraege") {
     posts = [{
       _id: "preview" as Id<"social_posts">,
       body: "Push-Day mit Fokus auf saubere Reps und maximale Kontraktion.\nImmer besser werden.  🧠 💪🏽",
       createdAt: Date.now() - 3 * 60 * 60 * 1000,
       mediaUrl: "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?auto=format&fit=crop&w=1400&q=80",
       mediaType: "image",
+      likedByViewer: false,
+      savedByViewer: false,
       likeCount: 24,
       commentCount: 6,
+      repostCount: 0,
       linkedLog: null,
     }];
+  } else if (posts.length === 0) {
+    return (
+      <div className="flex min-h-44 items-center justify-center border-y border-white/10 bg-[#050708] px-6 py-8 text-center text-sm text-white/55">
+        {emptyTitle}
+      </div>
+    );
   }
 
   return (
     <div className="overflow-hidden border-y border-white/10">
-      {posts.map((post) => (
+      {posts.map((post) => {
+        const isPreviewPost = post._id === ("preview" as Id<"social_posts">);
+        const commentBody = commentBodies[post._id] ?? "";
+        const showCommentInput = activeCommentPostId === post._id;
+        return (
         <article key={post._id} className="border-b border-white/10 bg-[#050708] px-6 py-4 last:border-b-0 sm:px-8">
           <div className="flex items-start gap-3">
             <Avatar name={profileName} avatarUrl={avatarUrl} />
@@ -1316,7 +1707,9 @@ function ProfilePostsCard({
                     <span className="text-xl font-normal text-white/45">· 3 Std.</span>
                   </p>
                 </div>
-                <MoreHorizontal className="h-5 w-5 shrink-0 text-white/55" />
+                <button type="button" aria-label="Post-Optionen" className="shrink-0 rounded-md text-white/55 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+                  <MoreHorizontal className="h-5 w-5" />
+                </button>
               </div>
               {post.body && <p className="mt-4 whitespace-pre-wrap text-base leading-6 text-white sm:text-lg">{post.body}</p>}
               {post.linkedLog && (
@@ -1337,20 +1730,35 @@ function ProfilePostsCard({
                   )}
                 </div>
               )}
-              <div className="mt-4 grid grid-cols-4 gap-2 text-sm text-white/58">
-                <span className="inline-flex items-center gap-2"><Heart className="h-5 w-5" />{post.likeCount}</span>
-                <span className="inline-flex items-center gap-2"><MessageSquare className="h-5 w-5" />{post.commentCount}</span>
-                <span className="inline-flex items-center gap-2"><Repeat2 className="h-5 w-5" />2</span>
-                <span className="inline-flex items-center justify-end"><Bookmark className="h-5 w-5" /></span>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-white/58 min-[420px]:grid-cols-4">
+                <button type="button" disabled={!userId || isPreviewPost} onClick={() => onLike(post._id)} className={`inline-flex items-center gap-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60 ${post.likedByViewer ? "text-rose-500 hover:text-rose-500" : ""}`}><Heart className={`h-5 w-5 ${post.likedByViewer ? "fill-current" : ""}`} />{post.likeCount}</button>
+                <button type="button" disabled={!userId || isPreviewPost} onClick={() => onToggleComment(post._id)} className="inline-flex items-center gap-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60"><MessageSquare className="h-5 w-5" />{post.commentCount}</button>
+                <button type="button" disabled className="inline-flex cursor-not-allowed items-center gap-2 opacity-60"><Repeat2 className="h-5 w-5" />{post.repostCount}</button>
+                <button type="button" disabled={!userId || isPreviewPost} onClick={() => onSave(post._id)} className={`inline-flex items-center justify-end transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60 ${post.savedByViewer ? "text-cyan-300 hover:text-cyan-300" : ""}`} aria-label={post.savedByViewer ? "Gespeicherten Beitrag entfernen" : "Post speichern"}><Bookmark className={`h-5 w-5 ${post.savedByViewer ? "fill-current" : ""}`} /></button>
               </div>
+              {!isPreviewPost && showCommentInput && (
+                <div className="mt-3 flex gap-2">
+                  <input
+                    id={`profile-comment-${post._id}`}
+                    value={commentBody}
+                    onChange={(event) => onCommentBodyChange(post._id, event.target.value)}
+                    placeholder="Kommentieren..."
+                    maxLength={600}
+                    className="min-h-9 min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/60"
+                  />
+                  <Button type="button" size="sm" className="bg-cyan-300 text-black hover:bg-cyan-200" disabled={!userId || !commentBody.trim()} onClick={() => onSubmitComment(post._id)}>
+                    Senden
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </article>
-      ))}
-      <Button variant="ghost" className="h-16 w-full gap-2 rounded-none border-t border-white/10 bg-[#050708] text-base text-white/65 hover:bg-white/[0.04]">
-        Mehr anzeigen
-        <ChevronDown className="h-4 w-4" />
-      </Button>
+      );
+      })}
+      <Link href="/social" className="flex h-16 w-full items-center justify-center gap-2 border-t border-white/10 bg-[#050708] text-base font-medium text-white/65 transition hover:bg-white/[0.04] hover:text-white">
+        Mehr entdecken
+      </Link>
     </div>
   );
 }
@@ -1714,11 +2122,11 @@ function ProfileMetric({
   detail?: string;
 }) {
   return (
-    <div className="min-h-28 border-r border-white/10 px-1.5 py-4 text-center last:border-r-0 sm:min-h-44 sm:px-4 sm:py-8" aria-label={`${label}: ${value}${detail ? `, ${detail}` : ""}`}>
-      <Icon aria-hidden="true" className={cn("mx-auto mb-3 h-5 w-5 text-white sm:mb-6 sm:h-8 sm:w-8", iconClassName)} />
-      <p className="truncate text-[1.1rem] font-bold leading-tight text-white min-[390px]:text-[1.22rem] sm:text-3xl" title={value}>{value}</p>
-      <p className="mt-2 text-[0.78rem] leading-tight text-white/62 min-[390px]:text-[0.85rem] sm:mt-4 sm:text-xl">{label}</p>
-      {detail && <p className="mt-1.5 truncate text-[0.76rem] leading-tight text-white/45 min-[390px]:text-[0.82rem] sm:mt-3 sm:text-xl" title={detail}>{detail}</p>}
+    <div className="min-h-[5.75rem] border-r border-white/[0.08] px-1.5 py-3 text-center transition-colors last:border-r-0 hover:bg-white/[0.035] sm:min-h-28 sm:px-3 sm:py-4" aria-label={`${label}: ${value}${detail ? `, ${detail}` : ""}`}>
+      <Icon aria-hidden="true" className={cn("mx-auto mb-2 h-4 w-4 text-white/85 sm:mb-3 sm:h-5 sm:w-5", iconClassName)} />
+      <p className="truncate text-[0.92rem] font-bold leading-tight text-white min-[390px]:text-[1rem] sm:text-xl" title={value}>{value}</p>
+      <p className="mt-1.5 text-[0.68rem] leading-tight text-white/58 min-[390px]:text-[0.72rem] sm:mt-2 sm:text-sm">{label}</p>
+      {detail && <p className="mt-1 truncate text-[0.66rem] leading-tight text-white/40 min-[390px]:text-[0.7rem] sm:text-sm" title={detail}>{detail}</p>}
     </div>
   );
 }
@@ -1726,7 +2134,7 @@ function ProfileMetric({
 function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "md" | "lg" | "hero" }) {
   const classes =
     size === "hero"
-      ? "h-full w-full text-4xl sm:text-7xl"
+      ? "h-[4.5rem] w-[4.5rem] text-4xl sm:h-28 sm:w-28 sm:text-7xl"
       : size === "lg"
         ? "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl"
         : "h-11 w-11 text-base";
@@ -1751,11 +2159,104 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function PublicField({
+  label,
+  checked,
+  onChange,
+  children,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <PublicFieldLabel label={label} checked={checked} onChange={onChange} />
+      {children}
+    </div>
+  );
+}
+
+function PublicFieldLabel({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex min-h-6 flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+      <Label>{label}</Label>
+      <label className="flex max-w-full shrink-0 items-center gap-2 self-end text-xs leading-none text-white/58 sm:self-auto">
+        <span>Im Profil zeigen</span>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="h-4 w-4 accent-cyan-300"
+        />
+      </label>
+    </div>
+  );
+}
+
+function AccentSelect({ value, onChange }: { value: Accent; onChange: (value: Accent) => void }) {
+  const selected = ACCENT_OPTIONS.find((option) => option.value === value) ?? ACCENT_OPTIONS[0];
+  return (
+    <Select value={value} onValueChange={(nextValue) => nextValue && onChange(nextValue as Accent)}>
+      <SelectTrigger className="h-11 w-full min-w-0 border-white/15 bg-white/[0.04] text-white hover:bg-white/[0.07]">
+        <span className={cn("h-5 w-5 shrink-0 rounded-full bg-gradient-to-br", ACCENTS[value])} />
+        <SelectValue placeholder={selected.label} />
+      </SelectTrigger>
+      <SelectContent className="border-white/10 bg-[#0d1115] text-white">
+        {ACCENT_OPTIONS.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            <span className={cn("h-4 w-4 rounded-full bg-gradient-to-br", ACCENTS[option.value])} />
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function ProfileVisibilitySelect({
+  value,
+  onChange,
+}: {
+  value: "private" | "public";
+  onChange: (value: "private" | "public") => void;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.025]">
+      <Select value={value} onValueChange={(nextValue) => nextValue && onChange(nextValue as "private" | "public")}>
+        <SelectTrigger className="h-auto min-h-16 w-full min-w-0 flex-wrap items-start gap-2 border-0 px-3 py-3 text-white hover:bg-white/[0.04] sm:flex-nowrap sm:items-center sm:px-4">
+          <div className="min-w-0 flex-1 basis-full text-left sm:basis-auto">
+            <p className="font-semibold">Profil-Privatsphäre</p>
+            <p className="mt-1 text-xs leading-5 text-white/48">
+              Wenn du zu einem öffentlichen Profil wechselst, können andere Personen freigegebene Infos sehen.
+            </p>
+          </div>
+          <SelectValue className="min-w-0 flex-none text-sm text-white/58" placeholder={value === "public" ? "Öffentlich" : "Privat"} />
+          <ChevronRight className="h-4 w-4 shrink-0 text-white/45" />
+        </SelectTrigger>
+        <SelectContent className="border-white/10 bg-[#0d1115] text-white">
+          <SelectItem value="private">Privat</SelectItem>
+          <SelectItem value="public">Öffentlich</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function PrivacyToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border bg-muted/25 px-3 py-2.5 text-sm">
-      <span>{label}</span>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 accent-primary" />
+    <label className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-sm text-white">
+      <span className="min-w-0 leading-5">{label}</span>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 accent-cyan-300" />
     </label>
   );
 }

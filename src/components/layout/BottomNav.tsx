@@ -21,7 +21,7 @@ export function BottomNav() {
   const { t } = useAppPreferences();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur md:hidden">
+    <nav className="pointer-events-auto fixed inset-x-0 bottom-0 z-[70] border-t border-border bg-card/95 px-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur md:hidden">
       <div className="mx-auto grid w-full max-w-md grid-cols-3 gap-1">
         {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");

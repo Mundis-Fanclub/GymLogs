@@ -78,11 +78,19 @@ async function viewerRepost(ctx: QueryCtx, postId: Id<"social_posts">, viewerId:
 }
 
 async function renderPostSummary(ctx: QueryCtx, post: Doc<"social_posts">, viewerId: Id<"users"> | undefined) {
-  const [author, viewerLike, viewerRepostPost, counts, repostOf] = await Promise.all([
+  const [author, viewerLike, viewerSave, viewerRepostPost, counts, repostOf] = await Promise.all([
     ctx.db.get(post.authorId),
     viewerId
       ? ctx.db
           .query("social_likes")
+          .withIndex("by_post_and_user", (q) =>
+            q.eq("postId", post._id).eq("userId", viewerId)
+          )
+          .unique()
+      : null,
+    viewerId
+      ? ctx.db
+          .query("social_saves")
           .withIndex("by_post_and_user", (q) =>
             q.eq("postId", post._id).eq("userId", viewerId)
           )
@@ -98,6 +106,7 @@ async function renderPostSummary(ctx: QueryCtx, post: Doc<"social_posts">, viewe
     mediaUrl: await mediaUrl(ctx, post),
     author: await userPreview(ctx, author),
     likedByViewer: Boolean(viewerLike),
+    savedByViewer: Boolean(viewerSave),
     repostedByViewer: Boolean(viewerRepostPost),
     ...counts,
     repostOf: repostOf
@@ -338,7 +347,7 @@ export const listByAuthor = query({
 
     return await Promise.all(
       posts.map(async (post) => {
-        const [likes, comments, viewerLike, linkedSubmission] = await Promise.all([
+        const [likes, comments, reposts, viewerLike, viewerSave, linkedSubmission] = await Promise.all([
           ctx.db
             .query("social_likes")
             .withIndex("by_post", (q) => q.eq("postId", post._id))
@@ -350,9 +359,21 @@ export const listByAuthor = query({
             )
             .order("asc")
             .take(6),
+          ctx.db
+            .query("social_posts")
+            .withIndex("by_repost", (q) => q.eq("repostOfPostId", post._id))
+            .take(200),
           args.viewerId
             ? ctx.db
                 .query("social_likes")
+                .withIndex("by_post_and_user", (q) =>
+                  q.eq("postId", post._id).eq("userId", args.viewerId!)
+                )
+                .unique()
+            : null,
+          args.viewerId
+            ? ctx.db
+                .query("social_saves")
                 .withIndex("by_post_and_user", (q) =>
                   q.eq("postId", post._id).eq("userId", args.viewerId!)
                 )
@@ -376,10 +397,12 @@ export const listByAuthor = query({
           mediaUrl: await mediaUrl(ctx, post),
           author: await userPreview(ctx, author),
           likedByViewer: Boolean(viewerLike),
+          savedByViewer: Boolean(viewerSave),
           likeCount: likes.length,
           commentCount:
             renderedComments.length +
             renderedComments.reduce((count, comment) => count + comment.replies.length, 0),
+          repostCount: reposts.length,
           comments: renderedComments,
           linkedLog: linkedSubmission
             ? {
@@ -394,6 +417,29 @@ export const listByAuthor = query({
         };
       })
     );
+  },
+});
+
+export const listSaved = query({
+  args: {
+    userId: v.id("users"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const saves = await ctx.db
+      .query("social_saves")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(args.limit ?? 30);
+
+    const posts = await Promise.all(
+      saves.map(async (save) => {
+        const post = await ctx.db.get(save.postId);
+        return post ? renderPostSummary(ctx, post, args.userId) : null;
+      })
+    );
+
+    return posts.filter((post) => post !== null);
   },
 });
 
@@ -414,6 +460,33 @@ export const toggleLike = mutation({
       return false;
     }
     await ctx.db.insert("social_likes", {
+      postId: args.postId,
+      userId: args.userId,
+      createdAt: Date.now(),
+    });
+    return true;
+  },
+});
+
+export const toggleSave = mutation({
+  args: {
+    userId: v.id("users"),
+    postId: v.id("social_posts"),
+  },
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new Error("Post not found.");
+    const existing = await ctx.db
+      .query("social_saves")
+      .withIndex("by_post_and_user", (q) =>
+        q.eq("postId", args.postId).eq("userId", args.userId)
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+      return false;
+    }
+    await ctx.db.insert("social_saves", {
       postId: args.postId,
       userId: args.userId,
       createdAt: Date.now(),

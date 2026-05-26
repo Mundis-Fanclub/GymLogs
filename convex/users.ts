@@ -11,6 +11,14 @@ function normalizeUsername(value: string): string {
     .slice(0, 24);
 }
 
+function profileSearchText(name: string, username: string | undefined, email?: string): string {
+  return [name, username, email?.split("@")[0]]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .slice(0, 500);
+}
+
 async function profileMedia(ctx: QueryCtx, user: Doc<"users">) {
   const [avatarStorageUrl, coverStorageUrl] = await Promise.all([
     user.avatarStorageId ? ctx.storage.getUrl(user.avatarStorageId) : null,
@@ -21,6 +29,29 @@ async function profileMedia(ctx: QueryCtx, user: Doc<"users">) {
     avatarUrl: avatarStorageUrl ?? user.avatarUrl,
     coverUrl: coverStorageUrl ?? user.coverUrl,
   };
+}
+
+function workoutDay(timestamp: number): number {
+  return Math.floor(timestamp / (24 * 60 * 60 * 1000));
+}
+
+function currentWorkoutStreakDays(workouts: Doc<"workouts">[]): number {
+  const workoutDays = [...new Set(workouts.map((workout) => workoutDay(workout.date)))].sort(
+    (a, b) => b - a
+  );
+  if (workoutDays.length === 0) return 0;
+
+  const today = workoutDay(Date.now());
+  if (workoutDays[0] < today - 1) return 0;
+
+  let streak = 1;
+  let expectedPreviousDay = workoutDays[0] - 1;
+  for (const day of workoutDays.slice(1)) {
+    if (day !== expectedPreviousDay) break;
+    streak += 1;
+    expectedPreviousDay -= 1;
+  }
+  return streak;
 }
 
 async function reserveUsername(
@@ -63,11 +94,16 @@ export const getOrCreate = mutation({
         name?: string;
         email?: string;
         username?: string;
+        searchText?: string;
         isPublic?: boolean;
         allowMessages?: boolean;
         showTrainingSummary?: boolean;
         profileAccent?: string;
         publicFields?: {
+          bio?: boolean;
+          location?: boolean;
+          favoriteLift?: boolean;
+          trainingGoal?: boolean;
           heightCm: boolean;
           weightKg: boolean;
           birthDate: boolean;
@@ -85,8 +121,19 @@ export const getOrCreate = mutation({
       if (existing.allowMessages === undefined) updates.allowMessages = true;
       if (existing.showTrainingSummary === undefined) updates.showTrainingSummary = true;
       if (!existing.profileAccent) updates.profileAccent = "emerald";
+      if (!existing.searchText || updates.name || updates.email || updates.username) {
+        updates.searchText = profileSearchText(
+          updates.name ?? existing.name,
+          updates.username ?? existing.username,
+          updates.email ?? existing.email
+        );
+      }
       if (!existing.publicFields) {
         updates.publicFields = {
+          bio: true,
+          location: true,
+          favoriteLift: true,
+          trainingGoal: true,
           heightCm: false,
           weightKg: false,
           birthDate: false,
@@ -113,6 +160,10 @@ export const getOrCreate = mutation({
       showTrainingSummary: true,
       profileAccent: "emerald",
       publicFields: {
+        bio: true,
+        location: true,
+        favoriteLift: true,
+        trainingGoal: true,
         heightCm: false,
         weightKg: false,
         birthDate: false,
@@ -123,7 +174,10 @@ export const getOrCreate = mutation({
     const fallback = normalizeUsername(args.name || args.email.split("@")[0] || "user");
     const username = fallback ? `${fallback}_${inserted.slice(-4)}` : `user_${inserted.slice(-4)}`;
     await reserveUsername(ctx, username, inserted);
-    await ctx.db.patch(inserted, { username });
+    await ctx.db.patch(inserted, {
+      username,
+      searchText: profileSearchText(args.name, username, args.email),
+    });
 
     return inserted;
   },
@@ -157,17 +211,25 @@ export const getPublicProfile = query({
 
     const isSelf = args.viewerId === args.userId;
     if (!isSelf && user.isPublic === false) {
+      const media = await profileMedia(ctx, user);
       return {
         _id: user._id,
         name: user.name,
         username: user.username,
+        avatarUrl: media.avatarUrl,
+        coverUrl: media.coverUrl,
+        profileAccent: user.profileAccent ?? "emerald",
         isPro: user.isPro ?? false,
         isPublic: false,
-        allowMessages: false,
+        allowMessages: user.allowMessages ?? true,
       };
     }
 
     const publicFields = user.publicFields ?? {
+      bio: true,
+      location: true,
+      favoriteLift: true,
+      trainingGoal: true,
       heightCm: false,
       weightKg: false,
       birthDate: false,
@@ -236,6 +298,7 @@ export const getPublicProfile = query({
         totalVolume,
         uniqueExercises: exerciseIds.size,
         activeWeeks,
+        currentStreakDays: currentWorkoutStreakDays(completedWorkouts),
         lastWorkoutAt: lastWorkout?.date,
         averageWorkoutsPerWeek:
           activeWeeks > 0
@@ -251,14 +314,14 @@ export const getPublicProfile = query({
       _id: user._id,
       name: user.name,
       username: user.username,
-      bio: user.bio,
+      bio: isSelf || publicFields.bio !== false ? user.bio : undefined,
       avatarUrl: media.avatarUrl,
       coverUrl: media.coverUrl,
       avatarStorageId: user.avatarStorageId,
       coverStorageId: user.coverStorageId,
-      location: user.location,
-      favoriteLift: user.favoriteLift,
-      trainingGoal: user.trainingGoal,
+      location: isSelf || publicFields.location !== false ? user.location : undefined,
+      favoriteLift: isSelf || publicFields.favoriteLift !== false ? user.favoriteLift : undefined,
+      trainingGoal: isSelf || publicFields.trainingGoal !== false ? user.trainingGoal : undefined,
       profileAccent: user.profileAccent ?? "emerald",
       isPro: user.isPro ?? false,
       proSince: user.proSince,
@@ -280,31 +343,29 @@ export const searchPublic = query({
     const normalized = args.query.trim().toLowerCase();
     if (normalized.length < 2) return [];
 
-    const users = await ctx.db.query("users").take(100);
-    const results = users
-      .filter((user) => user.isPublic !== false)
-      .filter((user) => user._id !== args.viewerId)
-      .filter((user) => {
-        const username = user.username?.toLowerCase() ?? "";
-        const name = user.name.toLowerCase();
-        return username.includes(normalized) || name.includes(normalized);
-      })
-      .slice(0, 12);
+    const results = await ctx.db
+      .query("users")
+      .withSearchIndex("search_profile", (q) =>
+        q.search("searchText", normalized).eq("isPublic", true)
+      )
+      .take(12);
 
     return await Promise.all(
-      results.map(async (user) => {
-        const media = await profileMedia(ctx, user);
-        return {
-        _id: user._id,
-        name: user.name,
-        username: user.username,
-        bio: user.bio,
-        avatarUrl: media.avatarUrl,
-        profileAccent: user.profileAccent ?? "emerald",
-        isPro: user.isPro ?? false,
-        allowMessages: user.allowMessages ?? true,
-        };
-      })
+      results
+        .filter((user) => user._id !== args.viewerId)
+        .map(async (user) => {
+          const media = await profileMedia(ctx, user);
+          return {
+            _id: user._id,
+            name: user.name,
+            username: user.username,
+            bio: user.bio,
+            avatarUrl: media.avatarUrl,
+            profileAccent: user.profileAccent ?? "emerald",
+            isPro: user.isPro ?? false,
+            allowMessages: user.allowMessages ?? true,
+          };
+        })
     );
   },
 });
@@ -342,6 +403,10 @@ export const updateProfile = mutation({
     allowMessages: v.boolean(),
     showTrainingSummary: v.boolean(),
     publicFields: v.object({
+      bio: v.boolean(),
+      location: v.boolean(),
+      favoriteLift: v.boolean(),
+      trainingGoal: v.boolean(),
       heightCm: v.boolean(),
       weightKg: v.boolean(),
       birthDate: v.boolean(),
@@ -380,6 +445,7 @@ export const updateProfile = mutation({
     await ctx.db.patch(args.userId, {
       name: args.name.trim() || "GymLogs User",
       username,
+      searchText: profileSearchText(args.name.trim() || "GymLogs User", username, currentUser.email),
       bio: args.bio?.trim().slice(0, 180),
       avatarUrl: args.avatarUrl?.trim().slice(0, 500),
       avatarStorageId: args.avatarStorageId,
