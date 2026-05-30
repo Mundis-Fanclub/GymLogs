@@ -81,6 +81,7 @@ export default defineSchema({
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_username", ["username"])
+    .index("by_is_public", ["isPublic"])
     .searchIndex("search_profile", {
       searchField: "searchText",
       filterFields: ["isPublic"],

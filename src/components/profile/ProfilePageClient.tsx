@@ -31,6 +31,7 @@ import {
   Ruler,
   Search,
   Send,
+  Settings,
   Share2,
   ShieldCheck,
   Sparkles,
@@ -68,6 +69,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_EXERCISES } from "@/lib/default-exercises";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { cn } from "@/lib/utils";
 
 const ACCENTS = {
@@ -238,11 +240,12 @@ const LIFT_LABELS = {
   deadlift: "Deadlift",
 } as const;
 
-type ProfileTab = "posts" | "saved" | "logs" | "training" | "about" | "messages" | "network";
+type ProfileTab = "posts" | "saved" | "logs" | "training";
 type ProfilePreviewTab = "posts" | "logs" | "training";
 
 export function ProfilePageClient() {
   const { userId, isLoaded } = useConvexUser();
+  const { locale, t } = useAppPreferences();
   const [loadSecondary, setLoadSecondary] = useState(false);
   const user = useQuery(api.users.get, userId ? { userId } : "skip");
   const publicPreview = useQuery(
@@ -326,7 +329,7 @@ export function ProfilePageClient() {
   const [uploadingProfilePostMedia, setUploadingProfilePostMedia] = useState(false);
   const [saved, setSaved] = useState(false);
   const [reportedMessage, setReportedMessage] = useState<Id<"messages"> | null>(null);
-  const [reportReason, setReportReason] = useState("Spam oder wiederholte Nachrichten");
+  const [reportReason, setReportReason] = useState(t("profile.messagesPanel.reportDefault"));
   const [uploading, setUploading] = useState<"avatar" | "cover" | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [friendUsername, setFriendUsername] = useState("");
@@ -338,6 +341,8 @@ export function ProfilePageClient() {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState<ProfileTab>("posts");
   const [previewProfileTab, setPreviewProfileTab] = useState<ProfilePreviewTab>("posts");
+  const [messagesDialogOpen, setMessagesDialogOpen] = useState(false);
+  const [networkDialogOpen, setNetworkDialogOpen] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<ProfileForm>({
@@ -380,8 +385,8 @@ export function ProfilePageClient() {
   useEffect(() => {
     function selectTabFromHash() {
       const hash = window.location.hash;
-      if (hash === "#messages") setActiveProfileTab("messages");
-      if (hash === "#network" || hash === "#friends") setActiveProfileTab("network");
+      if (hash === "#messages") setMessagesDialogOpen(true);
+      if (hash === "#network" || hash === "#friends") setNetworkDialogOpen(true);
       if (hash === "#training" || hash === "#workouts" || hash === "#playlists") setActiveProfileTab("training");
     }
 
@@ -454,63 +459,15 @@ export function ProfilePageClient() {
     () => conversations?.reduce((sum, item) => sum + item.unreadCount, 0) ?? 0,
     [conversations]
   );
-  const accentClass = ACCENTS[form.profileAccent] ?? ACCENTS.emerald;
   const displayAvatarUrl = avatarPreviewUrl || form.avatarUrl;
   const displayCoverUrl = coverPreviewUrl || form.coverUrl;
-  const visibleProfile = publicPreview ?? user;
-  const trainingSummary = publicPreview?.trainingSummary;
-  const topLog = topLogs?.[0];
-  const bestSet = trainingSummary?.bestSet;
-  const primaryLift = bestSet
-    ? `${bestSet.weight} kg x ${bestSet.reps}`
-    : topLog
-      ? `${topLog.submission.weightKg} kg x ${topLog.submission.reps}`
-      : null;
-  const primaryLiftLabel =
-    bestSet?.exerciseName ??
-    topLog?.exerciseName ??
-    form.favoriteLift ??
-    "Top Lift";
-  const streakDays = String(trainingSummary?.currentStreakDays ?? 0);
-  const weeklyActivityValue = trainingSummary ? `${trainingSummary.averageWorkoutsPerWeek} / Woche` : "5 / Woche";
-  const volumeThirtyDays = trainingSummary
-    ? `${Math.round(trainingSummary.totalVolume).toLocaleString("de-DE")} kg`
-    : "2.997 kg";
-  const joinedLabel = user?._creationTime
-    ? `Seit ${new Date(user._creationTime).toLocaleDateString("de-DE", {
-        month: "short",
-        year: "numeric",
-      })}`
-    : "Seit kurzem";
-  const profileMeta = [
-    visibleProfile?.location ? { icon: MapPin, value: visibleProfile.location } : null,
-    visibleProfile?.heightCm ? { icon: Ruler, value: `${visibleProfile.heightCm} cm` } : null,
-    { icon: Calendar, value: joinedLabel },
-  ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
-  const profileTabs = [
-    { id: "posts", label: "Beiträge" },
-    ...(isOwnProfile ? [{ id: "saved", label: "Gespeichert" } as const] : []),
-    { id: "logs", label: "Top Logs" },
-    { id: "training", label: "Training" },
-    { id: "messages", label: "Nachrichten" },
-    { id: "network", label: "Netzwerk" },
-    { id: "about", label: "Über mich" },
-  ] satisfies Array<{ id: ProfileTab; label: string }>;
+  const rawVisibleProfile = publicPreview ?? user;
   const hasAnyPublicWorkoutStat =
     form.publicTrainingStreak ||
     form.publicTrainingBestSet ||
     form.publicTrainingActivity ||
     form.publicTrainingVolume;
-  const previewTrainingSummary =
-    form.isPublic && form.showTrainingSummary && hasAnyPublicWorkoutStat ? trainingSummary : null;
-  const previewBestSet = previewTrainingSummary?.bestSet;
-  const hasVisiblePreviewMetric =
-    Boolean(previewTrainingSummary) &&
-    (form.publicTrainingStreak ||
-      (form.publicTrainingBestSet && Boolean(previewBestSet)) ||
-      form.publicTrainingActivity ||
-      form.publicTrainingVolume);
-  const previewVisibleProfile: VisibleProfile = form.isPublic
+  const publicVisibleProfile: VisibleProfile = form.isPublic
     ? {
         bio: form.publicBio ? form.bio : undefined,
         location: form.publicLocation ? form.location : undefined,
@@ -521,6 +478,143 @@ export function ProfilePageClient() {
         birthDate: form.publicBirthDate ? form.birthDate : undefined,
       }
     : {};
+  const visibleProfile = isOwnProfile ? publicVisibleProfile : rawVisibleProfile;
+  const trainingSummary =
+    isOwnProfile
+      ? form.isPublic && form.showTrainingSummary && hasAnyPublicWorkoutStat
+        ? publicPreview?.trainingSummary
+        : null
+      : publicPreview?.trainingSummary;
+  const topLog = topLogs?.[0];
+  const bestSet = trainingSummary?.bestSet;
+  const primaryLift = bestSet
+    ? `${bestSet.weight} kg x ${bestSet.reps}`
+    : !isOwnProfile && topLog
+      ? `${topLog.submission.weightKg} kg x ${topLog.submission.reps}`
+      : null;
+  const primaryLiftLabel =
+    bestSet?.exerciseName ??
+    (!isOwnProfile ? topLog?.exerciseName : undefined) ??
+    visibleProfile?.favoriteLift ??
+    "Top Lift";
+  const streakDays = String(trainingSummary?.currentStreakDays ?? 0);
+  const weeklyActivityValue = trainingSummary ? `${trainingSummary.averageWorkoutsPerWeek} / ${t("profile.metrics.week")}` : "";
+  const volumeThirtyDays = trainingSummary
+    ? `${Math.round(trainingSummary.totalVolume).toLocaleString(locale)} kg`
+    : "";
+  const joinedLabel = user?._creationTime
+    ? `${t("profile.meta.since")} ${new Date(user._creationTime).toLocaleDateString(locale, {
+        month: "short",
+        year: "numeric",
+      })}`
+    : t("profile.meta.sinceRecently");
+  const profileMeta = [
+    visibleProfile?.location ? { icon: MapPin, value: visibleProfile.location } : null,
+    visibleProfile?.heightCm ? { icon: Ruler, value: `${visibleProfile.heightCm} cm` } : null,
+    { icon: Calendar, value: joinedLabel },
+  ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
+  const profileTabs = [
+    { id: "posts", label: t("profile.tabs.posts") },
+    ...(isOwnProfile ? [{ id: "saved", label: t("profile.tabs.saved") } as const] : []),
+    { id: "logs", label: "Top Logs" },
+    { id: "training", label: "Training" },
+  ] satisfies Array<{ id: ProfileTab; label: string }>;
+  const previewTrainingSummary =
+    form.isPublic && form.showTrainingSummary && hasAnyPublicWorkoutStat ? trainingSummary : null;
+  const previewBestSet = previewTrainingSummary?.bestSet;
+  const profileMetricItems = [
+    form.publicTrainingStreak && trainingSummary
+      ? {
+          key: "streak",
+          icon: Flame,
+          iconClassName: "text-orange-400",
+          value: streakDays,
+          label: t("profile.metrics.streak"),
+        }
+      : null,
+    form.publicTrainingBestSet && bestSet
+      ? {
+          key: "topLift",
+          icon: Dumbbell,
+          value: primaryLift ?? "",
+          label: t("profile.metrics.topLift"),
+          detail: primaryLiftLabel,
+        }
+      : null,
+    form.publicTrainingActivity && trainingSummary
+      ? {
+          key: "activity",
+          icon: Activity,
+          iconClassName: "text-cyan-300",
+          value: weeklyActivityValue,
+          label: t("profile.metrics.activity"),
+        }
+      : null,
+    form.publicTrainingVolume && trainingSummary
+      ? {
+          key: "volume",
+          icon: Users,
+          iconClassName: "text-cyan-100",
+          value: volumeThirtyDays,
+          label: t("profile.metrics.volume30"),
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    key: string;
+    icon: ComponentType<{ className?: string }>;
+    iconClassName?: string;
+    value: string;
+    label: string;
+    detail?: string;
+  }>;
+  const previewMetricItems = [
+    form.publicTrainingStreak && previewTrainingSummary
+      ? {
+          key: "streak",
+          icon: Flame,
+          iconClassName: "text-orange-400",
+          value: String(previewTrainingSummary.currentStreakDays),
+          label: t("profile.metrics.streak"),
+        }
+      : null,
+    form.publicTrainingBestSet && previewBestSet
+      ? {
+          key: "topLift",
+          icon: Dumbbell,
+          value: `${previewBestSet.weight} kg x ${previewBestSet.reps}`,
+          label: t("profile.metrics.topLift"),
+          detail: previewBestSet.exerciseName,
+        }
+      : null,
+    form.publicTrainingActivity && previewTrainingSummary
+      ? {
+          key: "activity",
+          icon: Activity,
+          iconClassName: "text-cyan-300",
+          value: `${previewTrainingSummary.averageWorkoutsPerWeek} / ${t("profile.metrics.week")}`,
+          label: t("profile.metrics.activity"),
+        }
+      : null,
+    form.publicTrainingVolume && previewTrainingSummary
+      ? {
+          key: "volume",
+          icon: Users,
+          iconClassName: "text-cyan-100",
+          value: `${Math.round(previewTrainingSummary.totalVolume).toLocaleString(locale)} kg`,
+          label: t("profile.metrics.volume30"),
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    key: string;
+    icon: ComponentType<{ className?: string }>;
+    iconClassName?: string;
+    value: string;
+    label: string;
+    detail?: string;
+  }>;
+  const hasVisiblePreviewMetric =
+    Boolean(previewTrainingSummary) && previewMetricItems.length > 0;
+  const previewVisibleProfile: VisibleProfile = publicVisibleProfile;
   const previewMeta = [
     previewVisibleProfile.location ? { icon: MapPin, value: previewVisibleProfile.location } : null,
     previewVisibleProfile.heightCm ? { icon: Ruler, value: `${previewVisibleProfile.heightCm} cm` } : null,
@@ -528,7 +622,7 @@ export function ProfilePageClient() {
   ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
   const previewTemplates = form.isPublic ? workoutTemplates?.filter((template) => template.visibility === "public") : [];
   const previewTabs = [
-    { id: "posts", label: "Beiträge" },
+    { id: "posts", label: t("profile.tabs.posts") },
     { id: "logs", label: "Top Logs" },
     { id: "training", label: "Training" },
   ] satisfies Array<{ id: ProfilePreviewTab; label: string }>;
@@ -874,7 +968,7 @@ export function ProfilePageClient() {
       reason: reportReason,
     });
     setReportedMessage(null);
-    setReportReason("Spam oder wiederholte Nachrichten");
+    setReportReason(t("profile.messagesPanel.reportDefault"));
   }
 
   async function shareProfile() {
@@ -916,14 +1010,12 @@ export function ProfilePageClient() {
               <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Zurück" onClick={() => history.back()}>
                 <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
               </Button>
-              <div className="flex items-center gap-3 sm:gap-5">
-                <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Profil teilen" onClick={shareProfile}>
-                  <Share2 className="h-5 w-5 sm:h-6 sm:w-6" />
-                </Button>
-                <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Freunde anzeigen" onClick={() => setActiveProfileTab("network")}>
-                  <Users className="h-5 w-5 sm:h-6 sm:w-6" />
-                </Button>
-              </div>
+              <ProfileHeaderActions
+                unreadTotal={unreadTotal}
+                onShare={shareProfile}
+                onOpenMessages={() => setMessagesDialogOpen(true)}
+                onOpenNetwork={() => setNetworkDialogOpen(true)}
+              />
             </div>
             <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-6 sm:px-9 sm:pb-8">
               <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] items-center gap-5 min-[390px]:gap-6 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-8">
@@ -933,18 +1025,20 @@ export function ProfilePageClient() {
                 </div>
                 <div className="min-w-0">
                   <Badge className="mb-2 rounded-full border-cyan-300/20 bg-cyan-300/20 px-2.5 py-0.5 text-[0.68rem] text-cyan-200 shadow-lg shadow-cyan-950/30 sm:mb-4 sm:px-4 sm:py-1 sm:text-sm">
-                    Öffentliches Profil
+                    {form.isPublic ? t("profile.status.public") : t("profile.status.private")}
                   </Badge>
                   <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-none tracking-normal min-[390px]:text-[2.25rem] sm:text-6xl">
                     <span className="truncate">{form.name || "Steffen"}</span>
                     <BadgeCheck className="h-7 w-7 shrink-0 fill-sky-400 text-black sm:h-10 sm:w-10" />
                   </h1>
                   <p className="mt-2 text-[1.12rem] leading-tight text-white/70 min-[390px]:text-[1.25rem] sm:text-2xl">@{form.username || "shaker1"}</p>
-                  <p className="mt-4 max-w-[34rem] whitespace-pre-wrap text-[1rem] font-semibold leading-[1.35] text-white min-[390px]:text-[1.08rem] sm:mt-8 sm:text-3xl">
-                    {visibleProfile?.bio || "Disziplin heute, Stärke morgen.\nBaue meine beste Version."}
-                  </p>
+                  {visibleProfile?.bio && (
+                    <p className="mt-4 max-w-[34rem] whitespace-pre-wrap text-[1rem] font-semibold leading-[1.35] text-white min-[390px]:text-[1.08rem] sm:mt-8 sm:text-3xl">
+                      {visibleProfile.bio}
+                    </p>
+                  )}
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[0.85rem] text-white/62 min-[390px]:text-[0.95rem] sm:mt-8 sm:gap-x-8 sm:text-xl">
-                    {(profileMeta.length ? profileMeta : [{ icon: MapPin, value: "T-Bar Gym" }, { icon: Ruler, value: "178 cm" }, { icon: Calendar, value: joinedLabel }]).map(({ icon: Icon, value }) => (
+                    {profileMeta.map(({ icon: Icon, value }) => (
                       <span key={value} className="inline-flex items-center gap-2 sm:gap-3">
                         <Icon className="h-4 w-4 sm:h-6 sm:w-6" />
                         {value}
@@ -961,12 +1055,25 @@ export function ProfilePageClient() {
                 Profil bearbeiten
               </Button>
             </div>
-            <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] shadow-sm shadow-black/10 min-[420px]:grid-cols-4">
-              <ProfileMetric icon={Flame} iconClassName="text-orange-400" value={streakDays} label="Tage Streak" />
-              <ProfileMetric icon={Dumbbell} value={primaryLift ?? "43 kg x 8"} label="Top Lift" detail={primaryLiftLabel || "Push-up"} />
-              <ProfileMetric icon={Activity} iconClassName="text-cyan-300" value={weeklyActivityValue} label="ø Aktivität" />
-              <ProfileMetric icon={Users} iconClassName="text-cyan-100" value={volumeThirtyDays} label="Volumen (30 Tage)" />
-            </div>
+            {profileMetricItems.length > 0 && (
+              <div
+                className={cn(
+                  "grid grid-cols-2 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] shadow-sm shadow-black/10",
+                  profileMetricItems.length > 2 && "min-[420px]:grid-cols-4"
+                )}
+              >
+                {profileMetricItems.map((metric) => (
+                  <ProfileMetric
+                    key={metric.key}
+                    icon={metric.icon}
+                    iconClassName={metric.iconClassName}
+                    value={metric.value}
+                    label={metric.label}
+                    detail={metric.detail}
+                  />
+                ))}
+              </div>
+            )}
             <div className="overflow-x-auto border-b border-white/10">
               <div className="flex min-w-max justify-between gap-7 sm:gap-9">
                 {profileTabs.map((tab) => (
@@ -1124,9 +1231,6 @@ export function ProfilePageClient() {
                 onSaveTemplateEdit={saveWorkoutTemplateEdit}
               />
             )}
-            {activeProfileTab === "about" && (
-              <AboutProfileCard profile={visibleProfile} />
-            )}
             <div className="hidden">
               {visibleProfile?.heightCm && <QuickStat label="Größe" value={`${visibleProfile.heightCm} cm`} />}
               {visibleProfile?.weightKg && <QuickStat label="Gewicht" value={`${visibleProfile.weightKg} kg`} />}
@@ -1211,14 +1315,12 @@ export function ProfilePageClient() {
                     <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Zurück" onClick={() => setProfileEditMode("edit")}>
                       <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                     </Button>
-                    <div className="flex items-center gap-3 sm:gap-5">
-                      <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Profil teilen" onClick={shareProfile}>
-                        <Share2 className="h-5 w-5 sm:h-6 sm:w-6" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Freunde anzeigen" onClick={() => setActiveProfileTab("network")}>
-                        <Users className="h-5 w-5 sm:h-6 sm:w-6" />
-                      </Button>
-                    </div>
+                    <ProfileHeaderActions
+                      unreadTotal={unreadTotal}
+                      onShare={shareProfile}
+                      onOpenMessages={() => setMessagesDialogOpen(true)}
+                      onOpenNetwork={() => setNetworkDialogOpen(true)}
+                    />
                   </div>
                 )}
                 {profileEditMode === "edit" && (
@@ -1284,7 +1386,7 @@ export function ProfilePageClient() {
                   <div className="min-w-0 pb-1">
                     {profileEditMode === "preview" && (
                       <Badge className="mb-2 rounded-full border-cyan-300/20 bg-cyan-300/20 px-2.5 py-0.5 text-[0.68rem] text-cyan-200 shadow-lg shadow-cyan-950/30 sm:mb-4 sm:px-4 sm:py-1 sm:text-sm">
-                        {form.isPublic ? "Öffentliches Profil" : "Privates Profil"}
+                        {form.isPublic ? t("profile.status.public") : t("profile.status.private")}
                       </Badge>
                     )}
                     {profileEditMode === "preview" ? (
@@ -1371,24 +1473,22 @@ export function ProfilePageClient() {
                       </div>
                     </div>
                     {previewTrainingSummary && hasVisiblePreviewMetric && (
-                      <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] shadow-sm shadow-black/10 min-[420px]:grid-cols-4">
-                        {form.publicTrainingStreak && (
-                          <ProfileMetric icon={Flame} iconClassName="text-orange-400" value={String(previewTrainingSummary.currentStreakDays)} label="Tage Streak" />
+                      <div
+                        className={cn(
+                          "grid grid-cols-2 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] shadow-sm shadow-black/10",
+                          previewMetricItems.length > 2 && "min-[420px]:grid-cols-4"
                         )}
-                        {form.publicTrainingBestSet && previewBestSet && (
+                      >
+                        {previewMetricItems.map((metric) => (
                           <ProfileMetric
-                            icon={Dumbbell}
-                            value={`${previewBestSet.weight} kg x ${previewBestSet.reps}`}
-                            label="Top Lift"
-                            detail={previewBestSet.exerciseName}
+                            key={metric.key}
+                            icon={metric.icon}
+                            iconClassName={metric.iconClassName}
+                            value={metric.value}
+                            label={metric.label}
+                            detail={metric.detail}
                           />
-                        )}
-                        {form.publicTrainingActivity && (
-                          <ProfileMetric icon={Activity} iconClassName="text-cyan-300" value={`${previewTrainingSummary.averageWorkoutsPerWeek} / Woche`} label="Aktivität" />
-                        )}
-                        {form.publicTrainingVolume && (
-                          <ProfileMetric icon={Users} iconClassName="text-cyan-100" value={`${Math.round(previewTrainingSummary.totalVolume).toLocaleString("de-DE")} kg`} label="Volumen (30 Tage)" />
-                        )}
+                        ))}
                       </div>
                     )}
                     {!form.isPublic && (
@@ -1570,26 +1670,22 @@ export function ProfilePageClient() {
         </Dialog>
 
 
-        <Card
-          id="messages"
-          className={cn(
-            "scroll-mt-24 overflow-hidden border-cyan-500/10 bg-card/95 shadow-xl shadow-cyan-950/5",
-            activeProfileTab !== "messages" && "hidden"
-          )}
-        >
+        <Dialog open={messagesDialogOpen} onOpenChange={setMessagesDialogOpen}>
+          <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-y-auto rounded-none border-border bg-background p-0 sm:h-auto sm:max-h-[90dvh] sm:max-w-5xl sm:rounded-xl">
+            <Card id="messages" className="min-h-full overflow-hidden border-0 bg-card/95 shadow-none sm:min-h-0">
           <CardHeader className="border-b border-border/70 bg-muted/10">
             <CardTitle className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
-              Nachrichten
-              {unreadTotal > 0 && <Badge>{unreadTotal} ungelesen</Badge>}
+              {t("profile.messagesPanel.title")}
+              {unreadTotal > 0 && <Badge>{unreadTotal} {t("profile.messagesPanel.unread")}</Badge>}
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 p-3.5 sm:p-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
             <div className="max-h-[34rem] space-y-2 overflow-auto pr-1">
               {conversations === undefined ? (
-                <p className="text-sm text-muted-foreground">Nachrichten werden geladen...</p>
+                <p className="text-sm text-muted-foreground">{t("profile.messagesPanel.loading")}</p>
               ) : conversations.length === 0 ? (
-                <ProfileEmpty icon={MessageCircle} title="Noch keine Nachrichten" copy="Wenn du Beiträge teilst oder Freunde anschreibst, entsteht hier dein Social-Inbox-Verlauf." />
+                <ProfileEmpty icon={MessageCircle} title={t("profile.messagesPanel.emptyTitle")} copy={t("profile.messagesPanel.emptyCopy")} />
               ) : (
                 conversations.map((conversation) => (
                   <button
@@ -1610,12 +1706,12 @@ export function ProfilePageClient() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="flex items-center gap-1 truncate font-medium">
-                            <span className="truncate">{conversation.otherUser?.name ?? "Unbekannt"}</span>
+                            <span className="truncate">{conversation.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}</span>
                             {conversation.otherUser?.isPro && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
                           </p>
                           {conversation.unreadCount > 0 && <Badge>{conversation.unreadCount}</Badge>}
                         </div>
-                        <p className="truncate text-xs text-muted-foreground">{conversation.lastMessagePreview ?? "Neue Unterhaltung"}</p>
+                        <p className="truncate text-xs text-muted-foreground">{conversation.lastMessagePreview ?? t("profile.messagesPanel.newConversation")}</p>
                       </div>
                     </div>
                   </button>
@@ -1627,16 +1723,32 @@ export function ProfilePageClient() {
               {!thread ? (
                 <div className="flex h-full min-h-[24rem] flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
                   <MessageCircle className="h-8 w-8 text-cyan-300" />
-                  Wähle eine Unterhaltung aus.
+                  {t("profile.messagesPanel.selectThread")}
                 </div>
               ) : (
                 <div className="flex min-h-[28rem] flex-col">
                   <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/20 p-3">
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={t("profile.messagesPanel.closeThread")}
+                        title={t("profile.messagesPanel.closeThread")}
+                        onClick={() => {
+                          setActiveConversation(null);
+                          setReportedMessage(null);
+                          clearMessageImageDraft();
+                        }}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
                       <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} />
-                      <div>
-                        <p className="flex items-center gap-1 font-medium">
-                          {thread.otherUser?.name ?? "Unbekannt"}
+                      <div className="min-w-0">
+                        <p className="flex min-w-0 items-center gap-1 font-medium">
+                          <span className="truncate">
+                          {thread.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}
+                          </span>
                           {thread.otherUser?.isPro && <Crown className="h-3.5 w-3.5 text-amber-500" />}
                         </p>
                         <p className="text-xs text-muted-foreground">@{thread.otherUser?.username ?? "user"}</p>
@@ -1654,7 +1766,7 @@ export function ProfilePageClient() {
                           }
                         >
                           <Ban className="h-3.5 w-3.5" />
-                          {thread.isBlocked ? "Entblocken" : "Blockieren"}
+                          {thread.isBlocked ? t("profile.messagesPanel.unblock") : t("profile.messagesPanel.block")}
                         </Button>
                       </div>
                     )}
@@ -1682,11 +1794,11 @@ export function ProfilePageClient() {
                               <p className="whitespace-pre-wrap break-words leading-5">{message.body}</p>
                             )}
                             <div className={cn("mt-2 flex items-center justify-between gap-3 text-[0.7rem]", mine ? "text-primary-foreground/75" : "text-muted-foreground")}>
-                              <span>{new Date(message.createdAt).toLocaleString("de-DE")}</span>
-                              {mine ? <span>{message.readAt ? "Gelesen" : "Ungelesen"}</span> : (
+                              <span>{new Date(message.createdAt).toLocaleString(locale)}</span>
+                              {mine ? <span>{message.readAt ? t("profile.messagesPanel.read") : t("profile.messagesPanel.unreadStatus")}</span> : (
                                 <button type="button" className="inline-flex items-center gap-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setReportedMessage(message._id)}>
                                   <Flag className="h-3 w-3" />
-                                  Melden
+                                  {t("profile.messagesPanel.report")}
                                 </button>
                               )}
                             </div>
@@ -1697,11 +1809,11 @@ export function ProfilePageClient() {
                   </div>
                   {reportedMessage && (
                     <div className="border-t border-border bg-muted/30 p-3">
-                      <Label>Meldegrund</Label>
+                      <Label>{t("profile.messagesPanel.reportReason")}</Label>
                       <Input value={reportReason} onChange={(event) => setReportReason(event.target.value)} />
                       <div className="mt-2 flex gap-2">
-                        <Button size="sm" variant="destructive" onClick={submitReport}>Melden</Button>
-                        <Button size="sm" variant="outline" onClick={() => setReportedMessage(null)}>Abbrechen</Button>
+                        <Button size="sm" variant="destructive" onClick={submitReport}>{t("profile.messagesPanel.report")}</Button>
+                        <Button size="sm" variant="outline" onClick={() => setReportedMessage(null)}>{t("profile.messagesPanel.cancel")}</Button>
                       </div>
                     </div>
                   )}
@@ -1712,9 +1824,9 @@ export function ProfilePageClient() {
                         <img src={messageImageDraft.url} alt="" className="h-14 w-14 rounded-md object-cover" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{messageImageDraft.name}</p>
-                          <p className="text-xs text-muted-foreground">Bild wird als Nachricht gesendet.</p>
+                          <p className="text-xs text-muted-foreground">{t("profile.messagesPanel.sendImageHint")}</p>
                         </div>
-                        <Button type="button" size="icon-sm" variant="ghost" aria-label="Bild entfernen" onClick={clearMessageImageDraft}>
+                        <Button type="button" size="icon-sm" variant="ghost" aria-label={t("profile.messagesPanel.removeImage")} onClick={clearMessageImageDraft}>
                           <X className="h-4 w-4" />
                         </Button>
                       </div>
@@ -1726,8 +1838,8 @@ export function ProfilePageClient() {
                           "inline-flex size-9 cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-sm transition-colors hover:bg-muted sm:size-8",
                           (thread.isBlocked || uploadingMessageImage) && "pointer-events-none opacity-50"
                         )}
-                        aria-label="Bild senden"
-                        title="Bild senden"
+                        aria-label={t("profile.messagesPanel.sendImage")}
+                        title={t("profile.messagesPanel.sendImage")}
                       >
                           <Paperclip className="h-4 w-4" />
                         <input
@@ -1741,7 +1853,7 @@ export function ProfilePageClient() {
                       <Input
                         value={messageBody}
                         disabled={thread.isBlocked}
-                        placeholder={thread.isBlocked ? "Du hast diese Person blockiert." : "Nachricht schreiben..."}
+                        placeholder={thread.isBlocked ? t("profile.messagesPanel.blockedPlaceholder") : t("profile.messagesPanel.inputPlaceholder")}
                         onChange={(event) => setMessageBody(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" && !event.shiftKey) {
@@ -1757,7 +1869,7 @@ export function ProfilePageClient() {
                     </div>
                     <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <ShieldCheck className="h-3.5 w-3.5" />
-                      Spam-Schutz: Rate Limits, Duplicate-Check und Link-Limit laufen serverseitig.
+                      {t("profile.messagesPanel.spamNotice")}
                     </p>
                   </div>
                 </div>
@@ -1765,25 +1877,26 @@ export function ProfilePageClient() {
             </div>
           </CardContent>
         </Card>
+          </DialogContent>
+        </Dialog>
       </div>
 
+      <Dialog open={networkDialogOpen} onOpenChange={setNetworkDialogOpen}>
+        <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-y-auto rounded-none border-border bg-background p-4 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-xl sm:p-6">
       <aside
         id="network"
-        className={cn(
-          "scroll-mt-24 space-y-5",
-          activeProfileTab !== "network" && "hidden"
-        )}
+        className="space-y-5"
       >
         <Card className="border-cyan-500/10 bg-card/95 shadow-lg shadow-cyan-950/5">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Users className="h-4 w-4" />
-              Freunde
+              {t("profile.networkPanel.title")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-2">
-              <Label>Per Username hinzufügen</Label>
+              <Label>{t("profile.networkPanel.addByUsername")}</Label>
               <div className="flex gap-2">
                 <Input
                   placeholder="username"
@@ -1800,7 +1913,7 @@ export function ProfilePageClient() {
                       await addFriend({ userId, username: friendUsername });
                       setFriendUsername("");
                     } catch (error) {
-                      setFriendError(error instanceof Error ? error.message : "Konnte Freund nicht hinzufügen.");
+                      setFriendError(error instanceof Error ? error.message : t("profile.networkPanel.addError"));
                     }
                   }}
                 >
@@ -1811,9 +1924,9 @@ export function ProfilePageClient() {
             </div>
             <div className="space-y-2">
               {friends === undefined ? (
-                <p className="text-sm text-muted-foreground">Freunde werden geladen...</p>
+                <p className="text-sm text-muted-foreground">{t("profile.networkPanel.loading")}</p>
               ) : friends.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Noch keine Freunde hinzugefügt.</p>
+                <p className="text-sm text-muted-foreground">{t("profile.networkPanel.empty")}</p>
               ) : (
                 friends.map((entry) =>
                   entry.friend ? (
@@ -1845,11 +1958,11 @@ export function ProfilePageClient() {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Search className="h-4 w-4" />
-              Nutzer finden
+              {t("profile.networkPanel.findUsers")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Input placeholder="Name oder Username" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <Input placeholder={t("profile.networkPanel.searchPlaceholder")} value={query} onChange={(event) => setQuery(event.target.value)} />
             <div className="space-y-2">
               {searchResults?.map((result) => (
                 <div key={result._id} className="rounded-xl border border-border bg-muted/20 p-3 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/35">
@@ -1872,62 +1985,27 @@ export function ProfilePageClient() {
                     onClick={() => setMessageTarget(result._id)}
                   >
                     {result.allowMessages ? <Send className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                    Nachricht
+                    {t("profile.networkPanel.message")}
                   </Button>
                 </div>
               ))}
             </div>
             {messageTarget && (
               <div className="rounded-lg border border-border bg-muted/30 p-3">
-                <Label>Neue Nachricht</Label>
+                <Label>{t("profile.networkPanel.newMessage")}</Label>
                 <Textarea value={messageBody} onChange={(event) => setMessageBody(event.target.value)} rows={3} maxLength={600} />
                 <div className="mt-2 flex gap-2">
-                  <Button size="sm" onClick={() => submitMessage(messageTarget)}>Senden</Button>
-                  <Button size="sm" variant="outline" onClick={() => setMessageTarget(null)}>Abbrechen</Button>
+                  <Button size="sm" onClick={() => submitMessage(messageTarget)}>{t("profile.networkPanel.send")}</Button>
+                  <Button size="sm" variant="outline" onClick={() => setMessageTarget(null)}>{t("profile.networkPanel.cancel")}</Button>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="border-cyan-500/10 bg-card/95 shadow-lg shadow-cyan-950/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldCheck className="h-4 w-4" />
-              Datenschutzvorschau
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className={`rounded-xl bg-gradient-to-br ${accentClass} p-4 text-white shadow-lg shadow-cyan-950/15`}>
-              <div className="flex items-center gap-3">
-                <Avatar name={form.name} avatarUrl={displayAvatarUrl} />
-                <div>
-                  <p className="font-medium">{form.name || "GymLogs User"}</p>
-                  <p className="text-xs text-white/80">@{form.username || "username"}</p>
-                </div>
-              </div>
-              {form.bio && <p className="mt-3 text-sm text-white/90">{form.bio}</p>}
-            </div>
-            <PreviewRow label="Profil" value={form.isPublic ? "sichtbar" : "privat"} />
-            <PreviewRow label="Nachrichten" value={form.allowMessages ? "erlaubt" : "aus"} />
-            <PreviewRow label="Größe" value={form.publicHeight ? `${form.heightCm || "-"} cm` : "privat"} />
-            <PreviewRow label="Gewicht" value={form.publicWeight ? `${form.weightKg || "-"} kg` : "privat"} />
-            <PreviewRow label="Training" value={form.publicTrainingSummary && form.showTrainingSummary ? "sichtbar" : "privat"} />
-            {publicPreview?.trainingSummary && (
-              <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                <p className="mb-2 flex items-center gap-1.5 font-medium">
-                  <Sparkles className="h-4 w-4" />
-                  Öffentliche Trainingskarte
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <QuickStat label="Workouts" value={String(publicPreview.trainingSummary.completedWorkouts)} />
-                  <QuickStat label="Sets" value={String(publicPreview.trainingSummary.totalSets)} />
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </aside>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2300,9 +2378,9 @@ function TrainingTab({
   onCancelTemplateEdit: (templateId: Id<"workout_templates">) => void;
   onSaveTemplateEdit: (template: ProfileWorkoutTemplate) => void;
 }) {
-  const showGoal = ownerView || Boolean(trainingGoal);
-  const showFavoriteLift = ownerView || Boolean(favoriteLift);
-  const showHistory = ownerView || Boolean(trainingSummary);
+  const showGoal = Boolean(trainingGoal);
+  const showFavoriteLift = Boolean(favoriteLift);
+  const showHistory = Boolean(trainingSummary);
   const showTemplates = ownerView || templates === undefined || (templates?.length ?? 0) > 0;
 
   return (
@@ -2376,30 +2454,6 @@ function WorkoutHistoryCard({
       ) : (
         <p className="mt-2 text-sm leading-6 text-muted-foreground">Noch keine sichtbare Workout Historie.</p>
       )}
-    </div>
-  );
-}
-
-function AboutProfileCard({ profile }: { profile: VisibleProfile | null | undefined }) {
-  const rows = [
-    profile?.location ? ["Ort", profile.location] : null,
-    profile?.heightCm ? ["Größe", `${profile.heightCm} cm`] : null,
-    profile?.weightKg ? ["Gewicht", `${profile.weightKg} kg`] : null,
-    profile?.favoriteLift ? ["Lieblingslift", profile.favoriteLift] : null,
-    profile?.trainingGoal ? ["Ziel", profile.trainingGoal] : null,
-  ].filter(Boolean) as Array<[string, string]>;
-
-  return (
-    <div className="rounded-xl border border-border bg-muted/20 p-4">
-      <p className="font-medium">Über mich</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-        {profile?.bio || "Noch keine Beschreibung hinterlegt."}
-      </p>
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {rows.map(([label, value]) => (
-          <PreviewRow key={label} label={label} value={value} />
-        ))}
-      </div>
     </div>
   );
 }
@@ -2759,6 +2813,122 @@ function ImageMessage({ message }: { message: ChatMessageView }) {
   );
 }
 
+function ProfileHeaderActions({
+  unreadTotal,
+  onShare,
+  onOpenMessages,
+  onOpenNetwork,
+}: {
+  unreadTotal: number;
+  onShare: () => void;
+  onOpenMessages: () => void;
+  onOpenNetwork: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const { t } = useAppPreferences();
+  const unreadLabel = unreadTotal > 99 ? "99+" : String(unreadTotal);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  function choose(action: () => void) {
+    setOpen(false);
+    action();
+  }
+
+  return (
+    <div className="flex items-center gap-3 sm:gap-5">
+      <Button
+        size="icon"
+        variant="ghost"
+        className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11"
+        aria-label={t("profile.actions.share")}
+        onClick={onShare}
+      >
+        <Share2 className="h-5 w-5 sm:h-6 sm:w-6" />
+      </Button>
+      <div className="relative" ref={menuRef}>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="relative size-9 rounded-full text-white hover:bg-white/10 sm:size-11"
+          aria-label={t("profile.actions.socialMenu")}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <Users className="h-5 w-5 sm:h-6 sm:w-6" />
+          {unreadTotal > 0 && (
+            <span className="absolute -right-1 -top-1 min-w-4 rounded-full border border-[#050708] bg-cyan-300 px-1 text-[0.6rem] font-bold leading-4 text-black sm:min-w-5 sm:leading-5">
+              {unreadLabel}
+            </span>
+          )}
+        </Button>
+        {open && (
+          <div
+            role="menu"
+            aria-label={t("profile.actions.socialMenu")}
+            className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-lg border border-white/10 bg-[#0d1115] p-1.5 text-sm text-white shadow-2xl shadow-black/45"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
+              onClick={() => choose(onOpenNetwork)}
+            >
+              <Users className="h-4 w-4 text-white/58" />
+              <span className="min-w-0 flex-1 truncate">{t("profile.actions.network")}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
+              onClick={() => choose(onOpenMessages)}
+            >
+              <MessageCircle className="h-4 w-4 text-white/58" />
+              <span className="min-w-0 flex-1 truncate">{t("profile.actions.messages")}</span>
+              {unreadTotal > 0 && (
+                <span className="rounded-full bg-cyan-300 px-1.5 text-[0.65rem] font-bold leading-5 text-black">
+                  {unreadLabel}
+                </span>
+              )}
+            </button>
+            <Link
+              role="menuitem"
+              href="/settings"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
+              onClick={() => setOpen(false)}
+            >
+              <Settings className="h-4 w-4 text-white/58" />
+              <span className="min-w-0 flex-1 truncate">{t("profile.actions.settings")}</span>
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ProfileMetric({
   icon: Icon,
@@ -3018,11 +3188,3 @@ function QuickStat({
   );
 }
 
-function PreviewRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex min-h-11 items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
-    </div>
-  );
-}

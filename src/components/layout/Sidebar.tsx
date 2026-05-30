@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { Logo } from "@/components/brand/Logo";
+import { UserSearchButton } from "@/components/social/UserSearchButton";
 import { AppNavLink } from "./AppNavLink";
 
 const NAV_ITEMS = [
@@ -30,6 +31,7 @@ export function Sidebar() {
         </Link>
       </div>
       <nav className="flex-1 px-2 py-4 space-y-0.5">
+        <UserSearchButton triggerClassName="mb-3 w-full justify-start rounded-xl px-3" />
         {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (

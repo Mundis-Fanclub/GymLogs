@@ -390,6 +390,40 @@ export const searchPublic = query({
   },
 });
 
+export const suggestPublic = query({
+  args: {
+    viewerId: v.optional(v.id("users")),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(args.limit ?? 8, 1), 20);
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_is_public", (q) => q.eq("isPublic", true))
+      .order("desc")
+      .take(limit + 1);
+
+    return await Promise.all(
+      users
+        .filter((user) => user._id !== args.viewerId)
+        .slice(0, limit)
+        .map(async (user) => {
+          const media = await profileMedia(ctx, user);
+          return {
+            _id: user._id,
+            name: user.name,
+            username: user.username,
+            bio: user.bio,
+            avatarUrl: media.avatarUrl,
+            profileAccent: user.profileAccent ?? "emerald",
+            isPro: user.isPro ?? false,
+            allowMessages: user.allowMessages ?? true,
+          };
+        })
+    );
+  },
+});
+
 export const generateProfileUploadUrl = mutation({
   args: {
     userId: v.id("users"),

@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Crown, LogOut, MessageCircle, Plus, Settings, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/Logo";
+import { UserSearchButton } from "@/components/social/UserSearchButton";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { api } from "../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,13 @@ export function TopBar() {
     [conversations]
   );
   const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount);
+  const showUserSearch =
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
+    pathname === "/analytics" ||
+    pathname.startsWith("/analytics/") ||
+    pathname === "/social" ||
+    pathname.startsWith("/social/");
 
   useEffect(() => {
     if (!profileMenuOpen) return;
@@ -106,6 +114,9 @@ export function TopBar() {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+        {showUserSearch && (
+          <UserSearchButton compact triggerClassName="order-0" />
+        )}
         <Button
           size="icon-sm"
           variant="outline"
@@ -133,10 +144,10 @@ export function TopBar() {
             type="button"
             size="icon-sm"
             variant="outline"
-            aria-label="Profilmenue oeffnen"
+            aria-label={t("topbar.profileMenu")}
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen}
-            title="Profilmenue oeffnen"
+            title={t("topbar.profileMenu")}
             className="relative overflow-hidden rounded-full p-0"
             onClick={() => setProfileMenuOpen((open) => !open)}
           >
@@ -144,7 +155,7 @@ export function TopBar() {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={profileImageUrl}
-                alt="Profilbild"
+                alt={t("topbar.profile")}
                 className="h-full w-full rounded-full object-cover"
               />
             ) : (
@@ -160,29 +171,29 @@ export function TopBar() {
             <div
               ref={menuRef}
               role="menu"
-              aria-label="Profilmenue"
+              aria-label={t("topbar.profileMenu")}
               onKeyDown={handleProfileMenuKeyDown}
               className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-lg border border-border bg-card p-1.5 text-card-foreground shadow-xl shadow-black/20"
             >
               <ProfileMenuItem
                 icon={User}
-                label="Profil anzeigen"
+                label={t("topbar.profile")}
                 onClick={() => goToProfileMenuItem("/profile")}
               />
               <ProfileMenuItem
                 icon={MessageCircle}
-                label="Nachrichten"
+                label={t("topbar.messages")}
                 badge={unreadCount > 0 ? unreadLabel : undefined}
                 onClick={() => goToProfileMenuItem("/profile#messages")}
               />
               <ProfileMenuItem
                 icon={Settings}
-                label="Einstellungen"
+                label={t("topbar.settings")}
                 onClick={() => goToProfileMenuItem("/settings")}
               />
               <ProfileMenuItem
                 icon={LogOut}
-                label="Abmelden"
+                label={t("topbar.signOut")}
                 onClick={() => {
                   setProfileMenuOpen(false);
                   void signOut({ redirectUrl: "/sign-in" });
