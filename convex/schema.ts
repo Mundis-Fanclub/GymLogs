@@ -137,6 +137,23 @@ export default defineSchema({
         v.literal("deadlift")
       )
     ),
+    bodygraphZones: v.optional(
+      v.array(
+        v.union(
+          v.literal("chest"),
+          v.literal("back"),
+          v.literal("shoulders"),
+          v.literal("biceps"),
+          v.literal("triceps"),
+          v.literal("quads"),
+          v.literal("hamstrings"),
+          v.literal("glutes"),
+          v.literal("calves"),
+          v.literal("core"),
+          v.literal("legs")
+        )
+      )
+    ),
     createdBy: v.optional(v.id("users")),
   })
     .index("by_muscle_group", ["muscleGroup"])

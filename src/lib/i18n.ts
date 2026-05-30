@@ -433,7 +433,7 @@ export const dictionaries = {
     categories: {
       push: "Push",
       pull: "Pull",
-      legs: "Beine",
+      legs: "Unterkoerper",
       other: "Sonstiges",
     },
   },
@@ -480,6 +480,7 @@ function withGermanUmlauts(value: string): string {
     .replaceAll("Ruecken", "Rücken")
     .replaceAll("Gesaess", "Gesäß")
     .replaceAll("Ganzkoerper", "Ganzkörper")
+    .replaceAll("Unterkoerper", "Unterkörper")
     .replaceAll("Praesi", "Präsi")
     .replaceAll("Laedt", "Lädt")
     .replaceAll("Pruefung", "Prüfung");

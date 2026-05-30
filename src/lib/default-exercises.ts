@@ -10,6 +10,7 @@ export type DefaultExercise = {
   isFallback: true;
   isLeaderboardLift?: boolean;
   leaderboardLiftType?: "bench_press" | "squat" | "deadlift";
+  bodygraphZones?: string[];
 };
 
 export const DEFAULT_EXERCISES: DefaultExercise[] = [
@@ -24,12 +25,12 @@ export const DEFAULT_EXERCISES: DefaultExercise[] = [
   { _id: "fallback-lateral-raise", name: "Lateral Raise", muscleGroup: "shoulders", category: "push", isCustom: false, isFallback: true },
   { _id: "fallback-barbell-curl", name: "Barbell Curl", muscleGroup: "biceps", category: "pull", isCustom: false, isFallback: true },
   { _id: "fallback-tricep-pushdown", name: "Tricep Pushdown", muscleGroup: "triceps", category: "push", isCustom: false, isFallback: true },
-  { _id: "fallback-squat", name: "Squat", muscleGroup: "legs", category: "legs", isCustom: false, isFallback: true, isLeaderboardLift: true, leaderboardLiftType: "squat" },
-  { _id: "fallback-front-squat", name: "Front Squat", muscleGroup: "legs", category: "legs", isCustom: false, isFallback: true },
-  { _id: "fallback-leg-press", name: "Leg Press", muscleGroup: "legs", category: "legs", isCustom: false, isFallback: true },
-  { _id: "fallback-leg-curl", name: "Leg Curl", muscleGroup: "legs", category: "legs", isCustom: false, isFallback: true },
-  { _id: "fallback-hip-thrust", name: "Hip Thrust", muscleGroup: "legs", category: "legs", isCustom: false, isFallback: true },
-  { _id: "fallback-standing-calf-raise", name: "Standing Calf Raise", muscleGroup: "legs", category: "legs", isCustom: false, isFallback: true },
+  { _id: "fallback-squat", name: "Squat", muscleGroup: "legs", category: "legs", isCustom: false, isFallback: true, isLeaderboardLift: true, leaderboardLiftType: "squat", bodygraphZones: ["quads", "glutes"] },
+  { _id: "fallback-front-squat", name: "Front Squat", muscleGroup: "legs", category: "legs", isCustom: false, isFallback: true, bodygraphZones: ["quads", "glutes"] },
+  { _id: "fallback-leg-press", name: "Leg Press", muscleGroup: "legs", category: "legs", isCustom: false, isFallback: true, bodygraphZones: ["quads", "hamstrings", "glutes"] },
+  { _id: "fallback-leg-curl", name: "Leg Curl", muscleGroup: "hamstrings", category: "legs", isCustom: false, isFallback: true },
+  { _id: "fallback-hip-thrust", name: "Hip Thrust", muscleGroup: "glutes", category: "legs", isCustom: false, isFallback: true },
+  { _id: "fallback-standing-calf-raise", name: "Standing Calf Raise", muscleGroup: "calves", category: "legs", isCustom: false, isFallback: true },
   { _id: "fallback-plank", name: "Plank", muscleGroup: "core", category: "other", isCustom: false, isFallback: true },
 ];
 

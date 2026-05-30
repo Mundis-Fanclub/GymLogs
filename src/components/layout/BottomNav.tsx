@@ -1,5 +1,6 @@
 "use client";
 
+import { useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   BarChart2,
@@ -19,27 +20,95 @@ const NAV_ITEMS = [
 export function BottomNav() {
   const pathname = usePathname();
   const { t } = useAppPreferences();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const linkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const [indicator, setIndicator] = useState<{
+    left: number;
+    width: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    function recompute() {
+      const container = containerRef.current;
+      if (!container) return;
+      const activeItem = NAV_ITEMS.find(
+        (item) => pathname === item.href || pathname.startsWith(item.href + "/")
+      );
+      if (!activeItem) {
+        setIndicator(null);
+        return;
+      }
+      const activeEl = linkRefs.current[activeItem.href];
+      if (!activeEl) return;
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeEl.getBoundingClientRect();
+      setIndicator({
+        left: activeRect.left - containerRect.left,
+        width: activeRect.width,
+      });
+    }
+
+    recompute();
+    window.addEventListener("resize", recompute);
+    return () => window.removeEventListener("resize", recompute);
+  }, [pathname]);
 
   return (
-    <nav className="pointer-events-auto fixed inset-x-0 bottom-0 z-[70] border-t border-border bg-card/95 px-2.5 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur md:hidden">
-      <div className="mx-auto grid w-full max-w-md grid-cols-3 gap-1">
+    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-[7%] pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:hidden">
+      <div
+        ref={containerRef}
+        className="pointer-events-auto relative mx-auto flex h-[56px] w-full max-w-[380px] items-center justify-around rounded-full px-1.5"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 55%, rgba(0, 0, 0, 0.03) 100%), rgba(10, 10, 12, 0.22)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          boxShadow:
+            "0 24px 60px -16px rgba(0, 0, 0, 0.55), 0 6px 20px -10px rgba(0, 0, 0, 0.28), inset 0 1px 0 0 rgba(255, 255, 255, 0.14), inset 0 -1px 0 0 rgba(255, 255, 255, 0.02)",
+          backdropFilter: "blur(32px) saturate(180%)",
+          WebkitBackdropFilter: "blur(32px) saturate(180%)",
+        }}
+      >
+        {indicator && (
+          <span
+            aria-hidden="true"
+            className="absolute top-[9px] bottom-[9px] rounded-full transition-[left,width] duration-300 ease-out"
+            style={{
+              left: indicator.left,
+              width: indicator.width,
+              background:
+                "linear-gradient(180deg, rgba(249, 138, 42, 0.13) 0%, rgba(249, 138, 42, 0.04) 100%)",
+              border: "1px solid rgba(249, 138, 42, 0.15)",
+              boxShadow:
+                "inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 0 24px -8px rgba(249, 115, 22, 0.6)",
+            }}
+          />
+        )}
         {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <AppNavLink
               key={href}
+              ref={(el) => {
+                linkRefs.current[href] = el;
+              }}
               href={href}
               active={active}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-[3.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-xs font-semibold leading-none transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.97] min-[390px]:text-[0.8rem]",
+                "relative z-10 flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-2 text-[10.5px] font-medium leading-none transition-colors duration-300 ease-out active:scale-[0.96]",
                 active
-                  ? "bg-primary text-primary-foreground shadow-sm shadow-black/15"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "text-brand"
+                  : "text-muted-foreground/55 hover:text-foreground/80"
               )}
             >
-              <Icon className="h-5 w-5" />
-              <span className="max-w-full truncate">{t(labelKey)}</span>
+              <Icon
+                className={cn(
+                  "h-[20px] w-[20px] shrink-0 transition-transform duration-300 ease-out",
+                  active && "scale-[1.08]"
+                )}
+                strokeWidth={active ? 2.2 : 1.8}
+              />
+              <span className="truncate">{t(labelKey)}</span>
             </AppNavLink>
           );
         })}

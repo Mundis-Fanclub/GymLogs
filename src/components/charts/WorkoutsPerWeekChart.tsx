@@ -27,6 +27,7 @@ interface WorkoutsPerWeekChartProps {
     buckets: FrequencyBucket[];
   };
   period: FrequencyPeriod;
+  compact?: boolean;
 }
 
 function labelForBucket(
@@ -43,6 +44,7 @@ function labelForBucket(
 export function WorkoutsPerWeekChart({
   data,
   period,
+  compact = false,
 }: WorkoutsPerWeekChartProps) {
   const { locale, t } = useAppPreferences();
 
@@ -53,7 +55,7 @@ export function WorkoutsPerWeekChart({
 
   return (
     <div
-      className="h-[280px] w-full"
+      className={compact ? "h-[140px] w-full" : "h-[280px] w-full"}
       role="img"
       aria-label={t("analytics.workoutFrequency")}
     >

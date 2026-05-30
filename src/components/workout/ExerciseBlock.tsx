@@ -189,7 +189,7 @@ export function ExerciseBlock({
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
       <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-4">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-sky-500">
+          <h3 className="truncate text-sm font-semibold text-primary">
             {exerciseName}
           </h3>
         </div>
@@ -377,9 +377,9 @@ function RestBreak({
 
   return (
     <>
-      <div className="mx-1 my-2 flex items-center justify-between rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs">
+      <div className="mx-1 my-2 flex items-center justify-between rounded-lg border border-info/25 bg-info/10 px-3 py-2 text-xs">
         <div className="flex items-center gap-2">
-          <Bell className="h-3.5 w-3.5 text-sky-400" />
+          <Bell className="h-3.5 w-3.5 text-info" />
           <span className="font-medium">{label}</span>
           <span className="text-muted-foreground">
             {done ? "Pause ist um. Zurück an die Arbeit." : display}
@@ -407,7 +407,7 @@ function RestBreak({
         )}
       </div>
       {showToast && (
-        <div className="fixed bottom-20 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 rounded-lg border border-emerald-500/30 bg-background px-4 py-3 text-sm shadow-lg">
+        <div className="fixed bottom-20 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 rounded-lg border border-success/30 bg-background px-4 py-3 text-sm shadow-lg">
           <p className="font-semibold">Pause ist um</p>
           <p className="text-muted-foreground">Zurück an die Arbeit.</p>
         </div>

@@ -49,19 +49,19 @@ export default function LogsPage() {
       title: t("logsPage.trackFast"),
       description: t("logsPage.trackFastCopy"),
       icon: PlayCircle,
-      color: "text-sky-600",
+      color: "text-info",
     },
     {
       title: t("logsPage.rankFairly"),
       description: t("logsPage.rankFairlyCopy"),
       icon: Trophy,
-      color: "text-amber-600",
+      color: "text-warning",
     },
     {
       title: t("logsPage.verifyLater"),
       description: t("logsPage.verifyLaterCopy"),
       icon: ShieldCheck,
-      color: "text-emerald-600",
+      color: "text-success",
     },
   ];
 
@@ -121,7 +121,7 @@ export default function LogsPage() {
                 <div className="mt-3 space-y-2">
                   {plan.bullets.map((bullet) => (
                     <div key={bullet} className="flex items-center gap-2 text-sm">
-                      <Check className="h-4 w-4 text-emerald-600" />
+                      <Check className="h-4 w-4 text-success" />
                       <span>{bullet}</span>
                     </div>
                   ))}

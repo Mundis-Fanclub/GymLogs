@@ -11,7 +11,12 @@ import {
   filterDefaultExercises,
   type DefaultExercise,
 } from "@/lib/default-exercises";
-import { BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
+import {
+  DISPLAY_BODY_PARTS,
+  toBodyPart,
+  toDisplayBodyPart,
+  type DisplayBodyPart,
+} from "@/lib/muscle-groups";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 export function ExercisesList() {
@@ -26,12 +31,12 @@ export function ExercisesList() {
 
   const grouped = displayExercises.reduce(
     (acc, ex) => {
-      const group = toBodyPart(ex.muscleGroup);
+      const group = toDisplayBodyPart(toBodyPart(ex.muscleGroup));
       if (!acc[group]) acc[group] = [];
       acc[group].push(ex);
       return acc;
     },
-    {} as Record<BodyPart, Array<ConvexExercise | DefaultExercise>>
+    {} as Record<DisplayBodyPart, Array<ConvexExercise | DefaultExercise>>
   );
 
   return (
@@ -49,7 +54,8 @@ export function ExercisesList() {
       </div>
 
       {isFallback && (
-        <p className="rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+        <p className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-1 text-[11px] text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
           {t("exercises.fallbackNotice")}
         </p>
       )}
@@ -60,7 +66,7 @@ export function ExercisesList() {
         </p>
       ) : (
         <div className="space-y-6">
-          {BODY_PARTS.filter((mg) => grouped[mg]?.length).map((mg) => (
+          {DISPLAY_BODY_PARTS.filter((mg) => grouped[mg]?.length).map((mg) => (
             <div key={mg}>
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t(`muscleGroups.${mg}`)}
@@ -70,7 +76,7 @@ export function ExercisesList() {
                   const content = (
                     <>
                       <span className="min-w-0 truncate font-medium">{ex.name}</span>
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         {ex.isLeaderboardLift && (
                           <Badge variant="default" className="gap-1 text-xs">
                             <Trophy className="h-3 w-3" />
@@ -82,14 +88,6 @@ export function ExercisesList() {
                             {t("exercises.custom")}
                           </Badge>
                         )}
-                        {"isFallback" in ex && ex.isFallback && (
-                          <Badge variant="outline" className="text-xs">
-                            Demo
-                          </Badge>
-                        )}
-                        <Badge variant="secondary" className="text-xs capitalize">
-                          {t(`muscleGroups.${toBodyPart(ex.muscleGroup)}`)}
-                        </Badge>
                       </div>
                     </>
                   );

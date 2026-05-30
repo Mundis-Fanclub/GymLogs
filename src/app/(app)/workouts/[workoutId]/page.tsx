@@ -23,7 +23,13 @@ import { useAppPreferences } from "@/components/providers/AppPreferencesProvider
 import { formatVolume } from "@/lib/pr-utils";
 import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 import { ActiveWorkout } from "@/components/workout/ActiveWorkout";
-import { BODY_PARTS, toBodyPart, type BodyPart } from "@/lib/muscle-groups";
+import {
+  BODY_PARTS,
+  exerciseBodygraphParts,
+  toBodyPart,
+  toDisplayBodyPart,
+  type BodyPart,
+} from "@/lib/muscle-groups";
 import { BookmarkPlus, Pencil, Trash2 } from "lucide-react";
 
 export default function WorkoutDetailPage() {
@@ -60,8 +66,27 @@ export default function WorkoutDetailPage() {
   const muscleGroupSets = workout.exercises.reduce(
     (counts, ex) => {
       if (!ex.exercise) return counts;
-      const part = toBodyPart(ex.exercise.muscleGroup);
-      counts[part] += ex.sets.length;
+      const zones = exerciseBodygraphParts(ex.exercise);
+      for (const zone of zones) {
+        counts[zone] += ex.sets.length;
+      }
+      return counts;
+    },
+    Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<
+      BodyPart,
+      number
+    >
+  );
+
+  // Display counts use the primary muscle group only so the bodygraph
+  // does not paint secondary zones (e.g. glutes on a Beinpresse set that
+  // is counted as "Beine"). Mask rendering uses muscleGroupSets above for
+  // color, but a mask is only drawn when its display group has > 0 sets.
+  const captionSetCounts = workout.exercises.reduce(
+    (counts, ex) => {
+      if (!ex.exercise) return counts;
+      const displayPart = toDisplayBodyPart(toBodyPart(ex.exercise.muscleGroup));
+      counts[displayPart] += ex.sets.length;
       return counts;
     },
     Object.fromEntries(BODY_PARTS.map((part) => [part, 0])) as Record<
@@ -124,9 +149,8 @@ export default function WorkoutDetailPage() {
             {t("common.kg")}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
-            variant="outline"
             size="sm"
             className="gap-2"
             onClick={() => setIsEditing(true)}
@@ -136,8 +160,17 @@ export default function WorkoutDetailPage() {
           </Button>
           <Button
             variant="outline"
-            size="sm"
-            className="gap-2"
+            size="icon-sm"
+            aria-label={
+              savedTemplate
+                ? t("workouts.templateSaved")
+                : t("workouts.saveTemplate")
+            }
+            title={
+              savedTemplate
+                ? t("workouts.templateSaved")
+                : t("workouts.saveTemplate")
+            }
             onClick={() => {
               setTemplateName(
                 format(workout.date, "EEEE, MMMM d", {
@@ -151,16 +184,16 @@ export default function WorkoutDetailPage() {
             }}
           >
             <BookmarkPlus className="h-4 w-4" />
-            {savedTemplate ? t("workouts.templateSaved") : t("workouts.saveTemplate")}
           </Button>
           <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Workout löschen"
+            title="Workout löschen"
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={() => setShowDeleteDialog(true)}
           >
             <Trash2 className="h-4 w-4" />
-            Löschen
           </Button>
         </div>
       </div>
@@ -171,7 +204,11 @@ export default function WorkoutDetailPage() {
         </p>
       )}
 
-      <WorkoutMuscleMap muscleGroups={[]} muscleGroupSets={muscleGroupSets} />
+      <WorkoutMuscleMap
+        muscleGroups={[]}
+        muscleGroupSets={muscleGroupSets}
+        captionSetCounts={captionSetCounts}
+      />
 
       <div className="space-y-3">
         {workout.exercises.map((ex) => {
@@ -188,7 +225,7 @@ export default function WorkoutDetailPage() {
                     {ex.exercise.name}
                   </CardTitle>
                   <Badge variant="secondary" className="text-xs capitalize">
-                    {t(`muscleGroups.${toBodyPart(ex.exercise.muscleGroup)}`)}
+                    {t(`muscleGroups.${toDisplayBodyPart(toBodyPart(ex.exercise.muscleGroup))}`)}
                   </Badge>
                 </div>
               </CardHeader>
