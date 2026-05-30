@@ -71,6 +71,10 @@ export default defineSchema({
         weightKg: v.boolean(),
         birthDate: v.boolean(),
         trainingSummary: v.optional(v.boolean()),
+        trainingStreak: v.optional(v.boolean()),
+        trainingBestSet: v.optional(v.boolean()),
+        trainingActivity: v.optional(v.boolean()),
+        trainingVolume: v.optional(v.boolean()),
       })
     ),
     updatedAt: v.optional(v.number()),

@@ -48,4 +48,5 @@ next-env.d.ts
 .devserver.*.log
 dev-server.log
 .convex-dev*.log
+.convex-backend.*.log
 .next-dev*.log

@@ -108,6 +108,10 @@ export const getOrCreate = mutation({
           weightKg: boolean;
           birthDate: boolean;
           trainingSummary?: boolean;
+          trainingStreak?: boolean;
+          trainingBestSet?: boolean;
+          trainingActivity?: boolean;
+          trainingVolume?: boolean;
         };
       } = {};
 
@@ -138,6 +142,10 @@ export const getOrCreate = mutation({
           weightKg: false,
           birthDate: false,
           trainingSummary: true,
+          trainingStreak: true,
+          trainingBestSet: true,
+          trainingActivity: true,
+          trainingVolume: true,
         };
       }
 
@@ -168,6 +176,10 @@ export const getOrCreate = mutation({
         weightKg: false,
         birthDate: false,
         trainingSummary: true,
+        trainingStreak: true,
+        trainingBestSet: true,
+        trainingActivity: true,
+        trainingVolume: true,
       },
     });
 
@@ -234,11 +246,19 @@ export const getPublicProfile = query({
       weightKg: false,
       birthDate: false,
       trainingSummary: true,
+      trainingStreak: true,
+      trainingBestSet: true,
+      trainingActivity: true,
+      trainingVolume: true,
     };
     const canSeeTrainingSummary =
       isSelf ||
       (user.showTrainingSummary !== false &&
-        publicFields.trainingSummary !== false &&
+        (publicFields.trainingSummary !== false ||
+          publicFields.trainingStreak === true ||
+          publicFields.trainingBestSet === true ||
+          publicFields.trainingActivity === true ||
+          publicFields.trainingVolume === true) &&
         user.isPublic !== false);
 
     let trainingSummary = null;
@@ -411,6 +431,10 @@ export const updateProfile = mutation({
       weightKg: v.boolean(),
       birthDate: v.boolean(),
       trainingSummary: v.boolean(),
+      trainingStreak: v.boolean(),
+      trainingBestSet: v.boolean(),
+      trainingActivity: v.boolean(),
+      trainingVolume: v.boolean(),
     }),
   },
   handler: async (ctx, args) => {
@@ -430,6 +454,17 @@ export const updateProfile = mutation({
 
     const currentUser = await ctx.db.get(args.userId);
     if (!currentUser) throw new Error("User not found.");
+    const favoriteLift = args.favoriteLift?.trim().slice(0, 60);
+    if (favoriteLift) {
+      const exercises = await ctx.db.query("exercises").take(500);
+      const normalizedFavoriteLift = favoriteLift.toLowerCase();
+      const catalogExercise = exercises.find((exercise) =>
+        exercise.name.toLowerCase().includes(normalizedFavoriteLift)
+      );
+      if (!catalogExercise) {
+        throw new Error("Favorite lift must match an exercise from the catalog.");
+      }
+    }
     await reserveUsername(ctx, username, args.userId);
     const oldUsername = currentUser.username;
     if (oldUsername && oldUsername !== username) {
@@ -452,7 +487,7 @@ export const updateProfile = mutation({
       coverUrl: args.coverUrl?.trim().slice(0, 500),
       coverStorageId: args.coverStorageId,
       location: args.location?.trim().slice(0, 80),
-      favoriteLift: args.favoriteLift?.trim().slice(0, 60),
+      favoriteLift,
       trainingGoal: args.trainingGoal?.trim().slice(0, 120),
       profileAccent: ["emerald", "sky", "rose", "amber", "violet"].includes(args.profileAccent)
         ? args.profileAccent

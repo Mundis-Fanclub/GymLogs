@@ -9,7 +9,6 @@ import {
   Ban,
   BadgeCheck,
   Calendar,
-  ChevronRight,
   Crown,
   Dumbbell,
   ExternalLink,
@@ -26,6 +25,7 @@ import {
   MessageCircle,
   MoveRight,
   Paperclip,
+  Pencil,
   PlusCircle,
   Repeat2,
   Ruler,
@@ -67,6 +67,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DEFAULT_EXERCISES } from "@/lib/default-exercises";
 import { cn } from "@/lib/utils";
 
 const ACCENTS = {
@@ -113,6 +114,10 @@ type ProfileForm = {
   publicWeight: boolean;
   publicBirthDate: boolean;
   publicTrainingSummary: boolean;
+  publicTrainingStreak: boolean;
+  publicTrainingBestSet: boolean;
+  publicTrainingActivity: boolean;
+  publicTrainingVolume: boolean;
 };
 
 type ProfileTopLog = {
@@ -166,6 +171,24 @@ type ProfileTrainingSummary = {
   };
 };
 
+type ProfilePostComment = {
+  _id: Id<"social_comments">;
+  body: string;
+  createdAt: number;
+  author: null | {
+    _id: Id<"users">;
+    name: string;
+    username?: string;
+    avatarUrl?: string | null;
+    isPro: boolean;
+  };
+  mediaUrl?: string | null;
+  mediaType?: "gif";
+  likeCount: number;
+  likedByViewer: boolean;
+  replies?: ProfilePostComment[];
+};
+
 type VisibleProfile = {
   bio?: string;
   location?: string;
@@ -193,6 +216,7 @@ type ProfilePost = {
     reps: number;
     score?: number;
   };
+  comments?: ProfilePostComment[];
 };
 
 type MessageImageDraft = {
@@ -214,7 +238,8 @@ const LIFT_LABELS = {
   deadlift: "Deadlift",
 } as const;
 
-type ProfileTab = "posts" | "saved" | "logs" | "workouts" | "playlists" | "about" | "messages" | "network";
+type ProfileTab = "posts" | "saved" | "logs" | "training" | "about" | "messages" | "network";
+type ProfilePreviewTab = "posts" | "logs" | "training";
 
 export function ProfilePageClient() {
   const { userId, isLoaded } = useConvexUser();
@@ -236,6 +261,10 @@ export function ProfilePageClient() {
     api.workouts.listProfileTemplates,
     userId && loadSecondary ? { userId, viewerId: userId, limit: 12 } : "skip"
   );
+  const catalogExercises = useQuery(
+    api.exercises.search,
+    loadSecondary ? { query: "", limit: 200 } : "skip"
+  );
   const isOwnProfile = Boolean(userId && user?._id === userId);
   const posts = useQuery(api.social.listByAuthor, userId && loadSecondary ? { authorId: userId, viewerId: userId, limit: 30 } : "skip");
   const savedPosts = useQuery(api.social.listSaved, userId && isOwnProfile && loadSecondary ? { userId, limit: 30 } : "skip");
@@ -244,6 +273,10 @@ export function ProfilePageClient() {
   const generateUploadUrl = useMutation(api.users.generateProfileUploadUrl);
   const createProfilePost = useMutation(api.social.createPost);
   const generatePostUploadUrl = useMutation(api.social.generateUploadUrl);
+  const updateProfilePost = useMutation(api.social.updatePost);
+  const deleteProfilePost = useMutation(api.social.deletePost);
+  const updateWorkoutTemplate = useMutation(api.workouts.updateTemplateVisibility);
+  const deleteWorkoutTemplate = useMutation(api.workouts.deleteTemplate);
   const togglePostLike = useMutation(api.social.toggleLike);
   const togglePostSave = useMutation(api.social.toggleSave);
   const addProfilePostComment = useMutation(api.social.addComment);
@@ -275,6 +308,19 @@ export function ProfilePageClient() {
   const [profilePostBody, setProfilePostBody] = useState("");
   const [profilePostCommentBodies, setProfilePostCommentBodies] = useState<Record<string, string>>({});
   const [activeProfileCommentPostId, setActiveProfileCommentPostId] = useState<string | null>(null);
+  const [openProfilePostMenuId, setOpenProfilePostMenuId] = useState<string | null>(null);
+  const [editingProfilePostId, setEditingProfilePostId] = useState<string | null>(null);
+  const [editingProfilePostBodies, setEditingProfilePostBodies] = useState<Record<string, string>>({});
+  const [pendingProfilePostDelete, setPendingProfilePostDelete] = useState<Id<"social_posts"> | null>(null);
+  const [openWorkoutTemplateMenuId, setOpenWorkoutTemplateMenuId] = useState<string | null>(null);
+  const [editingWorkoutTemplateId, setEditingWorkoutTemplateId] = useState<string | null>(null);
+  const [workoutTemplateDrafts, setWorkoutTemplateDrafts] = useState<Record<string, {
+    name: string;
+    description: string;
+    visibility: "private" | "friends" | "public";
+    showWeights: boolean;
+  }>>({});
+  const [pendingWorkoutTemplateDelete, setPendingWorkoutTemplateDelete] = useState<Id<"workout_templates"> | null>(null);
   const [profilePostMediaDraft, setProfilePostMediaDraft] = useState<ProfilePostMediaDraft | null>(null);
   const [profilePostError, setProfilePostError] = useState("");
   const [uploadingProfilePostMedia, setUploadingProfilePostMedia] = useState(false);
@@ -291,6 +337,7 @@ export function ProfilePageClient() {
   const [profileEditMode, setProfileEditMode] = useState<"edit" | "preview">("edit");
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState<ProfileTab>("posts");
+  const [previewProfileTab, setPreviewProfileTab] = useState<ProfilePreviewTab>("posts");
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<ProfileForm>({
@@ -319,6 +366,10 @@ export function ProfilePageClient() {
     publicWeight: false,
     publicBirthDate: false,
     publicTrainingSummary: true,
+    publicTrainingStreak: true,
+    publicTrainingBestSet: true,
+    publicTrainingActivity: true,
+    publicTrainingVolume: true,
   });
 
   useEffect(() => {
@@ -331,6 +382,7 @@ export function ProfilePageClient() {
       const hash = window.location.hash;
       if (hash === "#messages") setActiveProfileTab("messages");
       if (hash === "#network" || hash === "#friends") setActiveProfileTab("network");
+      if (hash === "#training" || hash === "#workouts" || hash === "#playlists") setActiveProfileTab("training");
     }
 
     selectTabFromHash();
@@ -366,6 +418,10 @@ export function ProfilePageClient() {
       publicWeight: user.publicFields?.weightKg ?? false,
       publicBirthDate: user.publicFields?.birthDate ?? false,
       publicTrainingSummary: user.publicFields?.trainingSummary ?? true,
+      publicTrainingStreak: user.publicFields?.trainingStreak ?? user.publicFields?.trainingSummary ?? true,
+      publicTrainingBestSet: user.publicFields?.trainingBestSet ?? user.publicFields?.trainingSummary ?? true,
+      publicTrainingActivity: user.publicFields?.trainingActivity ?? user.publicFields?.trainingSummary ?? true,
+      publicTrainingVolume: user.publicFields?.trainingVolume ?? user.publicFields?.trainingSummary ?? true,
     });
     setAvatarPreviewUrl("");
     setCoverPreviewUrl("");
@@ -435,12 +491,54 @@ export function ProfilePageClient() {
     { id: "posts", label: "Beiträge" },
     ...(isOwnProfile ? [{ id: "saved", label: "Gespeichert" } as const] : []),
     { id: "logs", label: "Top Logs" },
-    { id: "workouts", label: "Workouts" },
-    { id: "playlists", label: "Playlists" },
+    { id: "training", label: "Training" },
     { id: "messages", label: "Nachrichten" },
     { id: "network", label: "Netzwerk" },
     { id: "about", label: "Über mich" },
   ] satisfies Array<{ id: ProfileTab; label: string }>;
+  const hasAnyPublicWorkoutStat =
+    form.publicTrainingStreak ||
+    form.publicTrainingBestSet ||
+    form.publicTrainingActivity ||
+    form.publicTrainingVolume;
+  const previewTrainingSummary =
+    form.isPublic && form.showTrainingSummary && hasAnyPublicWorkoutStat ? trainingSummary : null;
+  const previewBestSet = previewTrainingSummary?.bestSet;
+  const hasVisiblePreviewMetric =
+    Boolean(previewTrainingSummary) &&
+    (form.publicTrainingStreak ||
+      (form.publicTrainingBestSet && Boolean(previewBestSet)) ||
+      form.publicTrainingActivity ||
+      form.publicTrainingVolume);
+  const previewVisibleProfile: VisibleProfile = form.isPublic
+    ? {
+        bio: form.publicBio ? form.bio : undefined,
+        location: form.publicLocation ? form.location : undefined,
+        favoriteLift: form.publicFavoriteLift ? form.favoriteLift : undefined,
+        trainingGoal: form.publicTrainingGoal ? form.trainingGoal : undefined,
+        heightCm: form.publicHeight && form.heightCm ? Number(form.heightCm) : undefined,
+        weightKg: form.publicWeight && form.weightKg ? Number(form.weightKg) : undefined,
+        birthDate: form.publicBirthDate ? form.birthDate : undefined,
+      }
+    : {};
+  const previewMeta = [
+    previewVisibleProfile.location ? { icon: MapPin, value: previewVisibleProfile.location } : null,
+    previewVisibleProfile.heightCm ? { icon: Ruler, value: `${previewVisibleProfile.heightCm} cm` } : null,
+    { icon: Calendar, value: joinedLabel },
+  ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
+  const previewTemplates = form.isPublic ? workoutTemplates?.filter((template) => template.visibility === "public") : [];
+  const previewTabs = [
+    { id: "posts", label: "Beiträge" },
+    { id: "logs", label: "Top Logs" },
+    { id: "training", label: "Training" },
+  ] satisfies Array<{ id: ProfilePreviewTab; label: string }>;
+  const favoriteLiftOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const exercise of catalogExercises && catalogExercises.length > 0 ? catalogExercises : DEFAULT_EXERCISES) {
+      names.add(exercise.name);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "de"));
+  }, [catalogExercises]);
 
   if (isLoaded && !userId) {
     return (
@@ -459,6 +557,16 @@ export function ProfilePageClient() {
 
   async function saveProfile() {
     if (!userId) return;
+    const favoriteLift = form.favoriteLift.trim();
+    const normalizedFavoriteLift = favoriteLift.toLowerCase();
+    if (
+      normalizedFavoriteLift &&
+      !favoriteLiftOptions.some((exerciseName) => exerciseName.toLowerCase().includes(normalizedFavoriteLift))
+    ) {
+      setUploadError("Lieblingslift muss eine Übung aus dem Katalog oder ein Teil davon sein.");
+      return;
+    }
+    setUploadError("");
     await updateProfile({
       userId,
       name: form.name,
@@ -469,7 +577,7 @@ export function ProfilePageClient() {
       coverUrl: form.coverUrl || undefined,
       coverStorageId: form.coverStorageId,
       location: form.location || undefined,
-      favoriteLift: form.favoriteLift || undefined,
+      favoriteLift: favoriteLift || undefined,
       trainingGoal: form.trainingGoal || undefined,
       profileAccent: form.profileAccent,
       heightCm: form.heightCm ? Number(form.heightCm) : undefined,
@@ -486,7 +594,11 @@ export function ProfilePageClient() {
         heightCm: form.publicHeight,
         weightKg: form.publicWeight,
         birthDate: form.publicBirthDate,
-        trainingSummary: form.publicTrainingSummary,
+        trainingSummary: hasAnyPublicWorkoutStat,
+        trainingStreak: form.publicTrainingStreak,
+        trainingBestSet: form.publicTrainingBestSet,
+        trainingActivity: form.publicTrainingActivity,
+        trainingVolume: form.publicTrainingVolume,
       },
     });
     setSaved(true);
@@ -661,6 +773,72 @@ export function ProfilePageClient() {
     setActiveProfileCommentPostId(null);
   }
 
+  async function saveProfilePostEdit(post: ProfilePost) {
+    if (!userId) return;
+    const body = editingProfilePostBodies[post._id] ?? post.body ?? "";
+    await updateProfilePost({ userId, postId: post._id, body });
+    setEditingProfilePostId(null);
+    setEditingProfilePostBodies((current) => {
+      const next = { ...current };
+      delete next[post._id];
+      return next;
+    });
+  }
+
+  async function confirmProfilePostDelete() {
+    if (!userId || !pendingProfilePostDelete) return;
+    await deleteProfilePost({ userId, postId: pendingProfilePostDelete });
+    setPendingProfilePostDelete(null);
+    setOpenProfilePostMenuId(null);
+    if (editingProfilePostId === pendingProfilePostDelete) setEditingProfilePostId(null);
+  }
+
+  function editWorkoutTemplate(template: ProfileWorkoutTemplate) {
+    setOpenWorkoutTemplateMenuId(null);
+    setEditingWorkoutTemplateId(template._id);
+    setWorkoutTemplateDrafts((current) => ({
+      ...current,
+      [template._id]: {
+        name: template.name,
+        description: template.description ?? "",
+        visibility: template.visibility,
+        showWeights: template.showWeights,
+      },
+    }));
+  }
+
+  function cancelWorkoutTemplateEdit(templateId: Id<"workout_templates">) {
+    setEditingWorkoutTemplateId(null);
+    setWorkoutTemplateDrafts((current) => {
+      const next = { ...current };
+      delete next[templateId];
+      return next;
+    });
+  }
+
+  async function saveWorkoutTemplateEdit(template: ProfileWorkoutTemplate) {
+    if (!userId) return;
+    const draft = workoutTemplateDrafts[template._id];
+    if (!draft || !draft.name.trim()) return;
+    await updateWorkoutTemplate({
+      userId,
+      templateId: template._id,
+      name: draft.name,
+      description: draft.description || undefined,
+      visibility: draft.visibility,
+      showWeights: draft.showWeights,
+    });
+    cancelWorkoutTemplateEdit(template._id);
+  }
+
+  async function confirmWorkoutTemplateDelete() {
+    if (!userId || !pendingWorkoutTemplateDelete) return;
+    await deleteWorkoutTemplate({ userId, templateId: pendingWorkoutTemplateDelete });
+    setPendingWorkoutTemplateDelete(null);
+    setOpenWorkoutTemplateMenuId(null);
+    if (editingWorkoutTemplateId === pendingWorkoutTemplateDelete) setEditingWorkoutTemplateId(null);
+  }
+
   function clearMessageImageDraft() {
     if (messageImageDraft?.url) URL.revokeObjectURL(messageImageDraft.url);
     setMessageImageDraft(null);
@@ -832,10 +1010,36 @@ export function ProfilePageClient() {
                 avatarUrl={displayAvatarUrl}
                 isPro={Boolean(user?.isPro)}
                 userId={userId}
+                canManagePosts={isOwnProfile}
                 commentBodies={profilePostCommentBodies}
                 activeCommentPostId={activeProfileCommentPostId}
+                openPostMenuId={openProfilePostMenuId}
+                editingPostId={editingProfilePostId}
+                editingPostBodies={editingProfilePostBodies}
                 onLike={(postId) => userId && togglePostLike({ userId, postId })}
                 onSave={(postId) => userId && togglePostSave({ userId, postId })}
+                onOpenPostMenu={setOpenProfilePostMenuId}
+                onEditPost={(post) => {
+                  setOpenProfilePostMenuId(null);
+                  setEditingProfilePostId(post._id);
+                  setEditingProfilePostBodies((current) => ({ ...current, [post._id]: post.body ?? "" }));
+                }}
+                onDeletePost={(postId) => {
+                  setOpenProfilePostMenuId(null);
+                  setPendingProfilePostDelete(postId);
+                }}
+                onEditingPostBodyChange={(postId, body) =>
+                  setEditingProfilePostBodies((current) => ({ ...current, [postId]: body }))
+                }
+                onCancelPostEdit={(postId) => {
+                  setEditingProfilePostId(null);
+                  setEditingProfilePostBodies((current) => {
+                    const next = { ...current };
+                    delete next[postId];
+                    return next;
+                  });
+                }}
+                onSavePostEdit={saveProfilePostEdit}
                 onToggleComment={(postId) =>
                   setActiveProfileCommentPostId((current) => current === postId ? null : postId)
                 }
@@ -853,10 +1057,36 @@ export function ProfilePageClient() {
                 avatarUrl={displayAvatarUrl}
                 isPro={Boolean(user?.isPro)}
                 userId={userId}
+                canManagePosts={false}
                 commentBodies={profilePostCommentBodies}
                 activeCommentPostId={activeProfileCommentPostId}
+                openPostMenuId={openProfilePostMenuId}
+                editingPostId={editingProfilePostId}
+                editingPostBodies={editingProfilePostBodies}
                 onLike={(postId) => userId && togglePostLike({ userId, postId })}
                 onSave={(postId) => userId && togglePostSave({ userId, postId })}
+                onOpenPostMenu={setOpenProfilePostMenuId}
+                onEditPost={(post) => {
+                  setOpenProfilePostMenuId(null);
+                  setEditingProfilePostId(post._id);
+                  setEditingProfilePostBodies((current) => ({ ...current, [post._id]: post.body ?? "" }));
+                }}
+                onDeletePost={(postId) => {
+                  setOpenProfilePostMenuId(null);
+                  setPendingProfilePostDelete(postId);
+                }}
+                onEditingPostBodyChange={(postId, body) =>
+                  setEditingProfilePostBodies((current) => ({ ...current, [postId]: body }))
+                }
+                onCancelPostEdit={(postId) => {
+                  setEditingProfilePostId(null);
+                  setEditingProfilePostBodies((current) => {
+                    const next = { ...current };
+                    delete next[postId];
+                    return next;
+                  });
+                }}
+                onSavePostEdit={saveProfilePostEdit}
                 onToggleComment={(postId) =>
                   setActiveProfileCommentPostId((current) => current === postId ? null : postId)
                 }
@@ -868,18 +1098,34 @@ export function ProfilePageClient() {
               />
             )}
             {activeProfileTab === "logs" && <TopLogsCard logs={topLogs} embedded />}
-            {activeProfileTab === "workouts" && (
-              <WorkoutSummaryCard
+            {activeProfileTab === "training" && (
+              <TrainingTab
                 trainingGoal={visibleProfile?.trainingGoal}
-                favoriteLift={visibleProfile?.favoriteLift || primaryLiftLabel}
+                favoriteLift={visibleProfile?.favoriteLift}
                 trainingSummary={trainingSummary}
+                templates={workoutTemplates}
+                ownerView
+                openTemplateMenuId={openWorkoutTemplateMenuId}
+                editingTemplateId={editingWorkoutTemplateId}
+                templateDrafts={workoutTemplateDrafts}
+                onOpenTemplateMenu={setOpenWorkoutTemplateMenuId}
+                onEditTemplate={editWorkoutTemplate}
+                onDeleteTemplate={(templateId) => {
+                  setOpenWorkoutTemplateMenuId(null);
+                  setPendingWorkoutTemplateDelete(templateId);
+                }}
+                onTemplateDraftChange={(templateId, draft) =>
+                  setWorkoutTemplateDrafts((current) => ({
+                    ...current,
+                    [templateId]: { ...current[templateId], ...draft },
+                  }))
+                }
+                onCancelTemplateEdit={cancelWorkoutTemplateEdit}
+                onSaveTemplateEdit={saveWorkoutTemplateEdit}
               />
             )}
-            {activeProfileTab === "playlists" && (
-              <WorkoutTemplatesCard templates={workoutTemplates} ownerView embedded />
-            )}
             {activeProfileTab === "about" && (
-              <AboutProfileCard profile={visibleProfile} form={form} primaryLiftLabel={primaryLiftLabel} />
+              <AboutProfileCard profile={visibleProfile} />
             )}
             <div className="hidden">
               {visibleProfile?.heightCm && <QuickStat label="Größe" value={`${visibleProfile.heightCm} cm`} />}
@@ -898,6 +1144,44 @@ export function ProfilePageClient() {
           </CardContent>
         </Card>
 
+        <Dialog open={Boolean(pendingProfilePostDelete)} onOpenChange={(open) => !open && setPendingProfilePostDelete(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Beitrag löschen?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Der Beitrag und seine Kommentare werden dauerhaft entfernt.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setPendingProfilePostDelete(null)}>
+                Abbrechen
+              </Button>
+              <Button type="button" variant="destructive" onClick={confirmProfilePostDelete}>
+                Löschen
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={Boolean(pendingWorkoutTemplateDelete)} onOpenChange={(open) => !open && setPendingWorkoutTemplateDelete(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Workout-Playlist löschen?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Die gespeicherte Playlist wird dauerhaft entfernt. Deine abgeschlossenen Workouts bleiben erhalten.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setPendingWorkoutTemplateDelete(null)}>
+                Abbrechen
+              </Button>
+              <Button type="button" variant="destructive" onClick={confirmWorkoutTemplateDelete}>
+                Löschen
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Dialog
           open={editProfileOpen}
           onOpenChange={(open) => {
@@ -905,47 +1189,72 @@ export function ProfilePageClient() {
             if (!open) setProfileEditMode("edit");
           }}
         >
-          <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-screen max-w-none overflow-hidden rounded-none border-white/10 bg-[#050708] p-0 text-white shadow-2xl shadow-cyan-950/25 sm:h-auto sm:max-h-[92vh] sm:w-full sm:max-w-4xl sm:rounded-xl">
+          <DialogContent showCloseButton={profileEditMode !== "preview"} className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden rounded-none border-white/10 bg-[#050708] p-0 text-white shadow-2xl shadow-cyan-950/25 sm:h-auto sm:max-h-[92vh] sm:w-full sm:max-w-4xl sm:rounded-xl">
             <div className="h-full max-h-[100dvh] overflow-y-auto overflow-x-hidden sm:max-h-[92vh]">
-              <div className="relative min-h-[17rem] overflow-visible bg-cover bg-center sm:min-h-52" style={profileCoverStyle}>
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.35),#050708_92%)]" />
+              <div
+                className={cn(
+                  "relative overflow-visible bg-cover bg-center",
+                  profileEditMode === "preview" ? "min-h-[28.5rem] sm:min-h-[32rem]" : "min-h-[17rem] sm:min-h-52",
+                )}
+                style={profileCoverStyle}
+              >
+                <div
+                  className={cn(
+                    "pointer-events-none absolute inset-0",
+                    profileEditMode === "preview"
+                      ? "bg-[radial-gradient(circle_at_14%_36%,rgba(34,211,238,0.24),transparent_21%),linear-gradient(180deg,rgba(0,0,0,0.52)_0%,rgba(0,0,0,0.42)_26%,rgba(1,4,10,0.93)_82%,#050708_100%)]"
+                      : "bg-[linear-gradient(180deg,rgba(0,0,0,0.35),#050708_92%)]",
+                  )}
+                />
+                {profileEditMode === "preview" && (
+                  <div className="absolute left-3 right-3 top-3 z-20 flex items-center justify-between sm:left-7 sm:right-7 sm:top-6">
+                    <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Zurück" onClick={() => setProfileEditMode("edit")}>
+                      <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+                    </Button>
+                    <div className="flex items-center gap-3 sm:gap-5">
+                      <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Profil teilen" onClick={shareProfile}>
+                        <Share2 className="h-5 w-5 sm:h-6 sm:w-6" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Freunde anzeigen" onClick={() => setActiveProfileTab("network")}>
+                        <Users className="h-5 w-5 sm:h-6 sm:w-6" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {profileEditMode === "edit" && (
                 <DialogHeader className="relative z-10 flex-col items-start gap-3 space-y-0 p-4 pr-12 sm:flex-row sm:justify-between sm:p-7">
                   <div className="min-w-0">
                     <DialogTitle className="text-xl font-black text-white sm:text-3xl">Profil bearbeiten</DialogTitle>
                     <p className="mt-2 max-w-xl text-xs leading-5 text-white/62 sm:text-sm">
-                      Passe Cover, Profilinfos und Sichtbarkeit an. Die Vorschau nutzt deine aktuellen Eingaben.
+                      Passe Cover, Profilinfos und Sichtbarkeit an.
                     </p>
                   </div>
                   <Button
                     type="button"
-                    variant="outline"
-                    className="h-9 shrink-0 border-white/15 bg-white/[0.04] text-white hover:bg-white/10 sm:h-10"
-                    onClick={() => setProfileEditMode((mode) => mode === "preview" ? "edit" : "preview")}
+                    size="sm"
+                    variant="ghost"
+                    className="absolute right-12 top-4 h-8 max-w-full rounded-full border border-white/10 bg-black/20 px-2.5 text-xs text-white/62 backdrop-blur hover:bg-white/10 hover:text-white sm:static sm:h-9"
+                    disabled={uploading === "cover"}
+                    onClick={() => coverFileInputRef.current?.click()}
                   >
-                    <Eye className="h-4 w-4" />
-                    {profileEditMode === "preview" ? "Bearbeiten" : "Vorschau"}
+                    <ImagePlus className="h-3.5 w-3.5" />
+                    {uploading === "cover" ? "Upload..." : "Hintergrund"}
                   </Button>
                 </DialogHeader>
-                {profileEditMode === "edit" && (
-                  <div className="absolute left-4 right-4 top-[7.35rem] z-20 flex justify-end sm:left-auto sm:right-7 sm:top-24">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="max-w-full border-white/20 bg-black/45 text-white backdrop-blur hover:bg-black/60"
-                      disabled={uploading === "cover"}
-                      onClick={() => coverFileInputRef.current?.click()}
-                    >
-                      <ImagePlus className="h-4 w-4" />
-                      {uploading === "cover" ? "Upload läuft..." : "Hintergrund bearbeiten"}
-                    </Button>
-                  </div>
                 )}
-                <div className="relative z-10 grid grid-cols-[4.5rem_minmax(0,1fr)] items-end gap-3 px-4 pb-4 pt-16 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4 sm:px-7 sm:pb-5 sm:pt-0">
-                  <div className="relative">
+                <div
+                  className={cn(
+                    "relative z-10 grid items-end",
+                    profileEditMode === "preview"
+                      ? "absolute inset-x-0 bottom-0 grid-cols-[6.25rem_minmax(0,1fr)] gap-5 px-5 pb-6 min-[390px]:gap-6 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-8 sm:px-9 sm:pb-8"
+                      : "grid-cols-[4.5rem_minmax(0,1fr)] gap-3 px-4 pb-4 pt-16 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4 sm:px-7 sm:pb-5 sm:pt-0",
+                  )}
+                >
+                  <div className={cn("relative", profileEditMode === "preview" && "size-24 self-start min-[390px]:size-28 sm:size-44")}>
+                    {profileEditMode === "preview" && <div className="pointer-events-none absolute -inset-2 rounded-full bg-cyan-300/25 blur-2xl" />}
                     <button
                       type="button"
-                      className="block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                      className={cn("block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-cyan-300", profileEditMode === "preview" && "relative")}
                       aria-label="Profilbild bearbeiten"
                       onClick={() => profileEditMode === "edit" && setAvatarMenuOpen((open) => !open)}
                     >
@@ -973,8 +1282,44 @@ export function ProfilePageClient() {
                     )}
                   </div>
                   <div className="min-w-0 pb-1">
-                    <h2 className="truncate text-2xl font-black leading-none sm:text-5xl">{form.name || "GymLogs User"}</h2>
-                    <p className="mt-1 truncate text-sm text-white/68 sm:text-lg">@{form.username || "username"}</p>
+                    {profileEditMode === "preview" && (
+                      <Badge className="mb-2 rounded-full border-cyan-300/20 bg-cyan-300/20 px-2.5 py-0.5 text-[0.68rem] text-cyan-200 shadow-lg shadow-cyan-950/30 sm:mb-4 sm:px-4 sm:py-1 sm:text-sm">
+                        {form.isPublic ? "Öffentliches Profil" : "Privates Profil"}
+                      </Badge>
+                    )}
+                    {profileEditMode === "preview" ? (
+                      <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-none tracking-normal min-[390px]:text-[2.25rem] sm:text-6xl">
+                        <span className="truncate">{form.name || "Steffen"}</span>
+                        <BadgeCheck className="h-7 w-7 shrink-0 fill-sky-400 text-black sm:h-10 sm:w-10" />
+                      </h1>
+                    ) : (
+                      <h2 className="truncate text-2xl font-black leading-none sm:text-5xl">
+                        {form.name || "GymLogs User"}
+                      </h2>
+                    )}
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                      <p className={cn("truncate text-white/68", profileEditMode === "preview" ? "text-[1.12rem] min-[390px]:text-[1.25rem] sm:text-2xl" : "text-sm sm:text-lg")}>
+                        @{form.username || "username"}
+                      </p>
+                    </div>
+                    {profileEditMode === "preview" && (
+                      <>
+                        <p className="mt-4 max-w-[34rem] whitespace-pre-wrap text-[1rem] font-semibold leading-[1.35] text-white min-[390px]:text-[1.08rem] sm:mt-8 sm:text-3xl">
+                          {previewVisibleProfile.bio || "Noch keine öffentlich sichtbare Bio."}
+                        </p>
+                        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[0.85rem] text-white/62 min-[390px]:text-[0.95rem] sm:mt-8 sm:gap-x-8 sm:text-xl">
+                          {previewMeta.map((meta) => {
+                            const Icon = meta.icon;
+                            return (
+                              <span key={meta.value} className="inline-flex items-center gap-2 sm:gap-3">
+                                <Icon className="h-4 w-4 sm:h-6 sm:w-6" />
+                                {meta.value}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 <input
@@ -995,10 +1340,27 @@ export function ProfilePageClient() {
                 />
               </div>
 
-              <div className="space-y-4 px-4 pb-[calc(env(safe-area-inset-bottom)+7.75rem)] sm:px-7 sm:pb-7">
+              <div
+                className={cn(
+                  "w-full max-w-full space-y-4",
+                  profileEditMode === "preview"
+                    ? "px-5 pb-[calc(env(safe-area-inset-bottom)+8.5rem)] sm:px-9 sm:pb-7"
+                    : "px-4 pb-[calc(env(safe-area-inset-bottom)+7.75rem)] sm:px-7 sm:pb-7",
+                )}
+              >
                 {profileEditMode === "preview" ? (
-                  <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.025]">
-                    <div className="p-5">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-2.5 sm:max-w-xl sm:gap-3">
+                      {form.allowMessages && (
+                        <Button type="button" className="h-12 rounded-lg bg-cyan-300 text-base font-semibold text-black shadow-sm shadow-cyan-950/20 sm:h-14 sm:text-lg">
+                          Nachricht
+                        </Button>
+                      )}
+                      <Button type="button" variant="outline" className="h-12 rounded-lg border-white/15 bg-white/[0.04] text-base font-semibold text-white hover:bg-white/10 sm:h-14 sm:text-lg">
+                        Freund hinzufügen
+                      </Button>
+                    </div>
+                    <div className="hidden">
                       <p className="whitespace-pre-wrap text-lg font-semibold leading-7 text-white">
                         {form.bio || "Noch keine Bio eingetragen."}
                       </p>
@@ -1008,28 +1370,128 @@ export function ProfilePageClient() {
                         {form.heightCm && <Badge variant="secondary" className="bg-white/10 text-white"><Ruler className="h-3 w-3" />{form.heightCm} cm</Badge>}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 border-t border-white/10 min-[420px]:grid-cols-4">
-                      <ProfileMetric icon={Flame} iconClassName="text-orange-400" value={streakDays} label="Tage Streak" />
-                      <ProfileMetric icon={Dumbbell} value={primaryLift ?? "0 kg"} label="Top Lift" detail={primaryLiftLabel} />
-                      <ProfileMetric icon={Activity} iconClassName="text-cyan-300" value={weeklyActivityValue} label="Aktivität" />
-                      <ProfileMetric icon={Users} iconClassName="text-cyan-100" value={volumeThirtyDays} label="Volumen" />
-                    </div>
+                    {previewTrainingSummary && hasVisiblePreviewMetric && (
+                      <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] shadow-sm shadow-black/10 min-[420px]:grid-cols-4">
+                        {form.publicTrainingStreak && (
+                          <ProfileMetric icon={Flame} iconClassName="text-orange-400" value={String(previewTrainingSummary.currentStreakDays)} label="Tage Streak" />
+                        )}
+                        {form.publicTrainingBestSet && previewBestSet && (
+                          <ProfileMetric
+                            icon={Dumbbell}
+                            value={`${previewBestSet.weight} kg x ${previewBestSet.reps}`}
+                            label="Top Lift"
+                            detail={previewBestSet.exerciseName}
+                          />
+                        )}
+                        {form.publicTrainingActivity && (
+                          <ProfileMetric icon={Activity} iconClassName="text-cyan-300" value={`${previewTrainingSummary.averageWorkoutsPerWeek} / Woche`} label="Aktivität" />
+                        )}
+                        {form.publicTrainingVolume && (
+                          <ProfileMetric icon={Users} iconClassName="text-cyan-100" value={`${Math.round(previewTrainingSummary.totalVolume).toLocaleString("de-DE")} kg`} label="Volumen (30 Tage)" />
+                        )}
+                      </div>
+                    )}
+                    {!form.isPublic && (
+                      <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-white/65">
+                        Dieses Profil ist privat. Besucher sehen nur die Basisinfos im Header.
+                      </div>
+                    )}
+                    {form.isPublic && (
+                      <>
+                        <div className="overflow-x-auto border-b border-white/10">
+                          <div className="flex min-w-max justify-between gap-7 sm:gap-9">
+                            {previewTabs.map((tab) => (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setPreviewProfileTab(tab.id)}
+                                className={cn(
+                                  "relative min-h-12 whitespace-nowrap px-1 text-base font-semibold text-white/45 transition-colors hover:text-white sm:min-h-14 sm:text-xl",
+                                  previewProfileTab === tab.id && "text-white"
+                                )}
+                              >
+                                {tab.label}
+                                {previewProfileTab === tab.id && (
+                                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-cyan-300" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {previewProfileTab === "posts" && (
+                          <ProfilePostsCard
+                            posts={posts}
+                            profileName={form.name || "GymLogs User"}
+                            username={form.username || "username"}
+                            avatarUrl={displayAvatarUrl}
+                            isPro={Boolean(user?.isPro)}
+                            userId={null}
+                            canManagePosts={false}
+                            commentBodies={{}}
+                            activeCommentPostId={null}
+                            openPostMenuId={null}
+                            editingPostId={null}
+                            editingPostBodies={{}}
+                            onLike={() => undefined}
+                            onSave={() => undefined}
+                            onOpenPostMenu={() => undefined}
+                            onEditPost={() => undefined}
+                            onDeletePost={() => undefined}
+                            onEditingPostBodyChange={() => undefined}
+                            onCancelPostEdit={() => undefined}
+                            onSavePostEdit={() => undefined}
+                            onToggleComment={() => undefined}
+                            onCommentBodyChange={() => undefined}
+                            onSubmitComment={() => undefined}
+                          />
+                        )}
+                        {previewProfileTab === "logs" && <TopLogsCard logs={topLogs} embedded />}
+                        {previewProfileTab === "training" && (
+                          <TrainingTab
+                            trainingGoal={previewVisibleProfile.trainingGoal}
+                            favoriteLift={previewVisibleProfile.favoriteLift}
+                            trainingSummary={previewTrainingSummary}
+                            templates={previewTemplates}
+                            ownerView={false}
+                            openTemplateMenuId={null}
+                            editingTemplateId={null}
+                            templateDrafts={{}}
+                            onOpenTemplateMenu={() => undefined}
+                            onEditTemplate={() => undefined}
+                            onDeleteTemplate={() => undefined}
+                            onTemplateDraftChange={() => undefined}
+                            onCancelTemplateEdit={() => undefined}
+                            onSaveTemplateEdit={() => undefined}
+                          />
+                        )}
+                      </>
+                    )}
                   </div>
                 ) : (
-                  <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-                    <div className="space-y-4">
-                      <div className="grid min-w-0 gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
+                  <div className="grid min-w-0 max-w-full gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+                    <div className="min-w-0 max-w-full space-y-4">
+                      <div className="grid min-w-0 max-w-full gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
                         <Field label="Name">
                           <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
                         </Field>
                         <Field label="Username">
                           <Input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
                         </Field>
-                        <PublicField label="Ort" checked={form.publicLocation} onChange={(checked) => setForm({ ...form, publicLocation: checked })}>
+                        <PublicField label="Ort" checked={form.publicLocation} showVisibilityText onChange={(checked) => setForm({ ...form, publicLocation: checked })}>
                           <Input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} />
                         </PublicField>
                         <PublicField label="Lieblingslift" checked={form.publicFavoriteLift} onChange={(checked) => setForm({ ...form, publicFavoriteLift: checked })}>
-                          <Input value={form.favoriteLift} onChange={(event) => setForm({ ...form, favoriteLift: event.target.value })} />
+                          <Input
+                            list="favorite-lift-options"
+                            value={form.favoriteLift}
+                            placeholder="z.B. Bench oder Bench Press"
+                            onChange={(event) => setForm({ ...form, favoriteLift: event.target.value })}
+                          />
+                          <datalist id="favorite-lift-options">
+                            {favoriteLiftOptions.map((exerciseName) => (
+                              <option key={exerciseName} value={exerciseName} />
+                            ))}
+                          </datalist>
                         </PublicField>
                         <div className="sm:col-span-2">
                           <PublicFieldLabel label="Bio" checked={form.publicBio} onChange={(checked) => setForm({ ...form, publicBio: checked })} />
@@ -1041,7 +1503,7 @@ export function ProfilePageClient() {
                         </div>
                       </div>
 
-                      <div className="grid min-w-0 gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
+                      <div className="grid min-w-0 max-w-full gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
                         <Field label="Avatar URL Fallback">
                           <Input placeholder="https://..." value={form.avatarUrl} onChange={(event) => setForm({ ...form, avatarUrl: event.target.value, avatarStorageId: undefined })} />
                         </Field>
@@ -1051,8 +1513,8 @@ export function ProfilePageClient() {
                       </div>
                     </div>
 
-                    <div className="space-y-4">
-                      <div className="grid min-w-0 gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+                    <div className="min-w-0 max-w-full space-y-4">
+                      <div className="grid min-w-0 max-w-full gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
                         <PublicField label="Größe in cm" checked={form.publicHeight} onChange={(checked) => setForm({ ...form, publicHeight: checked })}>
                           <Input inputMode="decimal" value={form.heightCm} onChange={(event) => setForm({ ...form, heightCm: event.target.value })} />
                         </PublicField>
@@ -1067,11 +1529,27 @@ export function ProfilePageClient() {
                         </Field>
                       </div>
 
-                      <div className="grid min-w-0 gap-2 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+                      <div className="grid min-w-0 max-w-full gap-2 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
                         <ProfileVisibilitySelect value={form.isPublic ? "public" : "private"} onChange={(value) => setForm({ ...form, isPublic: value === "public" })} />
                         <PrivacyToggle label="Nachrichten erlauben" checked={form.allowMessages} onChange={(checked) => setForm({ ...form, allowMessages: checked })} />
-                        <PrivacyToggle label="Training zeigen" checked={form.showTrainingSummary} onChange={(checked) => setForm({ ...form, showTrainingSummary: checked })} />
-                        <PrivacyToggle label="Training öffentlich" checked={form.publicTrainingSummary} onChange={(checked) => setForm({ ...form, publicTrainingSummary: checked })} />
+                        <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-white">
+                          <p className="font-medium">Workout-Statistiken im öffentlichen Profil</p>
+                          <p className="mt-1 text-xs leading-5 text-white/45">
+                            Wähle genau aus, welche Kacheln Besucher im Profilkopf sehen.
+                          </p>
+                          <div className="mt-3 grid gap-2">
+                            <PrivacyToggle label="Streak" description="Zeigt deine aktuellen Trainingstage in Folge." checked={form.publicTrainingStreak} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingStreak: checked })} />
+                            <PrivacyToggle label="Top Lift" description="Zeigt deinen besten Satz aus der Trainingshistorie." checked={form.publicTrainingBestSet} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingBestSet: checked })} />
+                            <PrivacyToggle label="Aktivität pro Woche" description="Zeigt deine durchschnittlichen Workouts pro Woche." checked={form.publicTrainingActivity} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingActivity: checked })} />
+                            <PrivacyToggle label="Volumen" description="Zeigt dein sichtbares Gesamtvolumen aus der Trainingsauswertung." checked={form.publicTrainingVolume} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingVolume: checked })} />
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-white">
+                          <p className="font-medium">Weitere Training-Inhalte</p>
+                          <p className="mt-1 text-xs leading-5 text-white/45">
+                            Lieblingslift und Trainingsziel steuerst du direkt an ihren Feldern. Workout-Playlists steuerst du pro Playlist über Privat/Freunde/Öffentlich.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1091,110 +1569,6 @@ export function ProfilePageClient() {
           </DialogContent>
         </Dialog>
 
-        {false && (
-        <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Profil bearbeiten</DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              Avatar, Cover, Trainingssignal und Sichtbarkeit an einer Stelle.
-            </p>
-            </DialogHeader>
-            <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Name">
-              <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-            </Field>
-            <Field label="Username">
-              <Input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
-            </Field>
-            <MediaUpload
-              label="Profilbild"
-              description="Quadratisches Bild, max. 4 MB"
-              uploading={uploading === "avatar"}
-              onFile={(file) => uploadProfileImage(file, "avatar")}
-            />
-            <MediaUpload
-              label="Hintergrund"
-              description="Breites Coverbild, max. 8 MB"
-              uploading={uploading === "cover"}
-              onFile={(file) => uploadProfileImage(file, "cover")}
-            />
-            <Field label="Avatar URL Fallback">
-              <Input
-                placeholder="https://..."
-                value={form.avatarUrl}
-                onChange={(event) =>
-                  setForm({ ...form, avatarUrl: event.target.value, avatarStorageId: undefined })
-                }
-              />
-            </Field>
-            <Field label="Cover URL Fallback">
-              <Input
-                placeholder="https://..."
-                value={form.coverUrl}
-                onChange={(event) =>
-                  setForm({ ...form, coverUrl: event.target.value, coverStorageId: undefined })
-                }
-              />
-            </Field>
-            {uploadError && (
-              <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive sm:col-span-2">
-                {uploadError}
-              </p>
-            )}
-            <Field label="Ort">
-              <Input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} />
-            </Field>
-            <Field label="Lieblingslift">
-              <Input value={form.favoriteLift} onChange={(event) => setForm({ ...form, favoriteLift: event.target.value })} />
-            </Field>
-            <Field label="Größe in cm">
-              <Input inputMode="decimal" value={form.heightCm} onChange={(event) => setForm({ ...form, heightCm: event.target.value })} />
-            </Field>
-            <Field label="Gewicht in kg">
-              <Input inputMode="decimal" value={form.weightKg} onChange={(event) => setForm({ ...form, weightKg: event.target.value })} />
-            </Field>
-            <Field label="Geburtsdatum">
-              <Input type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} />
-            </Field>
-            <Field label="Akzent">
-              <div className="flex flex-wrap gap-2">
-                {(Object.keys(ACCENTS) as Accent[]).map((accent) => (
-                  <button
-                    key={accent}
-                    type="button"
-                    aria-label={`${accent} accent`}
-                    onClick={() => setForm({ ...form, profileAccent: accent })}
-                    className={`h-8 w-8 rounded-full bg-gradient-to-br ${ACCENTS[accent]} ring-offset-2 ring-offset-background ${
-                      form.profileAccent === accent ? "ring-2 ring-ring" : ""
-                    }`}
-                  />
-                ))}
-              </div>
-            </Field>
-            <div className="sm:col-span-2">
-              <Label>Bio</Label>
-              <Textarea value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} rows={3} maxLength={180} />
-            </div>
-            <div className="sm:col-span-2">
-              <Label>Trainingsziel</Label>
-              <Textarea value={form.trainingGoal} onChange={(event) => setForm({ ...form, trainingGoal: event.target.value })} rows={2} maxLength={120} />
-            </div>
-            <PrivacyToggle label="Öffentliches Profil" checked={form.isPublic} onChange={(checked) => setForm({ ...form, isPublic: checked })} />
-            <PrivacyToggle label="Nachrichten erlauben" checked={form.allowMessages} onChange={(checked) => setForm({ ...form, allowMessages: checked })} />
-            <PrivacyToggle label="Trainingszusammenfassung zeigen" checked={form.showTrainingSummary} onChange={(checked) => setForm({ ...form, showTrainingSummary: checked })} />
-            <PrivacyToggle label="Größe öffentlich" checked={form.publicHeight} onChange={(checked) => setForm({ ...form, publicHeight: checked })} />
-            <PrivacyToggle label="Gewicht öffentlich" checked={form.publicWeight} onChange={(checked) => setForm({ ...form, publicWeight: checked })} />
-            <PrivacyToggle label="Geburtsdatum öffentlich" checked={form.publicBirthDate} onChange={(checked) => setForm({ ...form, publicBirthDate: checked })} />
-            <PrivacyToggle label="Training öffentlich" checked={form.publicTrainingSummary} onChange={(checked) => setForm({ ...form, publicTrainingSummary: checked })} />
-            <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
-              <Button onClick={saveProfile}>Profil speichern</Button>
-              {saved && <span className="self-center text-sm text-emerald-500">Gespeichert</span>}
-            </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-        )}
 
         <Card
           id="messages"
@@ -1637,10 +2011,20 @@ function ProfilePostsCard({
   avatarUrl,
   isPro,
   userId,
+  canManagePosts,
   commentBodies,
   activeCommentPostId,
+  openPostMenuId,
+  editingPostId,
+  editingPostBodies,
   onLike,
   onSave,
+  onOpenPostMenu,
+  onEditPost,
+  onDeletePost,
+  onEditingPostBodyChange,
+  onCancelPostEdit,
+  onSavePostEdit,
   onToggleComment,
   onCommentBodyChange,
   onSubmitComment,
@@ -1652,10 +2036,20 @@ function ProfilePostsCard({
   avatarUrl?: string;
   isPro: boolean;
   userId: Id<"users"> | null | undefined;
+  canManagePosts: boolean;
   commentBodies: Record<string, string>;
   activeCommentPostId: string | null;
+  openPostMenuId: string | null;
+  editingPostId: string | null;
+  editingPostBodies: Record<string, string>;
   onLike: (postId: Id<"social_posts">) => void;
   onSave: (postId: Id<"social_posts">) => void;
+  onOpenPostMenu: (postId: string | null) => void;
+  onEditPost: (post: ProfilePost) => void;
+  onDeletePost: (postId: Id<"social_posts">) => void;
+  onEditingPostBodyChange: (postId: Id<"social_posts">, body: string) => void;
+  onCancelPostEdit: (postId: Id<"social_posts">) => void;
+  onSavePostEdit: (post: ProfilePost) => void;
   onToggleComment: (postId: Id<"social_posts">) => void;
   onCommentBodyChange: (postId: Id<"social_posts">, body: string) => void;
   onSubmitComment: (postId: Id<"social_posts">) => void;
@@ -1693,6 +2087,10 @@ function ProfilePostsCard({
         const isPreviewPost = post._id === ("preview" as Id<"social_posts">);
         const commentBody = commentBodies[post._id] ?? "";
         const showCommentInput = activeCommentPostId === post._id;
+        const visibleComments = post.comments ?? [];
+        const isEditing = editingPostId === post._id;
+        const editingBody = editingPostBodies[post._id] ?? post.body ?? "";
+        const canSaveEdit = Boolean(editingBody.trim() || post.mediaUrl || post.linkedLog);
         return (
         <article key={post._id} className="border-b border-white/10 bg-[#050708] px-6 py-4 last:border-b-0 sm:px-8">
           <div className="flex items-start gap-3">
@@ -1704,14 +2102,63 @@ function ProfilePostsCard({
                     {profileName}
                     {isPro && <BadgeCheck className="h-5 w-5 shrink-0 fill-sky-400 text-black" />}
                     <span className="truncate text-sm font-normal text-white/45">@{username}</span>
-                    <span className="text-xl font-normal text-white/45">· 3 Std.</span>
+                    <span className="text-sm font-normal text-white/45">· {formatProfilePostTime(post.createdAt)}</span>
                   </p>
                 </div>
-                <button type="button" aria-label="Post-Optionen" className="shrink-0 rounded-md text-white/55 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
-                  <MoreHorizontal className="h-5 w-5" />
-                </button>
+                {canManagePosts && !isPreviewPost && (
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      aria-label="Post-Optionen"
+                      className="rounded-md text-white/55 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                      onClick={() => onOpenPostMenu(openPostMenuId === post._id ? null : post._id)}
+                    >
+                      <MoreHorizontal className="h-5 w-5" />
+                    </button>
+                    {openPostMenuId === post._id && (
+                      <div className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-lg border border-white/10 bg-[#101416] p-1 text-white shadow-xl shadow-black/30">
+                        <button
+                          type="button"
+                          className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
+                          onClick={() => onEditPost(post)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Bearbeiten
+                        </button>
+                        <button
+                          type="button"
+                          className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-red-300 transition hover:bg-red-500/10"
+                          onClick={() => onDeletePost(post._id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Löschen
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              {post.body && <p className="mt-4 whitespace-pre-wrap text-base leading-6 text-white sm:text-lg">{post.body}</p>}
+              {isEditing ? (
+                <div className="mt-4 space-y-3">
+                  <Textarea
+                    value={editingBody}
+                    onChange={(event) => onEditingPostBodyChange(post._id, event.target.value)}
+                    rows={3}
+                    maxLength={1200}
+                    className="min-h-28 border-white/10 bg-white/[0.04] text-base text-white placeholder:text-white/35 focus:border-cyan-300/60 sm:text-lg"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="ghost" className="text-white/70 hover:bg-white/10 hover:text-white" onClick={() => onCancelPostEdit(post._id)}>
+                      Abbrechen
+                    </Button>
+                    <Button type="button" className="bg-cyan-300 text-black hover:bg-cyan-200" disabled={!canSaveEdit} onClick={() => onSavePostEdit(post)}>
+                      Speichern
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                post.body && <p className="mt-4 whitespace-pre-wrap text-base leading-6 text-white sm:text-lg">{post.body}</p>
+              )}
               {post.linkedLog && (
                 <div className="mt-4 rounded-lg border border-white/10 bg-black/25 p-3 text-sm">
                   <p className="font-medium">{post.linkedLog.exerciseName ?? "Top Log"}</p>
@@ -1736,6 +2183,13 @@ function ProfilePostsCard({
                 <button type="button" disabled className="inline-flex cursor-not-allowed items-center gap-2 opacity-60"><Repeat2 className="h-5 w-5" />{post.repostCount}</button>
                 <button type="button" disabled={!userId || isPreviewPost} onClick={() => onSave(post._id)} className={`inline-flex items-center justify-end transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60 ${post.savedByViewer ? "text-cyan-300 hover:text-cyan-300" : ""}`} aria-label={post.savedByViewer ? "Gespeicherten Beitrag entfernen" : "Post speichern"}><Bookmark className={`h-5 w-5 ${post.savedByViewer ? "fill-current" : ""}`} /></button>
               </div>
+              {visibleComments.length > 0 && (
+                <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                  {visibleComments.map((comment) => (
+                    <ProfileCommentPreview key={comment._id} comment={comment} />
+                  ))}
+                </div>
+              )}
               {!isPreviewPost && showCommentInput && (
                 <div className="mt-3 flex gap-2">
                   <input
@@ -1763,49 +2217,176 @@ function ProfilePostsCard({
   );
 }
 
-function WorkoutSummaryCard({
-  trainingGoal,
-  favoriteLift,
-  trainingSummary,
+function ProfileCommentPreview({
+  comment,
+  isReply = false,
 }: {
-  trainingGoal?: string;
-  favoriteLift?: string;
-  trainingSummary: ProfileTrainingSummary | null | undefined;
+  comment: ProfilePostComment;
+  isReply?: boolean;
 }) {
+  const authorName = comment.author?.username ?? comment.author?.name ?? "Unbekannt";
+
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <div className="rounded-xl border border-border bg-muted/20 p-4">
-        <p className="flex items-center gap-2 font-medium"><Target className="h-4 w-4 text-cyan-300" />Workout Historie</p>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          {trainingSummary
-            ? `${trainingSummary.completedWorkouts} Workouts, ${trainingSummary.totalSets} Sets und ${Math.round(trainingSummary.totalVolume).toLocaleString("de-DE")} kg Gesamtvolumen.`
-            : "Noch keine sichtbare Workout Historie."}
+    <div className={cn("grid grid-cols-[2rem_minmax(0,1fr)] gap-3 text-sm", isReply && "ml-5 border-l border-white/10 pl-3")}>
+      <Avatar name={comment.author?.name ?? "?"} avatarUrl={comment.author?.avatarUrl ?? undefined} size="sm" />
+      <div className="min-w-0">
+        <p className="truncate font-semibold leading-5 text-white">
+          {authorName}
+          <span className="ml-2 font-normal text-white/42">{formatProfilePostTime(comment.createdAt)}</span>
         </p>
-      </div>
-      <div className="rounded-xl border border-border bg-muted/20 p-4">
-        <p className="flex items-center gap-2 font-medium"><Dumbbell className="h-4 w-4 text-cyan-300" />Lieblingslift</p>
-        <p className="mt-2 text-2xl font-semibold">{favoriteLift || "Noch offen"}</p>
-        {trainingGoal && <p className="mt-2 text-sm leading-6 text-muted-foreground">{trainingGoal}</p>}
+        <p className="whitespace-pre-wrap break-words leading-5 text-white/82">{comment.body}</p>
+        {comment.replies && comment.replies.length > 0 && (
+          <div className="mt-3 space-y-3">
+            {comment.replies.map((reply) => (
+              <ProfileCommentPreview key={reply._id} comment={reply} isReply />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function AboutProfileCard({
-  profile,
-  form,
-  primaryLiftLabel,
+function formatProfilePostTime(timestamp: number) {
+  const diffMs = Date.now() - timestamp;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) return "gerade eben";
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)} Min.`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)} Std.`;
+  return new Date(timestamp).toLocaleDateString("de-DE");
+}
+
+function TrainingTab({
+  trainingGoal,
+  favoriteLift,
+  trainingSummary,
+  templates,
+  ownerView,
+  openTemplateMenuId,
+  editingTemplateId,
+  templateDrafts,
+  onOpenTemplateMenu,
+  onEditTemplate,
+  onDeleteTemplate,
+  onTemplateDraftChange,
+  onCancelTemplateEdit,
+  onSaveTemplateEdit,
 }: {
-  profile: VisibleProfile | null | undefined;
-  form: ProfileForm;
-  primaryLiftLabel: string;
+  trainingGoal?: string;
+  favoriteLift?: string;
+  trainingSummary: ProfileTrainingSummary | null | undefined;
+  templates: ProfileWorkoutTemplate[] | undefined;
+  ownerView: boolean;
+  openTemplateMenuId: string | null;
+  editingTemplateId: string | null;
+  templateDrafts: Record<string, {
+    name: string;
+    description: string;
+    visibility: "private" | "friends" | "public";
+    showWeights: boolean;
+  }>;
+  onOpenTemplateMenu: (templateId: string | null) => void;
+  onEditTemplate: (template: ProfileWorkoutTemplate) => void;
+  onDeleteTemplate: (templateId: Id<"workout_templates">) => void;
+  onTemplateDraftChange: (templateId: Id<"workout_templates">, draft: Partial<{
+    name: string;
+    description: string;
+    visibility: "private" | "friends" | "public";
+    showWeights: boolean;
+  }>) => void;
+  onCancelTemplateEdit: (templateId: Id<"workout_templates">) => void;
+  onSaveTemplateEdit: (template: ProfileWorkoutTemplate) => void;
 }) {
+  const showGoal = ownerView || Boolean(trainingGoal);
+  const showFavoriteLift = ownerView || Boolean(favoriteLift);
+  const showHistory = ownerView || Boolean(trainingSummary);
+  const showTemplates = ownerView || templates === undefined || (templates?.length ?? 0) > 0;
+
+  return (
+    <div className="space-y-4">
+      {showGoal && (
+        <div className="rounded-xl border border-cyan-500/15 bg-cyan-500/[0.04] p-4">
+          <p className="flex items-center gap-2 text-sm font-medium text-cyan-200">
+            <Target className="h-4 w-4" />
+            Trainingsziel
+          </p>
+          <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-white sm:text-lg">
+            {trainingGoal || "Noch kein Trainingsziel eingetragen."}
+          </p>
+        </div>
+      )}
+
+      {showFavoriteLift && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+          <p className="flex items-center gap-2 text-sm font-medium text-white/70">
+            <Dumbbell className="h-4 w-4 text-cyan-300" />
+            Lieblingslift
+          </p>
+          <p className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">{favoriteLift || "Noch offen"}</p>
+        </div>
+      )}
+
+      {showHistory && <WorkoutHistoryCard trainingSummary={trainingSummary} />}
+      {showTemplates && (
+        <WorkoutTemplatesCard
+          templates={templates}
+          ownerView={ownerView}
+          embedded
+          openTemplateMenuId={openTemplateMenuId}
+          editingTemplateId={editingTemplateId}
+          templateDrafts={templateDrafts}
+          onOpenTemplateMenu={onOpenTemplateMenu}
+          onEditTemplate={onEditTemplate}
+          onDeleteTemplate={onDeleteTemplate}
+          onTemplateDraftChange={onTemplateDraftChange}
+          onCancelTemplateEdit={onCancelTemplateEdit}
+          onSaveTemplateEdit={onSaveTemplateEdit}
+        />
+      )}
+      {!showGoal && !showFavoriteLift && !showHistory && !showTemplates && (
+        <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm text-white/55">
+          Keine öffentlich sichtbaren Trainingsinfos.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkoutHistoryCard({
+  trainingSummary,
+}: {
+  trainingSummary: ProfileTrainingSummary | null | undefined;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/20 p-4">
+      <p className="flex items-center gap-2 font-medium">
+        <Activity className="h-4 w-4 text-cyan-300" />
+        Workout Historie
+      </p>
+      {trainingSummary ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <QuickStat label="Workouts" value={String(trainingSummary.completedWorkouts)} />
+          <QuickStat label="Sets" value={String(trainingSummary.totalSets)} />
+          <QuickStat label="Volumen" value={`${Math.round(trainingSummary.totalVolume).toLocaleString("de-DE")} kg`} />
+          <QuickStat label="Frequenz" value={`${trainingSummary.averageWorkoutsPerWeek}/Woche`} />
+        </div>
+      ) : (
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">Noch keine sichtbare Workout Historie.</p>
+      )}
+    </div>
+  );
+}
+
+function AboutProfileCard({ profile }: { profile: VisibleProfile | null | undefined }) {
   const rows = [
     profile?.location ? ["Ort", profile.location] : null,
     profile?.heightCm ? ["Größe", `${profile.heightCm} cm`] : null,
     profile?.weightKg ? ["Gewicht", `${profile.weightKg} kg`] : null,
-    profile?.favoriteLift || primaryLiftLabel ? ["Lieblingslift", profile?.favoriteLift || primaryLiftLabel] : null,
-    form.trainingGoal ? ["Ziel", form.trainingGoal] : null,
+    profile?.favoriteLift ? ["Lieblingslift", profile.favoriteLift] : null,
+    profile?.trainingGoal ? ["Ziel", profile.trainingGoal] : null,
   ].filter(Boolean) as Array<[string, string]>;
 
   return (
@@ -1828,7 +2409,7 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
 
   return (
     <Card className={cn("overflow-hidden border-cyan-500/15 bg-card/95 shadow-xl shadow-cyan-950/5", embedded && "shadow-none")}>
-      <CardHeader className="border-b border-border/70 bg-muted/10">
+      <CardHeader className="border-b border-border/70 bg-muted/10 p-4 sm:p-6">
         <CardTitle className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-2">
           <Trophy className="h-5 w-5 text-cyan-300" />
@@ -1843,7 +2424,7 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
         </CardTitle>
         <p className="text-sm text-muted-foreground">Verified Lifts mit Leaderboard-Gefühl und Platz für künftige Video-Highlights.</p>
       </CardHeader>
-      <CardContent className="space-y-3 p-4 sm:p-6">
+      <CardContent className="space-y-3 p-3 sm:p-6">
         {logs === undefined ? (
           <p className="text-sm text-muted-foreground">Lade Top Logs...</p>
         ) : logs.length === 0 ? (
@@ -1914,10 +2495,38 @@ function WorkoutTemplatesCard({
   templates,
   ownerView = false,
   embedded = false,
+  openTemplateMenuId,
+  editingTemplateId,
+  templateDrafts,
+  onOpenTemplateMenu,
+  onEditTemplate,
+  onDeleteTemplate,
+  onTemplateDraftChange,
+  onCancelTemplateEdit,
+  onSaveTemplateEdit,
 }: {
   templates: ProfileWorkoutTemplate[] | undefined;
   ownerView?: boolean;
   embedded?: boolean;
+  openTemplateMenuId: string | null;
+  editingTemplateId: string | null;
+  templateDrafts: Record<string, {
+    name: string;
+    description: string;
+    visibility: "private" | "friends" | "public";
+    showWeights: boolean;
+  }>;
+  onOpenTemplateMenu: (templateId: string | null) => void;
+  onEditTemplate: (template: ProfileWorkoutTemplate) => void;
+  onDeleteTemplate: (templateId: Id<"workout_templates">) => void;
+  onTemplateDraftChange: (templateId: Id<"workout_templates">, draft: Partial<{
+    name: string;
+    description: string;
+    visibility: "private" | "friends" | "public";
+    showWeights: boolean;
+  }>) => void;
+  onCancelTemplateEdit: (templateId: Id<"workout_templates">) => void;
+  onSaveTemplateEdit: (template: ProfileWorkoutTemplate) => void;
 }) {
   return (
     <Card className={cn("border-blue-500/10 bg-card/95 shadow-xl shadow-blue-950/5", embedded && "shadow-none")}>
@@ -1941,11 +2550,66 @@ function WorkoutTemplatesCard({
             action={ownerView ? { href: "/workouts", label: "Playlist vorbereiten" } : undefined}
           />
         ) : (
-          templates.map((template) => (
-            <div key={template._id} className="rounded-xl border border-border bg-muted/25 p-4 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/40 hover:shadow-lg hover:shadow-cyan-950/10">
+          templates.map((template) => {
+            const isEditing = editingTemplateId === template._id;
+            const draft = templateDrafts[template._id] ?? {
+              name: template.name,
+              description: template.description ?? "",
+              visibility: template.visibility,
+              showWeights: template.showWeights,
+            };
+
+            return (
+            <div key={template._id} className="min-w-0 rounded-xl border border-border bg-muted/25 p-3 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/40 hover:shadow-lg hover:shadow-cyan-950/10 sm:p-4">
+              {isEditing && (
+                <div className="mb-4 grid gap-3 rounded-lg border border-border bg-background/70 p-3">
+                  <div className="grid gap-1.5">
+                    <Label>Name</Label>
+                    <Input value={draft.name} maxLength={80} onChange={(event) => onTemplateDraftChange(template._id, { name: event.target.value })} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>Beschreibung</Label>
+                    <Textarea value={draft.description} rows={2} maxLength={180} onChange={(event) => onTemplateDraftChange(template._id, { description: event.target.value })} />
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <Select
+                      value={draft.visibility}
+                      onValueChange={(value) =>
+                        onTemplateDraftChange(template._id, { visibility: value as "private" | "friends" | "public" })
+                      }
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="private">Privat</SelectItem>
+                        <SelectItem value="friends">Nur Freunde</SelectItem>
+                        <SelectItem value="public">Öffentlich</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <label className="flex min-h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={draft.showWeights}
+                        onChange={(event) => onTemplateDraftChange(template._id, { showWeights: event.target.checked })}
+                        className="h-4 w-4 accent-cyan-300"
+                      />
+                      Gewichte zeigen
+                    </label>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="ghost" onClick={() => onCancelTemplateEdit(template._id)}>
+                      Abbrechen
+                    </Button>
+                    <Button type="button" disabled={!draft.name.trim()} onClick={() => onSaveTemplateEdit(template)}>
+                      Speichern
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="font-medium">{template.name}</p>
+                <div className="min-w-0">
+                  <p className="break-words font-medium">{template.name}</p>
                   {template.description && (
                     <p className="mt-1 text-sm text-muted-foreground">{template.description}</p>
                   )}
@@ -1956,7 +2620,7 @@ function WorkoutTemplatesCard({
                       : " · Gewichte verborgen"}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex shrink-0 flex-wrap gap-2">
                   <Badge variant={template.visibility === "public" ? "default" : "outline"}>
                     {template.visibility === "public"
                       ? "Öffentlich"
@@ -1967,18 +2631,42 @@ function WorkoutTemplatesCard({
                   <Badge variant="secondary">
                     {template.showWeights ? "Mit Gewichten" : "Ohne Gewichte"}
                   </Badge>
+                  {ownerView && !isEditing && (
+                    <div className="relative">
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Playlist-Optionen"
+                        onClick={() => onOpenTemplateMenu(openTemplateMenuId === template._id ? null : template._id)}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                      {openTemplateMenuId === template._id && (
+                        <div className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-sm">
+                          <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition hover:bg-muted" onClick={() => onEditTemplate(template)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                            Bearbeiten
+                          </button>
+                          <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-destructive transition hover:bg-destructive/10" onClick={() => onDeleteTemplate(template._id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Löschen
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mt-3 grid gap-2">
-                {template.exercises.slice(0, 4).map((exercise) => (
-                  <div key={`${template._id}-${exercise.exerciseName}`} className="rounded-lg bg-background p-2 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{exercise.exerciseName}</span>
-                      <span className="text-xs text-muted-foreground">{exercise.sets.length} Sets</span>
+                {template.exercises.map((exercise) => (
+                  <div key={`${template._id}-${exercise.exerciseName}`} className="min-w-0 rounded-lg bg-background p-2 text-sm">
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                      <span className="min-w-0 break-words font-medium">{exercise.exerciseName}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{exercise.sets.length} Sets</span>
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
                       {exercise.sets
-                        .slice(0, 4)
                         .map((set) =>
                           set.weight === null ? `${set.reps} Wdh.` : `${set.weight} kg x ${set.reps}`
                         )
@@ -1988,7 +2676,8 @@ function WorkoutTemplatesCard({
                 ))}
               </div>
             </div>
-          ))
+          );
+          })
         )}
       </CardContent>
     </Card>
@@ -2070,43 +2759,6 @@ function ImageMessage({ message }: { message: ChatMessageView }) {
   );
 }
 
-function MediaUpload({
-  label,
-  description,
-  uploading,
-  onFile,
-}: {
-  label: string;
-  description: string;
-  uploading: boolean;
-  onFile: (file: File | undefined) => void;
-}) {
-  return (
-    <label className="flex min-h-24 cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-sm transition-colors hover:bg-muted">
-      <span className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-background">
-          <ImagePlus className="h-5 w-5 text-muted-foreground" />
-        </span>
-        <span>
-          <span className="block font-medium">{label}</span>
-          <span className="text-xs text-muted-foreground">
-            {uploading ? "Upload läuft..." : description}
-          </span>
-        </span>
-      </span>
-      <span className="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium">
-        Datei
-      </span>
-      <input
-        type="file"
-        accept="image/*"
-        className="sr-only"
-        disabled={uploading}
-        onChange={(event) => onFile(event.target.files?.[0])}
-      />
-    </label>
-  );
-}
 
 function ProfileMetric({
   icon: Icon,
@@ -2131,13 +2783,15 @@ function ProfileMetric({
   );
 }
 
-function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "md" | "lg" | "hero" }) {
+function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "sm" | "md" | "lg" | "hero" }) {
   const classes =
     size === "hero"
       ? "h-[4.5rem] w-[4.5rem] text-4xl sm:h-28 sm:w-28 sm:text-7xl"
       : size === "lg"
         ? "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl"
-        : "h-11 w-11 text-base";
+        : size === "sm"
+          ? "h-8 w-8 text-sm"
+          : "h-11 w-11 text-base";
   return (
     <div className={`${classes} flex shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-cyan-300 bg-[#272a2c] font-semibold text-white shadow-[0_0_32px_rgba(34,211,238,0.22)] sm:border-4`}>
       {avatarUrl ? (
@@ -2152,7 +2806,7 @@ function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: st
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 max-w-full space-y-1.5">
       <Label>{label}</Label>
       {children}
     </div>
@@ -2162,17 +2816,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function PublicField({
   label,
   checked,
+  showVisibilityText = false,
   onChange,
   children,
 }: {
   label: string;
   checked: boolean;
+  showVisibilityText?: boolean;
   onChange: (checked: boolean) => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1.5">
-      <PublicFieldLabel label={label} checked={checked} onChange={onChange} />
+    <div className="min-w-0 max-w-full space-y-1.5">
+      <PublicFieldLabel label={label} checked={checked} showVisibilityText={showVisibilityText} onChange={onChange} />
       {children}
     </div>
   );
@@ -2181,21 +2837,24 @@ function PublicField({
 function PublicFieldLabel({
   label,
   checked,
+  showVisibilityText = false,
   onChange,
 }: {
   label: string;
   checked: boolean;
+  showVisibilityText?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex min-h-6 flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+    <div className="flex min-h-6 items-center justify-between gap-3">
       <Label>{label}</Label>
-      <label className="flex max-w-full shrink-0 items-center gap-2 self-end text-xs leading-none text-white/58 sm:self-auto">
-        <span>Im Profil zeigen</span>
+      <label className="flex max-w-full shrink-0 items-center gap-2 text-xs leading-none text-white/58">
+        {showVisibilityText && <span>Im Profil zeigen</span>}
         <input
           type="checkbox"
           checked={checked}
           onChange={(event) => onChange(event.target.checked)}
+          aria-label={`${label} im Profil zeigen`}
           className="h-4 w-4 accent-cyan-300"
         />
       </label>
@@ -2230,32 +2889,64 @@ function ProfileVisibilitySelect({
   value: "private" | "public";
   onChange: (value: "private" | "public") => void;
 }) {
+  const options = [
+    { value: "private" as const, label: "Privat", icon: Lock },
+    { value: "public" as const, label: "Öffentlich", icon: Users },
+  ];
+
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.025]">
-      <Select value={value} onValueChange={(nextValue) => nextValue && onChange(nextValue as "private" | "public")}>
-        <SelectTrigger className="h-auto min-h-16 w-full min-w-0 flex-wrap items-start gap-2 border-0 px-3 py-3 text-white hover:bg-white/[0.04] sm:flex-nowrap sm:items-center sm:px-4">
-          <div className="min-w-0 flex-1 basis-full text-left sm:basis-auto">
-            <p className="font-semibold">Profil-Privatsphäre</p>
-            <p className="mt-1 text-xs leading-5 text-white/48">
-              Wenn du zu einem öffentlichen Profil wechselst, können andere Personen freigegebene Infos sehen.
-            </p>
-          </div>
-          <SelectValue className="min-w-0 flex-none text-sm text-white/58" placeholder={value === "public" ? "Öffentlich" : "Privat"} />
-          <ChevronRight className="h-4 w-4 shrink-0 text-white/45" />
-        </SelectTrigger>
-        <SelectContent className="border-white/10 bg-[#0d1115] text-white">
-          <SelectItem value="private">Privat</SelectItem>
-          <SelectItem value="public">Öffentlich</SelectItem>
-        </SelectContent>
-      </Select>
+    <div className="min-w-0 max-w-full overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3">
+      <div className="min-w-0">
+        <p className="font-semibold">Profil-Privatsphäre</p>
+        <p className="mt-1 max-w-full text-xs leading-5 text-white/48">
+          Wenn du zu einem öffentlichen Profil wechselst, können andere Personen freigegebene Infos sehen.
+        </p>
+      </div>
+      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">
+        {options.map((option) => {
+          const Icon = option.icon;
+          const selected = value === option.value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={cn(
+                "flex min-h-10 min-w-0 items-center justify-center gap-2 overflow-hidden rounded-lg border px-2 text-sm font-medium transition-colors",
+                selected
+                  ? "border-cyan-300 bg-cyan-300 text-black"
+                  : "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]",
+              )}
+              aria-pressed={selected}
+              onClick={() => onChange(option.value)}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 truncate">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function PrivacyToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+function PrivacyToggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
   return (
     <label className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5 text-sm text-white">
-      <span className="min-w-0 leading-5">{label}</span>
+      <span className="min-w-0 leading-5">
+        <span className="block">{label}</span>
+        {description && <span className="mt-1 block text-xs leading-5 text-white/45">{description}</span>}
+      </span>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 accent-cyan-300" />
     </label>
   );

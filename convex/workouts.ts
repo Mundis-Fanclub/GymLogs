@@ -305,6 +305,22 @@ export const updateTemplateVisibility = mutation({
   },
 });
 
+export const deleteTemplate = mutation({
+  args: {
+    templateId: v.id("workout_templates"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template || template.userId !== args.userId) {
+      throw new Error("Template not found.");
+    }
+
+    await ctx.db.delete(args.templateId);
+    return true;
+  },
+});
+
 async function areFriends(
   ctx: QueryCtx,
   a: Id<"users">,

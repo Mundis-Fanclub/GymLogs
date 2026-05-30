@@ -75,6 +75,24 @@ type ProfileWorkoutTemplate = {
   }>;
 };
 
+type ProfilePostComment = {
+  _id: Id<"social_comments">;
+  body: string;
+  createdAt: number;
+  author: null | {
+    _id: Id<"users">;
+    name: string;
+    username?: string;
+    avatarUrl?: string | null;
+    isPro: boolean;
+  };
+  mediaUrl?: string | null;
+  mediaType?: "gif";
+  likeCount: number;
+  likedByViewer: boolean;
+  replies?: ProfilePostComment[];
+};
+
 type ProfilePost = {
   _id: Id<"social_posts">;
   body: string;
@@ -92,6 +110,7 @@ type ProfilePost = {
     reps: number;
     score?: number;
   };
+  comments?: ProfilePostComment[];
 };
 
 const LIFT_LABELS = {
@@ -194,6 +213,22 @@ function PublicProfileContent({
   const accent = ACCENTS[(profile.profileAccent ?? "emerald") as keyof typeof ACCENTS] ?? ACCENTS.emerald;
   const canAddFriend = Boolean(userId && !isSelf && profile.username);
   const canMessage = Boolean(userId && !isSelf && profile.allowMessages);
+  const publicFields = (profile.publicFields ?? {}) as {
+    trainingSummary?: boolean;
+    trainingStreak?: boolean;
+    trainingBestSet?: boolean;
+    trainingActivity?: boolean;
+    trainingVolume?: boolean;
+  };
+  const showTrainingStreak = publicFields.trainingStreak ?? publicFields.trainingSummary ?? true;
+  const showTrainingBestSet = publicFields.trainingBestSet ?? publicFields.trainingSummary ?? true;
+  const showTrainingActivity = publicFields.trainingActivity ?? publicFields.trainingSummary ?? true;
+  const showTrainingVolume = publicFields.trainingVolume ?? publicFields.trainingSummary ?? true;
+  const hasVisibleTrainingMetric =
+    showTrainingStreak ||
+    (showTrainingBestSet && Boolean(profile.trainingSummary?.bestSet)) ||
+    showTrainingActivity ||
+    showTrainingVolume;
   const visibleMetrics = [
     profile.heightCm ? { icon: Ruler, label: "Größe", value: `${profile.heightCm} cm` } : null,
     profile.weightKg ? { icon: Scale, label: "Gewicht", value: `${profile.weightKg} kg` } : null,
@@ -290,16 +325,18 @@ function PublicProfileContent({
                 </div>
               )}
 
-              {profile.trainingSummary ? (
+              {profile.trainingSummary && hasVisibleTrainingMetric ? (
                 <div className="grid gap-3 min-[380px]:grid-cols-2 lg:grid-cols-4">
-                  <Metric icon={Sparkles} label="Workouts" value={String(profile.trainingSummary.completedWorkouts)} />
-                  <Metric icon={Dumbbell} label="Sets" value={String(profile.trainingSummary.totalSets)} />
-                  <Metric icon={Trophy} label="Volumen" value={`${Math.round(profile.trainingSummary.totalVolume).toLocaleString("de-DE")} kg`} />
-                  <Metric icon={Calendar} label="Frequenz" value={`${profile.trainingSummary.averageWorkoutsPerWeek}/Woche`} />
+                  {showTrainingStreak && <Metric icon={Sparkles} label="Streak" value={`${profile.trainingSummary.currentStreakDays} Tage`} />}
+                  {showTrainingBestSet && profile.trainingSummary.bestSet && (
+                    <Metric icon={Dumbbell} label="Top Lift" value={`${profile.trainingSummary.bestSet.weight} kg x ${profile.trainingSummary.bestSet.reps}`} />
+                  )}
+                  {showTrainingActivity && <Metric icon={Calendar} label="AktivitÃ¤t" value={`${profile.trainingSummary.averageWorkoutsPerWeek}/Woche`} />}
+                  {showTrainingVolume && <Metric icon={Trophy} label="Volumen" value={`${Math.round(profile.trainingSummary.totalVolume).toLocaleString("de-DE")} kg`} />}
                 </div>
               ) : null}
 
-              {profile.trainingSummary?.bestSet && (
+              {showTrainingBestSet && profile.trainingSummary?.bestSet && (
                 <div className="rounded-lg border border-border bg-muted/30 p-4">
                   <p className="mb-1 text-sm font-medium">Stärkstes öffentliches Set</p>
                   <p className="text-sm text-muted-foreground">
@@ -554,6 +591,7 @@ function ProfilePostsPanel({
           {posts.map((post) => {
             const commentBody = commentBodies[post._id] ?? "";
             const showCommentInput = activeCommentPostId === post._id;
+            const visibleComments = post.comments ?? [];
             return (
             <article key={post._id} className="space-y-3 p-4">
               <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -602,6 +640,13 @@ function ProfilePostsPanel({
                   Teilen
                 </span>
               </div>
+              {visibleComments.length > 0 && (
+                <div className="space-y-3 border-t border-border pt-3">
+                  {visibleComments.map((comment) => (
+                    <ProfileCommentPreview key={comment._id} comment={comment} />
+                  ))}
+                </div>
+              )}
               {showCommentInput && (
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
@@ -624,9 +669,53 @@ function ProfilePostsPanel({
   );
 }
 
-function Avatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
+function ProfileCommentPreview({
+  comment,
+  isReply = false,
+}: {
+  comment: ProfilePostComment;
+  isReply?: boolean;
+}) {
+  const authorName = comment.author?.username ?? comment.author?.name ?? "Unbekannt";
+
   return (
-    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-background bg-muted text-2xl font-semibold sm:h-24 sm:w-24 sm:text-3xl">
+    <div className={`grid grid-cols-[2rem_minmax(0,1fr)] gap-3 text-sm ${isReply ? "ml-5 border-l border-border pl-3" : ""}`}>
+      <Avatar name={comment.author?.name ?? "?"} avatarUrl={comment.author?.avatarUrl ?? undefined} size="sm" />
+      <div className="min-w-0">
+        <p className="truncate font-semibold leading-5">
+          {authorName}
+          <span className="ml-2 font-normal text-muted-foreground">{formatProfilePostTime(comment.createdAt)}</span>
+        </p>
+        <p className="whitespace-pre-wrap break-words leading-5 text-muted-foreground">{comment.body}</p>
+        {comment.replies && comment.replies.length > 0 && (
+          <div className="mt-3 space-y-3">
+            {comment.replies.map((reply) => (
+              <ProfileCommentPreview key={reply._id} comment={reply} isReply />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatProfilePostTime(timestamp: number) {
+  const diffMs = Date.now() - timestamp;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) return "gerade eben";
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)} Min.`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)} Std.`;
+  return new Date(timestamp).toLocaleDateString("de-DE");
+}
+
+function Avatar({ name, avatarUrl, size = "lg" }: { name: string; avatarUrl?: string; size?: "sm" | "lg" }) {
+  const classes = size === "sm" ? "h-8 w-8 text-sm border-2" : "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl border-4";
+
+  return (
+    <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border-background bg-muted font-semibold ${classes}`}>
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
