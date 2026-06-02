@@ -36,6 +36,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 type MediaKind = "image" | "video" | "gif";
 type MediaSize = "sm" | "md" | "lg";
@@ -47,6 +48,7 @@ type CommentMediaDraft = {
 
 export function SocialPageClient() {
   const { userId, isLoaded } = useConvexUser();
+  const { t } = useAppPreferences();
   const [loadFeed, setLoadFeed] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<Id<"social_posts"> | null>(null);
   const posts = useQuery(api.social.listFeed, loadFeed ? { viewerId: userId, limit: 12 } : "skip");
@@ -287,7 +289,7 @@ export function SocialPageClient() {
         <Textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
-          placeholder={mediaPreviewUrl ? "" : "Was gibt's Neues?"}
+          placeholder={mediaPreviewUrl ? "" : t("socialPage.composerPlaceholder")}
           rows={body || mediaPreviewUrl ? 2 : 1}
           maxLength={1200}
           className="min-h-10 resize-none border-0 bg-transparent px-0 py-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
@@ -317,11 +319,11 @@ export function SocialPageClient() {
         <div className="flex items-center justify-between gap-3">
           <label className="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground">
             <ImagePlus className="h-4 w-4" />
-            <span className="sr-only">{uploading ? "Upload läuft" : "Bild oder Video anhängen"}</span>
+            <span className="sr-only">{uploading ? t("socialPage.uploadRunning") : t("socialPage.attachMedia")}</span>
             <input type="file" accept="image/*,video/*,.gif" className="sr-only" onChange={(event) => uploadMedia(event.target.files?.[0])} />
           </label>
           <Button onClick={submitPost} disabled={!userId || uploading || (!body.trim() && !bodyAfter.trim() && !mediaStorageId)}>
-            Posten
+            {t("socialPage.post")}
           </Button>
         </div>
       </div>
@@ -1114,6 +1116,7 @@ function MediaPreview({
   onScaleChange?: (value: number) => void;
   onRemove?: () => void;
 }) {
+  const { t } = useAppPreferences();
   const frameRef = useRef<HTMLDivElement>(null);
   const fallbackScale = mediaSize === "sm" ? 45 : mediaSize === "md" ? 70 : 100;
   const currentScale = Math.min(100, Math.max(35, mediaScale ?? fallbackScale));
@@ -1163,7 +1166,7 @@ function MediaPreview({
           type="button"
           className="absolute right-2 top-2 z-10 inline-flex size-8 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black"
           onClick={onRemove}
-          aria-label="Medium entfernen"
+          aria-label={t("socialPage.removeMedia")}
         >
           <X className="h-4 w-4" />
         </button>

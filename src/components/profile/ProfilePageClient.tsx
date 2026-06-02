@@ -242,6 +242,7 @@ const LIFT_LABELS = {
 
 type ProfileTab = "posts" | "saved" | "logs" | "training";
 type ProfilePreviewTab = "posts" | "logs" | "training";
+type ProfileEditSection = "details" | "visibility";
 
 export function ProfilePageClient() {
   const { userId, isLoaded } = useConvexUser();
@@ -341,6 +342,7 @@ export function ProfilePageClient() {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState<ProfileTab>("posts");
   const [previewProfileTab, setPreviewProfileTab] = useState<ProfilePreviewTab>("posts");
+  const [profileEditSection, setProfileEditSection] = useState<ProfileEditSection>("details");
   const [messagesDialogOpen, setMessagesDialogOpen] = useState(false);
   const [networkDialogOpen, setNetworkDialogOpen] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -638,11 +640,11 @@ export function ProfilePageClient() {
     return (
       <EmptyState
         icon={User}
-        title="Profil nur mit Login"
-        description="Melde dich an, um dein Profil zu bearbeiten."
+        title={t("profile.misc.signedOutTitle")}
+        description={t("profile.misc.signedOutCopy")}
         action={
           <Link href="/sign-in">
-            <Button>Anmelden</Button>
+            <Button>{t("profile.misc.signIn")}</Button>
           </Link>
         }
       />
@@ -1007,7 +1009,7 @@ export function ProfilePageClient() {
           >
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_36%,rgba(34,211,238,0.24),transparent_21%),linear-gradient(180deg,rgba(0,0,0,0.52)_0%,rgba(0,0,0,0.42)_26%,rgba(1,4,10,0.93)_82%,#050708_100%)]" />
             <div className="absolute left-3 right-3 top-3 z-20 flex items-center justify-between sm:left-7 sm:right-7 sm:top-6">
-              <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Zurück" onClick={() => history.back()}>
+              <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label={t("profile.misc.back")} onClick={() => history.back()}>
                 <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
               </Button>
               <ProfileHeaderActions
@@ -1052,7 +1054,7 @@ export function ProfilePageClient() {
           <CardContent className="relative z-10 space-y-4 bg-[#050708] px-5 pb-7 pt-0 sm:space-y-6 sm:px-9">
             <div className="grid gap-2.5 sm:max-w-xl sm:gap-3">
               <Button type="button" className="h-12 rounded-lg bg-cyan-300 text-base font-semibold text-black shadow-sm shadow-cyan-950/20 transition-all hover:-translate-y-0.5 hover:bg-cyan-200 sm:h-14 sm:text-lg" onClick={() => setEditProfileOpen(true)}>
-                Profil bearbeiten
+                {t("profile.edit.title")}
               </Button>
             </div>
             {profileMetricItems.length > 0 && (
@@ -1251,17 +1253,17 @@ export function ProfilePageClient() {
         <Dialog open={Boolean(pendingProfilePostDelete)} onOpenChange={(open) => !open && setPendingProfilePostDelete(null)}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>Beitrag löschen?</DialogTitle>
+              <DialogTitle>{t("profile.misc.deletePostTitle")}</DialogTitle>
             </DialogHeader>
             <p className="text-sm leading-6 text-muted-foreground">
-              Der Beitrag und seine Kommentare werden dauerhaft entfernt.
+              {t("profile.misc.deletePostCopy")}
             </p>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setPendingProfilePostDelete(null)}>
-                Abbrechen
+                {t("profile.misc.cancel")}
               </Button>
               <Button type="button" variant="destructive" onClick={confirmProfilePostDelete}>
-                Löschen
+                {t("profile.misc.delete")}
               </Button>
             </div>
           </DialogContent>
@@ -1270,17 +1272,17 @@ export function ProfilePageClient() {
         <Dialog open={Boolean(pendingWorkoutTemplateDelete)} onOpenChange={(open) => !open && setPendingWorkoutTemplateDelete(null)}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>Workout-Playlist löschen?</DialogTitle>
+              <DialogTitle>{t("profile.misc.deletePlaylistTitle")}</DialogTitle>
             </DialogHeader>
             <p className="text-sm leading-6 text-muted-foreground">
-              Die gespeicherte Playlist wird dauerhaft entfernt. Deine abgeschlossenen Workouts bleiben erhalten.
+              {t("profile.misc.deletePlaylistCopy")}
             </p>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setPendingWorkoutTemplateDelete(null)}>
-                Abbrechen
+                {t("profile.misc.cancel")}
               </Button>
               <Button type="button" variant="destructive" onClick={confirmWorkoutTemplateDelete}>
-                Löschen
+                {t("profile.misc.delete")}
               </Button>
             </div>
           </DialogContent>
@@ -1290,7 +1292,10 @@ export function ProfilePageClient() {
           open={editProfileOpen}
           onOpenChange={(open) => {
             setEditProfileOpen(open);
-            if (!open) setProfileEditMode("edit");
+            if (!open) {
+              setProfileEditMode("edit");
+              setProfileEditSection("details");
+            }
           }}
         >
           <DialogContent showCloseButton={profileEditMode !== "preview"} className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden rounded-none border-white/10 bg-[#050708] p-0 text-white shadow-2xl shadow-cyan-950/25 sm:h-auto sm:max-h-[92vh] sm:w-full sm:max-w-4xl sm:rounded-xl">
@@ -1312,7 +1317,7 @@ export function ProfilePageClient() {
                 />
                 {profileEditMode === "preview" && (
                   <div className="absolute left-3 right-3 top-3 z-20 flex items-center justify-between sm:left-7 sm:right-7 sm:top-6">
-                    <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label="Zurück" onClick={() => setProfileEditMode("edit")}>
+                    <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label={t("profile.misc.back")} onClick={() => setProfileEditMode("edit")}>
                       <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                     </Button>
                     <ProfileHeaderActions
@@ -1326,9 +1331,9 @@ export function ProfilePageClient() {
                 {profileEditMode === "edit" && (
                 <DialogHeader className="relative z-10 flex-col items-start gap-3 space-y-0 p-4 pr-12 sm:flex-row sm:justify-between sm:p-7">
                   <div className="min-w-0">
-                    <DialogTitle className="text-xl font-black text-white sm:text-3xl">Profil bearbeiten</DialogTitle>
+                    <DialogTitle className="text-xl font-black text-white sm:text-3xl">{t("profile.edit.title")}</DialogTitle>
                     <p className="mt-2 max-w-xl text-xs leading-5 text-white/62 sm:text-sm">
-                      Passe Cover, Profilinfos und Sichtbarkeit an.
+                      {t("profile.edit.copy")}
                     </p>
                   </div>
                   <Button
@@ -1340,7 +1345,7 @@ export function ProfilePageClient() {
                     onClick={() => coverFileInputRef.current?.click()}
                   >
                     <ImagePlus className="h-3.5 w-3.5" />
-                    {uploading === "cover" ? "Upload..." : "Hintergrund"}
+                    {uploading === "cover" ? t("profile.misc.upload") : t("profile.misc.cover")}
                   </Button>
                 </DialogHeader>
                 )}
@@ -1357,7 +1362,7 @@ export function ProfilePageClient() {
                     <button
                       type="button"
                       className={cn("block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-cyan-300", profileEditMode === "preview" && "relative")}
-                      aria-label="Profilbild bearbeiten"
+                      aria-label={t("profile.misc.editAvatar")}
                       onClick={() => profileEditMode === "edit" && setAvatarMenuOpen((open) => !open)}
                     >
                       <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="hero" />
@@ -1370,7 +1375,7 @@ export function ProfilePageClient() {
                           onClick={() => avatarFileInputRef.current?.click()}
                         >
                           <Upload className="h-4 w-4" />
-                          Bild hochladen
+                          {t("profile.misc.uploadImage")}
                         </button>
                         <button
                           type="button"
@@ -1378,7 +1383,7 @@ export function ProfilePageClient() {
                           onClick={() => removeProfileImage("avatar")}
                         >
                           <Trash2 className="h-4 w-4" />
-                          Aktuelles Bild entfernen
+                          {t("profile.misc.removeCurrentImage")}
                         </button>
                       </div>
                     )}
@@ -1407,7 +1412,7 @@ export function ProfilePageClient() {
                     {profileEditMode === "preview" && (
                       <>
                         <p className="mt-4 max-w-[34rem] whitespace-pre-wrap text-[1rem] font-semibold leading-[1.35] text-white min-[390px]:text-[1.08rem] sm:mt-8 sm:text-3xl">
-                          {previewVisibleProfile.bio || "Noch keine öffentlich sichtbare Bio."}
+                          {previewVisibleProfile.bio || t("profile.misc.emptyPublicBio")}
                         </p>
                         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[0.85rem] text-white/62 min-[390px]:text-[0.95rem] sm:mt-8 sm:gap-x-8 sm:text-xl">
                           {previewMeta.map((meta) => {
@@ -1450,16 +1455,45 @@ export function ProfilePageClient() {
                     : "px-4 pb-[calc(env(safe-area-inset-bottom)+7.75rem)] sm:px-7 sm:pb-7",
                 )}
               >
+                {profileEditMode === "edit" && (
+                  <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-white/[0.025] p-1">
+                    {([
+                      { id: "details", label: t("profile.edit.detailsTab"), icon: User },
+                      { id: "visibility", label: t("profile.edit.visibilityTab"), icon: Eye },
+                    ] satisfies Array<{ id: ProfileEditSection; label: string; icon: ComponentType<{ className?: string }> }>).map((item) => {
+                      const Icon = item.icon;
+                      const selected = profileEditSection === item.id;
+
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={cn(
+                            "flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-sm font-semibold transition-colors",
+                            selected
+                              ? "bg-cyan-300 text-black"
+                              : "text-white/62 hover:bg-white/[0.06] hover:text-white"
+                          )}
+                          aria-pressed={selected}
+                          onClick={() => setProfileEditSection(item.id)}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 {profileEditMode === "preview" ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-2.5 sm:max-w-xl sm:gap-3">
                       {form.allowMessages && (
                         <Button type="button" className="h-12 rounded-lg bg-cyan-300 text-base font-semibold text-black shadow-sm shadow-cyan-950/20 sm:h-14 sm:text-lg">
-                          Nachricht
+                          {t("profile.misc.message")}
                         </Button>
                       )}
                       <Button type="button" variant="outline" className="h-12 rounded-lg border-white/15 bg-white/[0.04] text-base font-semibold text-white hover:bg-white/10 sm:h-14 sm:text-lg">
-                        Freund hinzufügen
+                        {t("profile.misc.addFriend")}
                       </Button>
                     </div>
                     <div className="hidden">
@@ -1493,7 +1527,7 @@ export function ProfilePageClient() {
                     )}
                     {!form.isPublic && (
                       <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-white/65">
-                        Dieses Profil ist privat. Besucher sehen nur die Basisinfos im Header.
+                        {t("profile.misc.privatePreview")}
                       </div>
                     )}
                     {form.isPublic && (
@@ -1567,20 +1601,24 @@ export function ProfilePageClient() {
                       </>
                     )}
                   </div>
-                ) : (
+                ) : profileEditSection === "details" ? (
                   <div className="grid min-w-0 max-w-full gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
                     <div className="min-w-0 max-w-full space-y-4">
-                      <div className="grid min-w-0 max-w-full gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
-                        <Field label="Name">
+                      <section className="grid min-w-0 max-w-full gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
+                        <div className="sm:col-span-2">
+                          <p className="font-semibold">{t("profile.edit.detailsTitle")}</p>
+                          <p className="mt-1 text-xs leading-5 text-white/45">{t("profile.edit.detailsCopy")}</p>
+                        </div>
+                        <Field label={t("profile.fields.name")}>
                           <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
                         </Field>
-                        <Field label="Username">
+                        <Field label={t("profile.fields.username")}>
                           <Input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
                         </Field>
-                        <PublicField label="Ort" checked={form.publicLocation} showVisibilityText onChange={(checked) => setForm({ ...form, publicLocation: checked })}>
+                        <Field label={t("profile.fields.location")}>
                           <Input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} />
-                        </PublicField>
-                        <PublicField label="Lieblingslift" checked={form.publicFavoriteLift} onChange={(checked) => setForm({ ...form, publicFavoriteLift: checked })}>
+                        </Field>
+                        <Field label={t("profile.fields.favoriteLift")}>
                           <Input
                             list="favorite-lift-options"
                             value={form.favoriteLift}
@@ -1592,66 +1630,91 @@ export function ProfilePageClient() {
                               <option key={exerciseName} value={exerciseName} />
                             ))}
                           </datalist>
-                        </PublicField>
+                        </Field>
                         <div className="sm:col-span-2">
-                          <PublicFieldLabel label="Bio" checked={form.publicBio} onChange={(checked) => setForm({ ...form, publicBio: checked })} />
-                          <Textarea value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} rows={3} maxLength={180} />
+                          <Field label={t("profile.fields.bio")}>
+                            <Textarea value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} rows={3} maxLength={180} />
+                          </Field>
                         </div>
                         <div className="sm:col-span-2">
-                          <PublicFieldLabel label="Trainingsziel" checked={form.publicTrainingGoal} onChange={(checked) => setForm({ ...form, publicTrainingGoal: checked })} />
-                          <Textarea value={form.trainingGoal} onChange={(event) => setForm({ ...form, trainingGoal: event.target.value })} rows={2} maxLength={120} />
+                          <Field label={t("profile.fields.trainingGoal")}>
+                            <Textarea value={form.trainingGoal} onChange={(event) => setForm({ ...form, trainingGoal: event.target.value })} rows={2} maxLength={120} />
+                          </Field>
                         </div>
-                      </div>
+                      </section>
 
-                      <div className="grid min-w-0 max-w-full gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
-                        <Field label="Avatar URL Fallback">
+                      <section className="grid min-w-0 max-w-full gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-2 sm:p-4">
+                        <div className="sm:col-span-2">
+                          <p className="font-semibold">{t("profile.edit.mediaTitle")}</p>
+                        </div>
+                        <Field label={t("profile.fields.avatarUrl")}>
                           <Input placeholder="https://..." value={form.avatarUrl} onChange={(event) => setForm({ ...form, avatarUrl: event.target.value, avatarStorageId: undefined })} />
                         </Field>
-                        <Field label="Cover URL Fallback">
+                        <Field label={t("profile.fields.coverUrl")}>
                           <Input placeholder="https://..." value={form.coverUrl} onChange={(event) => setForm({ ...form, coverUrl: event.target.value, coverStorageId: undefined })} />
                         </Field>
-                      </div>
+                      </section>
                     </div>
 
-                    <div className="min-w-0 max-w-full space-y-4">
-                      <div className="grid min-w-0 max-w-full gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
-                        <PublicField label="Größe in cm" checked={form.publicHeight} onChange={(checked) => setForm({ ...form, publicHeight: checked })}>
-                          <Input inputMode="decimal" value={form.heightCm} onChange={(event) => setForm({ ...form, heightCm: event.target.value })} />
-                        </PublicField>
-                        <PublicField label="Gewicht in kg" checked={form.publicWeight} onChange={(checked) => setForm({ ...form, publicWeight: checked })}>
-                          <Input inputMode="decimal" value={form.weightKg} onChange={(event) => setForm({ ...form, weightKg: event.target.value })} />
-                        </PublicField>
-                        <PublicField label="Geburtsdatum" checked={form.publicBirthDate} onChange={(checked) => setForm({ ...form, publicBirthDate: checked })}>
-                          <Input type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} />
-                        </PublicField>
-                        <Field label="Akzent">
-                          <AccentSelect value={form.profileAccent} onChange={(profileAccent) => setForm({ ...form, profileAccent })} />
-                        </Field>
+                    <section className="grid min-w-0 max-w-full content-start gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+                      <p className="font-semibold">{t("profile.edit.bodyTitle")}</p>
+                      <Field label={t("profile.fields.heightCm")}>
+                        <Input inputMode="decimal" value={form.heightCm} onChange={(event) => setForm({ ...form, heightCm: event.target.value })} />
+                      </Field>
+                      <Field label={t("profile.fields.weightKg")}>
+                        <Input inputMode="decimal" value={form.weightKg} onChange={(event) => setForm({ ...form, weightKg: event.target.value })} />
+                      </Field>
+                      <Field label={t("profile.fields.birthDate")}>
+                        <Input type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} />
+                      </Field>
+                      <Field label={t("profile.fields.accent")}>
+                        <AccentSelect value={form.profileAccent} onChange={(profileAccent) => setForm({ ...form, profileAccent })} />
+                      </Field>
+                    </section>
+                  </div>
+                ) : (
+                  <div className="mx-auto grid w-full max-w-2xl gap-3">
+                    <section className="grid min-w-0 max-w-full gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+                      <div>
+                        <p className="font-semibold">{t("profile.edit.visibilityTitle")}</p>
+                        <p className="mt-1 text-xs leading-5 text-white/45">{t("profile.edit.visibilityCopy")}</p>
                       </div>
+                      <ProfileVisibilitySelect value={form.isPublic ? "public" : "private"} onChange={(value) => setForm({ ...form, isPublic: value === "public" })} />
+                      <PrivacyToggle label={t("profile.fields.allowMessages")} checked={form.allowMessages} onChange={(checked) => setForm({ ...form, allowMessages: checked })} />
+                    </section>
 
-                      <div className="grid min-w-0 max-w-full gap-2 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4">
-                        <ProfileVisibilitySelect value={form.isPublic ? "public" : "private"} onChange={(value) => setForm({ ...form, isPublic: value === "public" })} />
-                        <PrivacyToggle label="Nachrichten erlauben" checked={form.allowMessages} onChange={(checked) => setForm({ ...form, allowMessages: checked })} />
-                        <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-white">
-                          <p className="font-medium">Workout-Statistiken im öffentlichen Profil</p>
-                          <p className="mt-1 text-xs leading-5 text-white/45">
-                            Wähle genau aus, welche Kacheln Besucher im Profilkopf sehen.
-                          </p>
-                          <div className="mt-3 grid gap-2">
-                            <PrivacyToggle label="Streak" description="Zeigt deine aktuellen Trainingstage in Folge." checked={form.publicTrainingStreak} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingStreak: checked })} />
-                            <PrivacyToggle label="Top Lift" description="Zeigt deinen besten Satz aus der Trainingshistorie." checked={form.publicTrainingBestSet} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingBestSet: checked })} />
-                            <PrivacyToggle label="Aktivität pro Woche" description="Zeigt deine durchschnittlichen Workouts pro Woche." checked={form.publicTrainingActivity} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingActivity: checked })} />
-                            <PrivacyToggle label="Volumen" description="Zeigt dein sichtbares Gesamtvolumen aus der Trainingsauswertung." checked={form.publicTrainingVolume} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingVolume: checked })} />
-                          </div>
-                        </div>
-                        <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-white">
-                          <p className="font-medium">Weitere Training-Inhalte</p>
-                          <p className="mt-1 text-xs leading-5 text-white/45">
-                            Lieblingslift und Trainingsziel steuerst du direkt an ihren Feldern. Workout-Playlists steuerst du pro Playlist über Privat/Freunde/Öffentlich.
-                          </p>
-                        </div>
+                    <section className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-white sm:p-4">
+                      <p className="font-medium">{t("profile.edit.fieldVisibilityTitle")}</p>
+                      <div className="mt-3 grid gap-2">
+                        <PrivacyToggle label={t("profile.fields.bio")} checked={form.publicBio} onChange={(checked) => setForm({ ...form, publicBio: checked })} />
+                        <PrivacyToggle label={t("profile.fields.location")} checked={form.publicLocation} onChange={(checked) => setForm({ ...form, publicLocation: checked })} />
+                        <PrivacyToggle label={t("profile.fields.favoriteLift")} checked={form.publicFavoriteLift} onChange={(checked) => setForm({ ...form, publicFavoriteLift: checked })} />
+                        <PrivacyToggle label={t("profile.fields.trainingGoal")} checked={form.publicTrainingGoal} onChange={(checked) => setForm({ ...form, publicTrainingGoal: checked })} />
+                        <PrivacyToggle label={t("profile.fields.heightCm")} checked={form.publicHeight} onChange={(checked) => setForm({ ...form, publicHeight: checked })} />
+                        <PrivacyToggle label={t("profile.fields.weightKg")} checked={form.publicWeight} onChange={(checked) => setForm({ ...form, publicWeight: checked })} />
+                        <PrivacyToggle label={t("profile.fields.birthDate")} checked={form.publicBirthDate} onChange={(checked) => setForm({ ...form, publicBirthDate: checked })} />
                       </div>
-                    </div>
+                    </section>
+
+                    <section className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-white sm:p-4">
+                      <p className="font-medium">{t("profile.edit.trainingStatsTitle")}</p>
+                      <p className="mt-1 text-xs leading-5 text-white/45">
+                        {t("profile.edit.trainingStatsCopy")}
+                      </p>
+                      <div className="mt-3 grid gap-2">
+                        <PrivacyToggle label={t("profile.fields.streak")} description={t("profile.trainingVisibility.streakCopy")} checked={form.publicTrainingStreak} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingStreak: checked })} />
+                        <PrivacyToggle label={t("profile.metrics.topLift")} description={t("profile.trainingVisibility.topLiftCopy")} checked={form.publicTrainingBestSet} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingBestSet: checked })} />
+                        <PrivacyToggle label={t("profile.fields.activityPerWeek")} description={t("profile.trainingVisibility.activityCopy")} checked={form.publicTrainingActivity} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingActivity: checked })} />
+                        <PrivacyToggle label={t("profile.fields.volume")} description={t("profile.trainingVisibility.volumeCopy")} checked={form.publicTrainingVolume} onChange={(checked) => setForm({ ...form, showTrainingSummary: true, publicTrainingVolume: checked })} />
+                      </div>
+                    </section>
+
+                    <section className="rounded-lg border border-white/10 bg-white/[0.025] p-3 text-sm text-white sm:p-4">
+                      <p className="font-medium">{t("profile.edit.otherTrainingTitle")}</p>
+                      <p className="mt-1 text-xs leading-5 text-white/45">
+                        {t("profile.edit.otherTrainingCopy")}
+                      </p>
+                    </section>
                   </div>
                 )}
 
@@ -1659,10 +1722,10 @@ export function ProfilePageClient() {
                 <div className="fixed inset-x-0 bottom-0 z-[110] flex flex-col gap-2 border-t border-white/10 bg-[#050708]/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur sm:sticky sm:-mx-7 sm:flex-row sm:items-center sm:justify-end sm:px-7 sm:py-4">
                   <Button type="button" variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" onClick={() => setProfileEditMode((mode) => mode === "preview" ? "edit" : "preview")}>
                     <Eye className="h-4 w-4" />
-                    {profileEditMode === "preview" ? "Zurück bearbeiten" : "Vorschau"}
+                    {profileEditMode === "preview" ? t("profile.edit.backToEdit") : t("profile.edit.preview")}
                   </Button>
-                  <Button className="bg-cyan-300 text-black hover:bg-cyan-200" onClick={saveProfile}>Profil speichern</Button>
-                  {saved && <span className="self-center text-sm text-emerald-400">Gespeichert</span>}
+                  <Button className="bg-cyan-300 text-black hover:bg-cyan-200" onClick={saveProfile}>{t("profile.edit.save")}</Button>
+                  {saved && <span className="self-center text-sm text-emerald-400">{t("profile.edit.saved")}</span>}
                 </div>
               </div>
             </div>
@@ -2035,25 +2098,27 @@ function ProfilePostComposer({
   onClearMedia: () => void;
   onSubmit: () => void;
 }) {
+  const { t } = useAppPreferences();
+
   return (
-    <section className="border-y border-white/10 bg-[#050708] px-6 py-4 sm:px-8" aria-label="Beitrag erstellen">
+    <section className="border-y border-white/10 bg-[#050708] px-6 py-4 sm:px-8" aria-label={t("socialPage.createPost")}>
       <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3">
         <Avatar name={profileName} avatarUrl={avatarUrl} />
         <div className="min-w-0 space-y-3">
           <Textarea
             value={body}
             onChange={(event) => onBodyChange(event.target.value)}
-            placeholder="Was gibt's Neues?"
+            placeholder={t("socialPage.composerPlaceholder")}
             rows={mediaDraft || body ? 2 : 1}
             maxLength={1200}
-            aria-label="Neuen Beitrag schreiben"
+            aria-label={t("socialPage.newPost")}
             className="min-h-10 resize-none border-0 bg-transparent px-0 py-1 text-base text-white placeholder:text-white/45 shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
           {mediaDraft && (
             <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]">
               <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-xs text-white/55">
                 <span className="truncate">{mediaDraft.name}</span>
-                <Button type="button" size="icon-xs" variant="ghost" aria-label="Medium entfernen" onClick={onClearMedia}>
+                <Button type="button" size="icon-xs" variant="ghost" aria-label={t("socialPage.removeMedia")} onClick={onClearMedia}>
                   <X className="h-3 w-3" />
                 </Button>
               </div>
@@ -2069,11 +2134,11 @@ function ProfilePostComposer({
           <div className="flex items-center justify-between gap-3">
             <label className="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-white/55 transition hover:bg-white/10 hover:text-white">
               <ImagePlus className="h-4 w-4" />
-              <span className="sr-only">{uploading ? "Upload läuft" : "Bild oder Video anhängen"}</span>
+              <span className="sr-only">{uploading ? t("socialPage.uploadRunning") : t("socialPage.attachMedia")}</span>
               <input type="file" accept="image/*,video/*,.gif" className="sr-only" onChange={(event) => onFile(event.target.files?.[0])} />
             </label>
             <Button type="button" size="sm" className="bg-cyan-300 text-black hover:bg-cyan-200" disabled={disabled} onClick={onSubmit}>
-              Posten
+              {t("socialPage.post")}
             </Button>
           </div>
         </div>
@@ -2133,6 +2198,8 @@ function ProfilePostsCard({
   onSubmitComment: (postId: Id<"social_posts">) => void;
   emptyTitle?: string;
 }) {
+  const { t } = useAppPreferences();
+
   if (posts === undefined) {
     return <p className="text-xl text-white/55">Beiträge werden geladen...</p>;
   }
@@ -2201,7 +2268,7 @@ function ProfilePostsCard({
                           onClick={() => onEditPost(post)}
                         >
                           <Pencil className="h-4 w-4" />
-                          Bearbeiten
+                          {t("profile.misc.edit")}
                         </button>
                         <button
                           type="button"
@@ -2209,7 +2276,7 @@ function ProfilePostsCard({
                           onClick={() => onDeletePost(post._id)}
                         >
                           <Trash2 className="h-4 w-4" />
-                          Löschen
+                          {t("profile.misc.delete")}
                         </button>
                       </div>
                     )}
@@ -2227,10 +2294,10 @@ function ProfilePostsCard({
                   />
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="ghost" className="text-white/70 hover:bg-white/10 hover:text-white" onClick={() => onCancelPostEdit(post._id)}>
-                      Abbrechen
+                      {t("profile.misc.cancel")}
                     </Button>
                     <Button type="button" className="bg-cyan-300 text-black hover:bg-cyan-200" disabled={!canSaveEdit} onClick={() => onSavePostEdit(post)}>
-                      Speichern
+                      {t("profile.misc.save")}
                     </Button>
                   </div>
                 </div>
@@ -2289,7 +2356,7 @@ function ProfilePostsCard({
       );
       })}
       <Link href="/social" className="flex h-16 w-full items-center justify-center gap-2 border-t border-white/10 bg-[#050708] text-base font-medium text-white/65 transition hover:bg-white/[0.04] hover:text-white">
-        Mehr entdecken
+        {t("socialPage.discoverMore")}
       </Link>
     </div>
   );
@@ -2582,6 +2649,8 @@ function WorkoutTemplatesCard({
   onCancelTemplateEdit: (templateId: Id<"workout_templates">) => void;
   onSaveTemplateEdit: (template: ProfileWorkoutTemplate) => void;
 }) {
+  const { t } = useAppPreferences();
+
   return (
     <Card className={cn("border-blue-500/10 bg-card/95 shadow-xl shadow-blue-950/5", embedded && "shadow-none")}>
       <CardHeader className="border-b border-border/70 bg-muted/10">
@@ -2653,10 +2722,10 @@ function WorkoutTemplatesCard({
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="ghost" onClick={() => onCancelTemplateEdit(template._id)}>
-                      Abbrechen
+                      {t("profile.misc.cancel")}
                     </Button>
                     <Button type="button" disabled={!draft.name.trim()} onClick={() => onSaveTemplateEdit(template)}>
-                      Speichern
+                      {t("profile.misc.save")}
                     </Button>
                   </div>
                 </div>
@@ -2700,11 +2769,11 @@ function WorkoutTemplatesCard({
                         <div className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-sm">
                           <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition hover:bg-muted" onClick={() => onEditTemplate(template)}>
                             <Pencil className="h-3.5 w-3.5" />
-                            Bearbeiten
+                            {t("profile.misc.edit")}
                           </button>
                           <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-destructive transition hover:bg-destructive/10" onClick={() => onDeleteTemplate(template._id)}>
                             <Trash2 className="h-3.5 w-3.5" />
-                            Löschen
+                            {t("profile.misc.delete")}
                           </button>
                         </div>
                       )}
@@ -2983,55 +3052,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function PublicField({
-  label,
-  checked,
-  showVisibilityText = false,
-  onChange,
-  children,
-}: {
-  label: string;
-  checked: boolean;
-  showVisibilityText?: boolean;
-  onChange: (checked: boolean) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="min-w-0 max-w-full space-y-1.5">
-      <PublicFieldLabel label={label} checked={checked} showVisibilityText={showVisibilityText} onChange={onChange} />
-      {children}
-    </div>
-  );
-}
-
-function PublicFieldLabel({
-  label,
-  checked,
-  showVisibilityText = false,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  showVisibilityText?: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <div className="flex min-h-6 items-center justify-between gap-3">
-      <Label>{label}</Label>
-      <label className="flex max-w-full shrink-0 items-center gap-2 text-xs leading-none text-white/58">
-        {showVisibilityText && <span>Im Profil zeigen</span>}
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-          aria-label={`${label} im Profil zeigen`}
-          className="h-4 w-4 accent-cyan-300"
-        />
-      </label>
-    </div>
-  );
-}
-
 function AccentSelect({ value, onChange }: { value: Accent; onChange: (value: Accent) => void }) {
   const selected = ACCENT_OPTIONS.find((option) => option.value === value) ?? ACCENT_OPTIONS[0];
   return (
@@ -3059,17 +3079,18 @@ function ProfileVisibilitySelect({
   value: "private" | "public";
   onChange: (value: "private" | "public") => void;
 }) {
+  const { t } = useAppPreferences();
   const options = [
-    { value: "private" as const, label: "Privat", icon: Lock },
-    { value: "public" as const, label: "Öffentlich", icon: Users },
+    { value: "private" as const, label: t("profile.visibility.private"), icon: Lock },
+    { value: "public" as const, label: t("profile.visibility.public"), icon: Users },
   ];
 
   return (
     <div className="min-w-0 max-w-full overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3">
       <div className="min-w-0">
-        <p className="font-semibold">Profil-Privatsphäre</p>
+        <p className="font-semibold">{t("profile.visibility.title")}</p>
         <p className="mt-1 max-w-full text-xs leading-5 text-white/48">
-          Wenn du zu einem öffentlichen Profil wechselst, können andere Personen freigegebene Infos sehen.
+          {t("profile.visibility.copy")}
         </p>
       </div>
       <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">

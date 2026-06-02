@@ -20,14 +20,14 @@ export default function SettingsPage() {
     <div className="mx-auto grid max-w-5xl gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>Einstellungen</CardTitle>
+          <CardTitle>{t("settings.title")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <div className="grid gap-3 sm:grid-cols-2">
             <PreferencePanel
               icon={Languages}
-              title="Sprache"
-              copy="Wähle die Sprache für Navigation, Topbar und App-Texte."
+              title={t("settings.languageTitle")}
+              copy={t("settings.languageCopy")}
             >
               <div className="grid gap-2">
                 {LOCALES.map((item) => (
@@ -54,11 +54,11 @@ export default function SettingsPage() {
 
             <PreferencePanel
               icon={theme === "dark" ? Moon : Sun}
-              title="Darstellung"
-              copy="Schalte zwischen Dark Mode und Light Mode um."
+              title={t("settings.appearanceTitle")}
+              copy={t("settings.appearanceCopy")}
             >
               <Button variant="outline" className="w-full justify-between" onClick={toggleTheme}>
-                <span>{theme === "dark" ? "Dark Mode aktiv" : "Light Mode aktiv"}</span>
+                <span>{theme === "dark" ? t("settings.darkActive") : t("settings.lightActive")}</span>
                 {theme === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
               </Button>
               <p className="text-xs text-muted-foreground">
@@ -70,24 +70,24 @@ export default function SettingsPage() {
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
             <SettingsPanel
               icon={UserRound}
-              title="Profil"
-              copy="Name, Avatar, Bio, Sichtbarkeit und Nachrichtenfreigabe verwaltest du im Profil."
+              title={t("settings.profileTitle")}
+              copy={t("settings.profileCopy")}
               href="/profile"
-              action="Profil bearbeiten"
+              action={t("settings.profileAction")}
             />
             <SettingsPanel
               icon={Bell}
-              title="Nachrichten"
-              copy="Deine Unterhaltungen und ungelesenen Nachrichten findest du im Nachrichtenbereich."
+              title={t("settings.messagesTitle")}
+              copy={t("settings.messagesCopy")}
               href="/profile#messages"
-              action="Nachrichten öffnen"
+              action={t("settings.messagesAction")}
             />
             <SettingsPanel
               icon={Shield}
-              title="Privatsphäre"
-              copy="Blockierte Nutzer und Meldefunktionen bleiben direkt in der Unterhaltung verfügbar."
+              title={t("settings.privacyTitle")}
+              copy={t("settings.privacyCopy")}
               href="/profile#messages"
-              action="Unterhaltungen ansehen"
+              action={t("settings.privacyAction")}
             />
           </div>
         </CardContent>
