@@ -10,6 +10,7 @@
 
 import type * as analytics from "../analytics.js";
 import type * as exercises from "../exercises.js";
+import type * as follows from "../follows.js";
 import type * as friends from "../friends.js";
 import type * as logs from "../logs.js";
 import type * as messages from "../messages.js";
@@ -30,6 +31,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   exercises: typeof exercises;
+  follows: typeof follows;
   friends: typeof friends;
   logs: typeof logs;
   messages: typeof messages;

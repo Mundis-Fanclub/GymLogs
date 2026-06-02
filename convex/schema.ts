@@ -105,6 +105,15 @@ export default defineSchema({
     .index("by_addressee", ["addresseeId", "createdAt"])
     .index("by_pair", ["requesterId", "addresseeId"]),
 
+  follows: defineTable({
+    followerId: v.id("users"),
+    followingId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_follower", ["followerId", "createdAt"])
+    .index("by_following", ["followingId", "createdAt"])
+    .index("by_pair", ["followerId", "followingId"]),
+
   exercises: defineTable({
     name: v.string(),
     muscleGroup: v.union(
@@ -166,6 +175,7 @@ export default defineSchema({
     userId: v.id("users"),
     date: v.number(),
     notes: v.optional(v.string()),
+    sourceTemplateId: v.optional(v.id("workout_templates")),
     isCompleted: v.boolean(),
   })
     .index("by_user", ["userId"])
@@ -180,6 +190,7 @@ export default defineSchema({
     ),
     showWeights: v.optional(v.boolean()),
     description: v.optional(v.string()),
+    executionCount: v.optional(v.number()),
     exercises: v.array(
       v.object({
         exerciseId: v.id("exercises"),

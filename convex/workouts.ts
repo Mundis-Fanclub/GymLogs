@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const templateVisibility = v.union(
   v.literal("private"),
@@ -222,6 +222,16 @@ export const resetEmptyStart = mutation({
 export const complete = mutation({
   args: { workoutId: v.id("workouts") },
   handler: async (ctx, args) => {
+    const workout = await ctx.db.get(args.workoutId);
+    if (!workout) return;
+    if (!workout.isCompleted && workout.sourceTemplateId) {
+      const template = await ctx.db.get(workout.sourceTemplateId);
+      if (template) {
+        await ctx.db.patch(template._id, {
+          executionCount: (template.executionCount ?? 0) + 1,
+        });
+      }
+    }
     await ctx.db.patch(args.workoutId, { isCompleted: true, date: Date.now() });
   },
 });
@@ -332,7 +342,7 @@ export const deleteTemplate = mutation({
 });
 
 async function areFriends(
-  ctx: QueryCtx,
+  ctx: QueryCtx | MutationCtx,
   a: Id<"users">,
   b: Id<"users">
 ) {
@@ -345,6 +355,15 @@ async function areFriends(
     )
     .unique();
   return friendship?.status === "accepted";
+}
+
+async function canUseTemplate(
+  ctx: QueryCtx | MutationCtx,
+  templateUserId: Id<"users">,
+  viewerId: Id<"users">
+) {
+  if (templateUserId === viewerId) return true;
+  return await areFriends(ctx, templateUserId, viewerId);
 }
 
 export const listProfileTemplates = query({
@@ -379,6 +398,7 @@ export const listProfileTemplates = query({
           ...template,
           visibility: template.visibility ?? "private",
           showWeights: template.showWeights ?? false,
+          executionCount: template.executionCount ?? 0,
           exercises: template.exercises.map((exercise) => ({
             ...exercise,
             sets: exercise.sets.map((set) => ({
@@ -404,6 +424,111 @@ export const listProfileTemplates = query({
             : null,
         };
       });
+  },
+});
+
+export const getTemplateForStart = query({
+  args: {
+    templateId: v.id("workout_templates"),
+    viewerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template) return null;
+
+    const visibility = template.visibility ?? "private";
+    const isSelf = template.userId === args.viewerId;
+    const canSee =
+      isSelf ||
+      visibility === "public" ||
+      (visibility === "friends" &&
+        (await canUseTemplate(ctx, template.userId, args.viewerId)));
+
+    if (!canSee) return null;
+
+    const showWeights = isSelf || template.showWeights === true;
+    return {
+      _id: template._id,
+      userId: template.userId,
+      name: template.name,
+      description: template.description,
+      visibility,
+      showWeights: template.showWeights ?? false,
+      executionCount: template.executionCount ?? 0,
+      exercises: template.exercises.map((exercise) => ({
+        exerciseName: exercise.exerciseName,
+        muscleGroup: exercise.muscleGroup,
+        category: exercise.category,
+        sets: exercise.sets.map((set) => ({
+          reps: set.reps,
+          weight: showWeights ? set.weight : null,
+        })),
+      })),
+      totalExercises: template.exercises.length,
+      totalSets: template.exercises.reduce(
+        (sum, exercise) => sum + exercise.sets.length,
+        0
+      ),
+      totalVolume: showWeights
+        ? template.exercises.reduce(
+            (sum, exercise) =>
+              sum +
+              exercise.sets.reduce(
+                (exerciseSum, set) => exerciseSum + set.weight * set.reps,
+                0
+              ),
+            0
+          )
+        : null,
+    };
+  },
+});
+
+export const startFromTemplate = mutation({
+  args: {
+    templateId: v.id("workout_templates"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template) throw new Error("Template not found.");
+
+    const visibility = template.visibility ?? "private";
+    const canStart =
+      template.userId === args.userId ||
+      visibility === "public" ||
+      (visibility === "friends" &&
+        (await canUseTemplate(ctx, template.userId, args.userId)));
+
+    if (!canStart) throw new Error("Template not available.");
+
+    const includeWeights =
+      template.userId === args.userId || template.showWeights === true;
+    const workoutId = await ctx.db.insert("workouts", {
+      userId: args.userId,
+      date: Date.now(),
+      notes: `From template: ${template.name}`,
+      sourceTemplateId: template._id,
+      isCompleted: false,
+    });
+
+    let setOrder = 0;
+    for (const exercise of template.exercises) {
+      for (const set of exercise.sets) {
+        await ctx.db.insert("sets", {
+          workoutId,
+          exerciseId: exercise.exerciseId,
+          userId: args.userId,
+          weight: includeWeights ? set.weight : 0,
+          reps: set.reps,
+          setOrder,
+          createdAt: Date.now(),
+        });
+        setOrder += 1;
+      }
+    }
+
+    return workoutId;
   },
 });
 

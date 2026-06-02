@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import {
   Ban,
   Calendar,
+  ChevronDown,
   Crown,
   Dumbbell,
   Flag,
@@ -13,6 +15,7 @@ import {
   Bookmark,
   MapPin,
   MessageCircle,
+  Play,
   Ruler,
   Scale,
   Send,
@@ -26,20 +29,14 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { ProfilePageIsland } from "@/components/profile/ProfilePageIsland";
+import { FollowDialog } from "@/components/profile/FollowDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-
-const ACCENTS = {
-  emerald: "from-emerald-500 via-sky-500 to-slate-950",
-  sky: "from-sky-500 via-cyan-400 to-slate-950",
-  rose: "from-rose-500 via-orange-400 to-slate-950",
-  amber: "from-amber-400 via-lime-500 to-slate-950",
-  violet: "from-violet-500 via-fuchsia-400 to-slate-950",
-} as const;
+import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 
 type ProfileTopLog = {
   submission: {
@@ -67,6 +64,7 @@ type ProfileWorkoutTemplate = {
   totalExercises: number;
   totalSets: number;
   totalVolume: number | null;
+  executionCount: number;
   exercises: Array<{
     exerciseName: string;
     muscleGroup: string;
@@ -79,6 +77,7 @@ type ProfilePostComment = {
   _id: Id<"social_comments">;
   body: string;
   createdAt: number;
+  updatedAt?: number;
   author: null | {
     _id: Id<"users">;
     name: string;
@@ -97,6 +96,7 @@ type ProfilePost = {
   _id: Id<"social_posts">;
   body: string;
   createdAt: number;
+  updatedAt?: number;
   mediaUrl?: string | null;
   mediaType?: "image" | "video" | "gif";
   likedByViewer: boolean;
@@ -136,6 +136,7 @@ function PublicProfileContent({
   viewedUserId: Id<"users">;
   userId: Id<"users"> | null | undefined;
 }) {
+  const { locale, t } = useAppPreferences();
   const profile = useQuery(api.users.getPublicProfile, {
     userId: viewedUserId,
     ...(userId ? { viewerId: userId } : {}),
@@ -155,22 +156,29 @@ function PublicProfileContent({
     ...(userId ? { viewerId: userId } : {}),
     limit: 30,
   });
+  const followGraph = useQuery(api.follows.listForProfile, {
+    userId: viewedUserId,
+    ...(userId ? { viewerId: userId } : {}),
+    limit: 80,
+  });
   const sendMessage = useMutation(api.messages.send);
   const togglePostLike = useMutation(api.social.toggleLike);
   const togglePostSave = useMutation(api.social.toggleSave);
   const addProfilePostComment = useMutation(api.social.addComment);
-  const friends = useQuery(api.friends.list, userId ? { userId } : "skip");
-  const addFriend = useMutation(api.friends.addByUsername);
-  const removeFriend = useMutation(api.friends.remove);
+  const followUser = useMutation(api.follows.follow);
+  const unfollowUser = useMutation(api.follows.unfollow);
   const blockUser = useMutation(api.messages.blockUser);
   const reportUser = useMutation(api.messages.reportUser);
   const [body, setBody] = useState("");
   const [sent, setSent] = useState(false);
-  const [reportReason, setReportReason] = useState("Profil wirkt wie Spam");
+  const [reportReason, setReportReason] = useState(t("profile.public.reportDefault"));
   const [showReport, setShowReport] = useState(false);
   const [showMessageComposer, setShowMessageComposer] = useState(false);
+  const [followDialogOpen, setFollowDialogOpen] = useState(false);
+  const [activePublicTab, setActivePublicTab] = useState<"posts" | "media">("posts");
   const [commentBodies, setCommentBodies] = useState<Record<string, string>>({});
   const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
+  const mediaPosts = useMemo(() => posts?.filter((post) => Boolean(post.mediaUrl)), [posts]);
 
   async function submit() {
     if (!userId || !body.trim()) return;
@@ -200,18 +208,34 @@ function PublicProfileContent({
     setActiveCommentPostId(null);
   }
 
+  function toggleFollowProfile() {
+    if (!userId) return;
+    if (followGraph?.viewerFollowing) {
+      void unfollowUser({ followerId: userId, followingId: viewedUserId });
+    } else {
+      void followUser({ followerId: userId, followingId: viewedUserId });
+    }
+  }
+
+  function toggleFollowInDialog(targetId: Id<"users">, following: boolean) {
+    if (!userId) return;
+    if (following) {
+      void unfollowUser({ followerId: userId, followingId: targetId });
+    } else {
+      void followUser({ followerId: userId, followingId: targetId });
+    }
+  }
+
   if (profile === undefined) {
-    return <p className="text-sm text-muted-foreground">Profil wird geladen...</p>;
+    return <p className="text-sm text-muted-foreground">{t("profile.public.loading")}</p>;
   }
 
   if (!profile) {
-    return <p className="text-sm text-muted-foreground">Profil nicht gefunden.</p>;
+    return <p className="text-sm text-muted-foreground">{t("profile.public.notFound")}</p>;
   }
 
   const isSelf = userId === viewedUserId;
-  const friendship = friends?.find((entry) => entry.friend?._id === viewedUserId);
-  const accent = ACCENTS[(profile.profileAccent ?? "emerald") as keyof typeof ACCENTS] ?? ACCENTS.emerald;
-  const canAddFriend = Boolean(userId && !isSelf && profile.username);
+  const canFollow = Boolean(userId && !isSelf);
   const canMessage = Boolean(userId && !isSelf && profile.allowMessages);
   const publicFields = (profile.publicFields ?? {}) as {
     trainingSummary?: boolean;
@@ -230,13 +254,13 @@ function PublicProfileContent({
     showTrainingActivity ||
     showTrainingVolume;
   const visibleMetrics = [
-    profile.heightCm ? { icon: Ruler, label: "Größe", value: `${profile.heightCm} cm` } : null,
-    profile.weightKg ? { icon: Scale, label: "Gewicht", value: `${profile.weightKg} kg` } : null,
+    profile.heightCm ? { icon: Ruler, label: t("profile.fields.heightCm"), value: `${profile.heightCm} cm` } : null,
+    profile.weightKg ? { icon: Scale, label: t("profile.fields.weightKg"), value: `${profile.weightKg} kg` } : null,
     profile.birthDate
       ? {
           icon: Calendar,
-          label: "Geburtsdatum",
-          value: new Date(profile.birthDate).toLocaleDateString("de-DE"),
+          label: t("profile.fields.birthDate"),
+          value: new Date(profile.birthDate).toLocaleDateString(locale),
         }
       : null,
   ].filter(Boolean) as Array<{ icon: typeof Ruler; label: string; value: string }>;
@@ -245,53 +269,51 @@ function PublicProfileContent({
     <div className="mx-auto max-w-5xl space-y-5 overflow-x-hidden">
       <Card className="overflow-hidden">
         <div
-          className={`relative min-h-[23rem] bg-gradient-to-br bg-cover bg-center sm:min-h-52 ${accent}`}
+          className="relative min-h-[23rem] bg-muted bg-cover bg-center sm:min-h-52"
           style={profile.coverUrl ? { backgroundImage: `url(${profile.coverUrl})` } : undefined}
         >
-          <div className="absolute inset-0 bg-black/25" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/15 via-background/35 to-background/85" />
           <div className="absolute bottom-4 left-4 right-4 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex min-w-0 items-end gap-3 sm:gap-4">
               <Avatar name={profile.name} avatarUrl={profile.avatarUrl} />
-              <div className="min-w-0 text-white">
+              <div className="min-w-0 text-foreground">
                 <h1 className="flex min-w-0 items-center gap-2 text-2xl font-semibold sm:text-3xl">
                   <span className="truncate">{profile.name}</span>
                   {profile.isPro && <Crown className="h-6 w-6 shrink-0 text-amber-300" />}
                 </h1>
-                <p className="truncate text-sm text-white/80">@{profile.username ?? "user"}</p>
+                <p className="truncate text-sm text-muted-foreground">@{profile.username ?? "user"}</p>
+                <button
+                  type="button"
+                  className="mt-2 text-left text-sm font-medium text-muted-foreground transition hover:text-foreground"
+                  onClick={() => setFollowDialogOpen(true)}
+                >
+                  {(followGraph?.followerCount ?? 0).toLocaleString(locale)} {t("profile.follow.followerLine")}
+                </button>
               </div>
             </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:min-w-[22rem] sm:flex-wrap sm:justify-end">
               {canMessage && (
-                <Button className="w-full sm:w-auto" onClick={() => setShowMessageComposer((value) => !value)}>
+                <Button className="h-10 w-full rounded-full sm:w-auto sm:min-w-40" onClick={() => setShowMessageComposer((value) => !value)}>
                   <MessageCircle className="h-4 w-4" />
-                  Nachricht senden
+                  {t("profile.public.sendMessage")}
                 </Button>
               )}
-              {canAddFriend && (
+              {canFollow && (
                 <Button
-                  className="w-full sm:w-auto"
-                  variant={friendship ? "secondary" : "outline"}
-                  onClick={() => {
-                    if (!userId || !profile.username) return;
-                    return friendship
-                      ? removeFriend({ userId, friendId: viewedUserId })
-                      : addFriend({ userId, username: profile.username });
-                  }}
+                  className="h-10 w-full rounded-full sm:w-auto sm:min-w-36"
+                  variant={followGraph?.viewerFollowing ? "secondary" : "outline"}
+                  onClick={toggleFollowProfile}
                 >
                   <User className="h-4 w-4" />
-                  {friendship ? "Befreundet" : "Freund hinzufügen"}
+                  {followGraph?.viewerFollowing ? t("profile.follow.following") : t("profile.follow.follow")}
                 </Button>
               )}
               {userId && !isSelf && profile.isPublic !== false && (
                 <>
-                  <Button className="w-full sm:w-auto" variant="outline" onClick={() => blockUser({ blockerId: userId, blockedId: viewedUserId })}>
-                    <Ban className="h-4 w-4" />
-                    Blockieren
-                  </Button>
-                  <Button className="w-full sm:w-auto" variant="outline" onClick={() => setShowReport((value) => !value)}>
-                    <Flag className="h-4 w-4" />
-                    Melden
-                  </Button>
+                  <Button className="h-10 w-full rounded-full sm:w-auto" variant="outline" onClick={() => blockUser({ blockerId: userId, blockedId: viewedUserId })}>
+                    <Ban className="h-4 w-4" />{t("profile.public.block")}</Button>
+                  <Button className="h-10 w-full rounded-full sm:w-auto" variant="outline" onClick={() => setShowReport((value) => !value)}>
+                    <Flag className="h-4 w-4" />{t("profile.public.report")}</Button>
                 </>
               )}
             </div>
@@ -306,13 +328,13 @@ function PublicProfileContent({
                 {profile.favoriteLift && <Badge variant="secondary"><Dumbbell className="h-3 w-3" />{profile.favoriteLift}</Badge>}
                 {profile.isPro && <Badge className="gap-1 bg-amber-500 text-black"><Crown className="h-3 w-3" />Pro</Badge>}
                 {topLogs?.some((log) => log.isTopFivePercent) && <Badge className="gap-1"><Sparkles className="h-3 w-3" />Top 5%</Badge>}
-                {profile.trainingSummary?.completedWorkouts ? <Badge><Trophy className="h-3 w-3" />Aktiv</Badge> : <Badge variant="outline">Neu</Badge>}
+                {profile.trainingSummary?.completedWorkouts ? <Badge><Trophy className="h-3 w-3" />{t("profile.public.active")}</Badge> : <Badge variant="outline">{t("profile.public.new")}</Badge>}
               </div>
 
               {profile.bio && <p className="text-sm leading-6">{profile.bio}</p>}
               {profile.trainingGoal && (
                 <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                  <p className="mb-1 flex items-center gap-2 font-medium"><Target className="h-4 w-4" />Trainingsziel</p>
+                  <p className="mb-1 flex items-center gap-2 font-medium"><Target className="h-4 w-4" />{t("profile.fields.trainingGoal")}</p>
                   <p className="text-muted-foreground">{profile.trainingGoal}</p>
                 </div>
               )}
@@ -327,18 +349,18 @@ function PublicProfileContent({
 
               {profile.trainingSummary && hasVisibleTrainingMetric ? (
                 <div className="grid gap-3 min-[380px]:grid-cols-2 lg:grid-cols-4">
-                  {showTrainingStreak && <Metric icon={Sparkles} label="Streak" value={`${profile.trainingSummary.currentStreakDays} Tage`} />}
+                  {showTrainingStreak && <Metric icon={Sparkles} label={t("profile.metrics.streak")} value={`${profile.trainingSummary.currentStreakDays} ${t("profile.public.days")}`} />}
                   {showTrainingBestSet && profile.trainingSummary.bestSet && (
-                    <Metric icon={Dumbbell} label="Top Lift" value={`${profile.trainingSummary.bestSet.weight} kg x ${profile.trainingSummary.bestSet.reps}`} />
+                    <Metric icon={Dumbbell} label={t("profile.metrics.topLift")} value={`${profile.trainingSummary.bestSet.weight} kg x ${profile.trainingSummary.bestSet.reps}`} />
                   )}
-                  {showTrainingActivity && <Metric icon={Calendar} label="AktivitÃ¤t" value={`${profile.trainingSummary.averageWorkoutsPerWeek}/Woche`} />}
-                  {showTrainingVolume && <Metric icon={Trophy} label="Volumen" value={`${Math.round(profile.trainingSummary.totalVolume).toLocaleString("de-DE")} kg`} />}
+                  {showTrainingActivity && <Metric icon={Calendar} label={t("profile.metrics.activity")} value={`${profile.trainingSummary.averageWorkoutsPerWeek}/${t("profile.metrics.week")}`} />}
+                  {showTrainingVolume && <Metric icon={Trophy} label={t("profile.metrics.volume30")} value={`${Math.round(profile.trainingSummary.totalVolume).toLocaleString(locale)} kg`} />}
                 </div>
               ) : null}
 
               {showTrainingBestSet && profile.trainingSummary?.bestSet && (
                 <div className="rounded-lg border border-border bg-muted/30 p-4">
-                  <p className="mb-1 text-sm font-medium">Stärkstes öffentliches Set</p>
+                  <p className="mb-1 text-sm font-medium">{t("profile.public.bestPublicSet")}</p>
                   <p className="text-sm text-muted-foreground">
                     {profile.trainingSummary.bestSet.exerciseName}: {profile.trainingSummary.bestSet.weight} kg x {profile.trainingSummary.bestSet.reps}
                   </p>
@@ -353,23 +375,23 @@ function PublicProfileContent({
         )}
       </Card>
 
-      {sent && <p className="px-1 text-sm text-emerald-500">Nachricht gesendet.</p>}
+      {sent && <p className="px-1 text-sm text-emerald-500">{t("profile.public.messageSent")}</p>}
 
       {showMessageComposer && canMessage && (
         <Card>
           <CardContent className="space-y-3 p-4 sm:p-6">
             <div className="flex items-center gap-2 font-medium">
               <MessageCircle className="h-4 w-4" />
-              Nachricht senden
+              {t("profile.public.sendMessage")}
             </div>
             <Textarea value={body} onChange={(event) => setBody(event.target.value)} rows={3} maxLength={600} />
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button size="sm" onClick={submit} disabled={!body.trim()}>
                 <Send className="h-4 w-4" />
-                Senden
+                {t("profile.networkPanel.send")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setShowMessageComposer(false)}>
-                Abbrechen
+                {t("profile.misc.cancel")}
               </Button>
             </div>
           </CardContent>
@@ -379,13 +401,13 @@ function PublicProfileContent({
       {showReport && userId && !isSelf && (
         <Card>
           <CardContent className="space-y-3 p-4 sm:p-6">
-            <Label>Meldegrund</Label>
+            <Label>{t("profile.public.reportReason")}</Label>
             <Input value={reportReason} onChange={(event) => setReportReason(event.target.value)} />
             <p className="text-xs text-muted-foreground">
-              Profilmeldungen landen in der Moderationsqueue. Nachrichten lassen sich direkt in Unterhaltungen melden.
+              {t("profile.public.reportCopy")}
             </p>
             <Button variant="destructive" onClick={submitProfileReport}>
-              Profil melden
+              {t("profile.public.reportProfile")}
             </Button>
           </CardContent>
         </Card>
@@ -395,39 +417,69 @@ function PublicProfileContent({
         <Card>
           <CardContent className="flex items-center gap-3 p-4 text-sm text-muted-foreground">
             <User className="h-4 w-4" />
-            Melde dich an, um Nachrichten zu schreiben.
+            {t("profile.public.signInToMessage")}
           </CardContent>
         </Card>
       )}
 
       {profile.isPublic !== false && (
-        <ProfilePostsPanel
-          posts={posts}
-          userId={userId}
-          commentBodies={commentBodies}
-          activeCommentPostId={activeCommentPostId}
-          onLike={(postId) => userId && togglePostLike({ userId, postId })}
-          onSave={(postId) => userId && togglePostSave({ userId, postId })}
-          onToggleComment={(postId) =>
-            setActiveCommentPostId((current) => current === postId ? null : postId)
-          }
-          onCommentBodyChange={(postId, body) =>
-            setCommentBodies((current) => ({ ...current, [postId]: body }))
-          }
-          onSubmitComment={submitProfilePostComment}
-        />
+        <>
+          <div className="border-b border-border">
+            <div className="flex gap-4 sm:gap-5">
+              {(["posts", "media"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`relative min-h-11 px-1 text-base font-semibold transition-colors sm:min-h-12 sm:text-lg ${
+                    activePublicTab === tab ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setActivePublicTab(tab)}
+                >
+                  {tab === "posts" ? t("profile.tabs.posts") : t("profile.tabs.media")}
+                  {activePublicTab === tab && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />}
+                </button>
+              ))}
+            </div>
+          </div>
+          <ProfilePostsPanel
+            posts={activePublicTab === "media" ? mediaPosts : posts}
+            userId={userId}
+            commentBodies={commentBodies}
+            activeCommentPostId={activeCommentPostId}
+            onLike={(postId) => userId && togglePostLike({ userId, postId })}
+            onSave={(postId) => userId && togglePostSave({ userId, postId })}
+            onToggleComment={(postId) =>
+              setActiveCommentPostId((current) => current === postId ? null : postId)
+            }
+            onCommentBodyChange={(postId, body) =>
+              setCommentBodies((current) => ({ ...current, [postId]: body }))
+            }
+            onSubmitComment={submitProfilePostComment}
+            emptyTitle={activePublicTab === "media" ? t("profile.public.mediaEmptyTitle") : undefined}
+          />
+        </>
       )}
+      <FollowDialog
+        open={followDialogOpen}
+        onOpenChange={setFollowDialogOpen}
+        graph={followGraph}
+        viewerId={userId}
+        profileUserId={viewedUserId}
+        onFollowToggle={toggleFollowInDialog}
+      />
     </div>
   );
 }
 
 function TopLogsPanel({ logs }: { logs: ProfileTopLog[] | undefined }) {
+  const { locale, t } = useAppPreferences();
+
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="flex items-center gap-2 text-sm font-medium">
           <Trophy className="h-4 w-4" />
-          Top Logs
+          {t("profile.tabs.logs")}
         </p>
         {logs?.some((log) => log.isTopFivePercent) && (
           <Badge className="gap-1">
@@ -437,9 +489,9 @@ function TopLogsPanel({ logs }: { logs: ProfileTopLog[] | undefined }) {
         )}
       </div>
       {logs === undefined ? (
-        <p className="text-sm text-muted-foreground">Top Logs werden geladen...</p>
+        <p className="text-sm text-muted-foreground">{t("profile.topLogs.loading")}</p>
       ) : logs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Noch keine verified Top Logs sichtbar.</p>
+        <p className="text-sm text-muted-foreground">{t("profile.topLogs.empty")}</p>
       ) : (
         <div className="space-y-2">
           {logs.map((log) => (
@@ -454,7 +506,7 @@ function TopLogsPanel({ logs }: { logs: ProfileTopLog[] | undefined }) {
                 <div className="flex flex-wrap gap-2">
                   {log.rank && (
                     <Badge variant="secondary">
-                      #{log.rank} von {log.total}
+                      #{log.rank} {t("profile.topLogs.of")} {log.total}
                     </Badge>
                   )}
                   {log.percentile && <Badge variant="outline">{log.percentile}%</Badge>}
@@ -468,7 +520,7 @@ function TopLogsPanel({ logs }: { logs: ProfileTopLog[] | undefined }) {
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 {LIFT_LABELS[log.submission.liftType]} · {log.submission.bodyweightClass} ·{" "}
-                {new Date(log.submission.submittedAt).toLocaleDateString("de-DE")}
+                {new Date(log.submission.submittedAt).toLocaleDateString(locale)}
               </p>
             </div>
           ))}
@@ -483,45 +535,66 @@ function WorkoutTemplatesPanel({
 }: {
   templates: ProfileWorkoutTemplate[] | undefined;
 }) {
+  const { locale, t } = useAppPreferences();
+  const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
+
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="flex items-center gap-2 text-sm font-medium">
           <Dumbbell className="h-4 w-4" />
-          Workout-Playlists
+          {t("profile.playlists.title")}
         </p>
       </div>
       {templates === undefined ? (
-        <p className="text-sm text-muted-foreground">Workout-Playlists werden geladen...</p>
+        <p className="text-sm text-muted-foreground">{t("profile.playlists.loading")}</p>
       ) : templates.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Keine sichtbaren Workout-Playlists.</p>
+        <p className="text-sm text-muted-foreground">{t("profile.playlists.emptyPublic")}</p>
       ) : (
         <div className="space-y-3">
-          {templates.map((template) => (
-            <div key={template._id} className="rounded-lg border border-border bg-background p-3">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          {templates.map((template) => {
+            const isExpanded = expandedTemplateId === template._id;
+            return (
+            <div key={template._id} className="rounded-lg border border-border bg-background p-3 transition hover:border-primary/30 hover:bg-muted/20">
+              <button
+                type="button"
+                className="flex w-full flex-col gap-2 text-left sm:flex-row sm:items-start sm:justify-between"
+                onClick={() => setExpandedTemplateId((current) => current === template._id ? null : template._id)}
+                aria-expanded={isExpanded}
+              >
                 <div>
                   <p className="font-medium">{template.name}</p>
                   {template.description && (
                     <p className="mt-1 text-sm text-muted-foreground">{template.description}</p>
                   )}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {template.totalExercises} Übungen · {template.totalSets} Sets
+                    {template.totalExercises} {t("profile.playlists.exercises")} · {template.totalSets} Sets
                     {template.totalVolume !== null
-                      ? ` · ${Math.round(template.totalVolume).toLocaleString("de-DE")} kg`
-                      : " · Gewichte verborgen"}
+                      ? ` · ${Math.round(template.totalVolume).toLocaleString(locale)} kg`
+                      : ` · ${t("profile.playlists.weightsHidden")}`}
+                    {" · "}
+                    {template.executionCount} {t("profile.playlists.performedCount")}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={template.visibility === "public" ? "default" : "outline"}>
-                    {template.visibility === "public" ? "Öffentlich" : "Nur Freunde"}
+                    {template.visibility === "public" ? t("profile.playlists.public") : t("profile.playlists.friends")}
                   </Badge>
                   <Badge variant="secondary">
-                    {template.showWeights ? "Mit Gewichten" : "Ohne Gewichte"}
+                    {template.showWeights ? t("profile.playlists.withWeights") : t("profile.playlists.withoutWeights")}
                   </Badge>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                 </div>
-              </div>
-              <div className="mt-3 grid gap-2">
+              </button>
+              {isExpanded && (
+              <div className="mt-3 grid gap-3 border-t border-border pt-3">
+                <Link href={`/workouts/new?templateId=${template._id}`} className="inline-flex">
+                  <Button className="gap-2">
+                    <Play className="h-4 w-4" />
+                    {t("profile.playlists.startWorkout")}
+                  </Button>
+                </Link>
+                <div className="grid gap-2">
                 {template.exercises.slice(0, 4).map((exercise) => (
                   <div key={`${template._id}-${exercise.exerciseName}`} className="rounded-lg bg-muted/30 p-2 text-sm">
                     <div className="flex items-center justify-between gap-2">
@@ -532,15 +605,18 @@ function WorkoutTemplatesPanel({
                       {exercise.sets
                         .slice(0, 4)
                         .map((set) =>
-                          set.weight === null ? `${set.reps} Wdh.` : `${set.weight} kg x ${set.reps}`
+                          set.weight === null ? `${set.reps} ${t("profile.playlists.repsShort")}` : `${set.weight} kg x ${set.reps}`
                         )
                         .join(" · ")}
                     </p>
                   </div>
                 ))}
+                </div>
               </div>
+              )}
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>
@@ -552,6 +628,7 @@ function ProfilePostsPanel({
   userId,
   commentBodies,
   activeCommentPostId,
+  emptyTitle,
   onLike,
   onSave,
   onToggleComment,
@@ -562,27 +639,45 @@ function ProfilePostsPanel({
   userId: Id<"users"> | null | undefined;
   commentBodies: Record<string, string>;
   activeCommentPostId: string | null;
+  emptyTitle?: string;
   onLike: (postId: Id<"social_posts">) => void;
   onSave: (postId: Id<"social_posts">) => void;
   onToggleComment: (postId: Id<"social_posts">) => void;
   onCommentBodyChange: (postId: Id<"social_posts">, body: string) => void;
   onSubmitComment: (postId: Id<"social_posts">) => void;
 }) {
+  const { locale, t } = useAppPreferences();
+  async function sharePost(postId: Id<"social_posts">) {
+    const postUrl = `${window.location.origin}/social?post=${postId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: t("profile.public.sharePost"),
+          url: postUrl,
+        });
+        return;
+      }
+      await navigator.clipboard?.writeText(postUrl);
+    } catch {
+      // Closing the native share sheet should not break the post UI.
+    }
+  }
+
   return (
     <section className="space-y-3">
       <div className="border-b border-border pb-3">
-        <p className="text-sm font-medium">Beiträge</p>
-        <p className="text-xs text-muted-foreground">Neueste zuerst</p>
+        <p className="text-sm font-medium">{t("profile.public.postsTitle")}</p>
+        <p className="text-xs text-muted-foreground">{t("profile.public.newestFirst")}</p>
       </div>
       {posts === undefined ? (
-        <p className="text-sm text-muted-foreground">Beiträge werden geladen...</p>
+        <p className="text-sm text-muted-foreground">{t("profile.public.postsLoading")}</p>
       ) : posts.length === 0 ? (
         <div className="flex min-h-44 flex-col items-center justify-center gap-3 rounded-lg border border-border bg-muted/20 p-6 text-center">
           <MessageCircle className="h-10 w-10 text-muted-foreground" />
           <div>
-            <p className="font-medium">Noch keine Beiträge</p>
+            <p className="font-medium">{emptyTitle ?? t("profile.public.postsEmptyTitle")}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Wenn Beiträge geteilt werden, erscheinen sie hier.
+              {t("profile.public.postsEmptyCopy")}
             </p>
           </div>
         </div>
@@ -592,12 +687,16 @@ function ProfilePostsPanel({
             const commentBody = commentBodies[post._id] ?? "";
             const showCommentInput = activeCommentPostId === post._id;
             const visibleComments = post.comments ?? [];
+            const edited = Boolean(post.updatedAt && post.updatedAt > post.createdAt);
             return (
             <article key={post._id} className="space-y-3 p-4">
               <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                <time title={new Date(post.createdAt).toLocaleString("de-DE")}>
-                  {new Date(post.createdAt).toLocaleDateString("de-DE")}
-                </time>
+                <div className="flex items-center gap-2">
+                  <time title={new Date(post.createdAt).toLocaleString(locale)}>
+                    {new Date(post.createdAt).toLocaleDateString(locale)}
+                  </time>
+                  {edited && <span>{t("profile.public.edited")}</span>}
+                </div>
                 <div className="flex items-center gap-4">
                   <span>{post.likeCount} Likes</span>
                   <span>{post.commentCount} Kommentare</span>
@@ -631,19 +730,19 @@ function ProfilePostsPanel({
                   <MessageCircle className="h-4 w-4" />
                   {post.commentCount}
                 </button>
-                <button type="button" disabled={!userId} onClick={() => onSave(post._id)} className={`inline-flex items-center gap-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 ${post.savedByViewer ? "text-cyan-500 hover:text-cyan-500" : ""}`}>
+                <button type="button" disabled={!userId} onClick={() => onSave(post._id)} className={`inline-flex items-center gap-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 ${post.savedByViewer ? "text-primary hover:text-primary" : ""}`}>
                   <Bookmark className={`h-4 w-4 ${post.savedByViewer ? "fill-current" : ""}`} />
-                  Speichern
+                  {t("profile.public.savePost")}
                 </button>
-                <span className="inline-flex items-center gap-1">
+                <button type="button" onClick={() => sharePost(post._id)} className="inline-flex items-center gap-1 transition hover:text-foreground">
                   <Share2 className="h-4 w-4" />
-                  Teilen
-                </span>
+                  {t("profile.public.sharePost")}
+                </button>
               </div>
               {visibleComments.length > 0 && (
                 <div className="space-y-3 border-t border-border pt-3">
                   {visibleComments.map((comment) => (
-                    <ProfileCommentPreview key={comment._id} comment={comment} />
+                    <ProfileCommentPreview key={comment._id} comment={comment} postId={post._id} userId={userId} />
                   ))}
                 </div>
               )}
@@ -652,11 +751,11 @@ function ProfilePostsPanel({
                   <Input
                     value={commentBody}
                     onChange={(event) => onCommentBodyChange(post._id, event.target.value)}
-                    placeholder="Kommentieren..."
+                    placeholder={t("profile.public.commentPlaceholder")}
                     maxLength={500}
                   />
                   <Button size="sm" disabled={!commentBody.trim()} onClick={() => onSubmitComment(post._id)}>
-                    Senden
+                    {t("profile.networkPanel.send")}
                   </Button>
                 </div>
               )}
@@ -671,12 +770,38 @@ function ProfilePostsPanel({
 
 function ProfileCommentPreview({
   comment,
+  postId,
+  userId,
   isReply = false,
 }: {
   comment: ProfilePostComment;
+  postId: Id<"social_posts">;
+  userId: Id<"users"> | null | undefined;
   isReply?: boolean;
 }) {
-  const authorName = comment.author?.username ?? comment.author?.name ?? "Unbekannt";
+  const { locale, t } = useAppPreferences();
+  const addComment = useMutation(api.social.addComment);
+  const updateComment = useMutation(api.social.updateComment);
+  const [replying, setReplying] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editingBody, setEditingBody] = useState(comment.body);
+  const authorName = comment.author?.username ?? comment.author?.name ?? t("profile.public.unknownUser");
+  const isOwnComment = Boolean(userId && comment.author?._id === userId);
+  const edited = Boolean(comment.updatedAt && comment.updatedAt > comment.createdAt);
+
+  async function submitReply() {
+    if (!userId || !replyBody.trim()) return;
+    await addComment({ userId, postId, parentCommentId: comment._id, body: replyBody });
+    setReplyBody("");
+    setReplying(false);
+  }
+
+  async function saveEdit() {
+    if (!userId || !editingBody.trim()) return;
+    await updateComment({ userId, commentId: comment._id, body: editingBody });
+    setEditing(false);
+  }
 
   return (
     <div className={`grid grid-cols-[2rem_minmax(0,1fr)] gap-3 text-sm ${isReply ? "ml-5 border-l border-border pl-3" : ""}`}>
@@ -684,13 +809,56 @@ function ProfileCommentPreview({
       <div className="min-w-0">
         <p className="truncate font-semibold leading-5">
           {authorName}
-          <span className="ml-2 font-normal text-muted-foreground">{formatProfilePostTime(comment.createdAt)}</span>
+          <span className="ml-2 font-normal text-muted-foreground">{formatProfilePostTime(comment.createdAt, locale, t("profile.public.justNow"))}</span>
+          {edited && <span className="ml-2 font-normal text-muted-foreground">{t("profile.public.edited")}</span>}
         </p>
-        <p className="whitespace-pre-wrap break-words leading-5 text-muted-foreground">{comment.body}</p>
+        {editing ? (
+          <div className="mt-2 space-y-2">
+            <Textarea value={editingBody} onChange={(event) => setEditingBody(event.target.value)} rows={2} maxLength={500} className="min-h-16 text-sm" />
+            <div className="flex justify-end gap-2">
+              <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                {t("profile.misc.cancel")}
+              </Button>
+              <Button type="button" size="sm" disabled={!editingBody.trim()} onClick={saveEdit}>
+                {t("profile.misc.save")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="whitespace-pre-wrap break-words leading-5 text-muted-foreground">{comment.body}</p>
+        )}
+        <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+          {!isReply && userId && (
+            <button type="button" className="transition hover:text-foreground" onClick={() => setReplying((value) => !value)}>
+              {t("profile.public.reply")}
+            </button>
+          )}
+          {isOwnComment && (
+            <button type="button" className="transition hover:text-foreground" onClick={() => {
+              setEditingBody(comment.body);
+              setEditing(true);
+            }}>
+              {t("profile.misc.edit")}
+            </button>
+          )}
+        </div>
+        {replying && (
+          <div className="mt-2 flex gap-2">
+            <Input
+              value={replyBody}
+              onChange={(event) => setReplyBody(event.target.value)}
+              placeholder={t("profile.public.replyPlaceholder")}
+              maxLength={500}
+            />
+            <Button type="button" size="icon" disabled={!replyBody.trim()} onClick={submitReply}>
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         {comment.replies && comment.replies.length > 0 && (
           <div className="mt-3 space-y-3">
             {comment.replies.map((reply) => (
-              <ProfileCommentPreview key={reply._id} comment={reply} isReply />
+              <ProfileCommentPreview key={reply._id} comment={reply} postId={postId} userId={userId} isReply />
             ))}
           </div>
         )}
@@ -699,16 +867,16 @@ function ProfileCommentPreview({
   );
 }
 
-function formatProfilePostTime(timestamp: number) {
+function formatProfilePostTime(timestamp: number, locale: string, justNow: string) {
   const diffMs = Date.now() - timestamp;
   const minute = 60 * 1000;
   const hour = 60 * minute;
   const day = 24 * hour;
 
-  if (diffMs < minute) return "gerade eben";
+  if (diffMs < minute) return justNow;
   if (diffMs < hour) return `${Math.floor(diffMs / minute)} Min.`;
   if (diffMs < day) return `${Math.floor(diffMs / hour)} Std.`;
-  return new Date(timestamp).toLocaleDateString("de-DE");
+  return new Date(timestamp).toLocaleDateString(locale);
 }
 
 function Avatar({ name, avatarUrl, size = "lg" }: { name: string; avatarUrl?: string; size?: "sm" | "lg" }) {

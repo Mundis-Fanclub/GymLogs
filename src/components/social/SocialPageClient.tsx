@@ -442,7 +442,7 @@ export function SocialPageClient() {
   replyBody={replyBodies[comment._id] ?? ""}
                       replyMedia={commentMediaDrafts[comment._id]}
                       editingCommentId={editingCommentId}
-                      editingBody={editingCommentBodies[comment._id] ?? comment.body}
+                      editingCommentBodies={editingCommentBodies}
                       openCommentMenuId={openCommentMenuId}
                       onToggleExpanded={() => setExpandedReplies({ ...expandedReplies, [comment._id]: !expandedReplies[comment._id] })}
                       onReplyToggle={() => setReplyingToCommentId(replyingToCommentId === comment._id ? null : comment._id)}
@@ -452,20 +452,20 @@ export function SocialPageClient() {
                       onSubmitReply={() => submitReply(thread.post._id, comment._id)}
                       onLike={(commentId) => userId && toggleCommentLike({ userId, commentId })}
                       onOpenCommentMenu={setOpenCommentMenuId}
-                      onEditComment={() => {
-                        setEditingCommentId(comment._id);
-                        setEditingCommentBodies({ ...editingCommentBodies, [comment._id]: comment.body });
+                      onEditComment={(commentId, body) => {
+                        setEditingCommentId(commentId);
+                        setEditingCommentBodies({ ...editingCommentBodies, [commentId]: body });
                         setOpenCommentMenuId(null);
                       }}
                       onDeleteComment={(commentId) => setPendingDelete({ kind: "comment", id: commentId })}
-                      onEditingBodyChange={(value) => setEditingCommentBodies({ ...editingCommentBodies, [comment._id]: value })}
+                      onEditingBodyChange={(commentId, value) => setEditingCommentBodies({ ...editingCommentBodies, [commentId]: value })}
                       onCancelEdit={() => setEditingCommentId(null)}
-                      onSaveEdit={() => {
+                      onSaveEdit={(commentId, body) => {
                         if (!userId) return;
                         void updateComment({
                           userId,
-                          commentId: comment._id,
-                          body: editingCommentBodies[comment._id] ?? comment.body,
+                          commentId,
+                          body: editingCommentBodies[commentId] ?? body,
                         });
                         setEditingCommentId(null);
                       }}
@@ -579,6 +579,7 @@ function PostCard({
     body: string;
     bodyAfter?: string;
     createdAt: number;
+    updatedAt?: number;
     mediaUrl?: string | null;
     mediaType?: MediaKind;
     mediaSize?: MediaSize;
@@ -627,6 +628,8 @@ function PostCard({
   const isOwnPost = Boolean(userId && post.author?._id === userId);
   const isEditing = editingPostId === post._id;
   const canRepost = Boolean(userId && !isOwnPost && !post.repostedByViewer && !post.repostOfPostId);
+  const { t } = useAppPreferences();
+  const edited = Boolean(post.updatedAt && post.updatedAt > post.createdAt);
 
   return (
     <article className={`border-b border-border p-3 transition-colors last:border-b-0 ${isThreadHeader ? "" : "hover:bg-muted/20"} sm:p-4`}>
@@ -645,6 +648,7 @@ function PostCard({
                 <time className="text-sm text-muted-foreground" title={new Date(post.createdAt).toLocaleString("de-DE")}>
                   {formatRelativeTime(post.createdAt)}
                 </time>
+                {edited && <span className="text-sm text-muted-foreground">{t("socialPage.edited")}</span>}
               </div>
               <p className="truncate text-xs text-muted-foreground">@{post.author?.name ?? "user"}</p>
             </div>
@@ -753,7 +757,7 @@ function CommentThread({
   replyBody,
   replyMedia,
   editingCommentId,
-  editingBody,
+  editingCommentBodies,
   openCommentMenuId,
   onToggleExpanded,
   onReplyToggle,
@@ -774,6 +778,7 @@ function CommentThread({
     authorId: Id<"users">;
     body: string;
     createdAt: number;
+    updatedAt?: number;
     mediaUrl?: string | null;
     mediaType?: "gif";
     author: null | { _id: Id<"users">; name: string; username?: string; avatarUrl?: string | null; isPro: boolean };
@@ -784,6 +789,7 @@ function CommentThread({
       authorId: Id<"users">;
       body: string;
       createdAt: number;
+      updatedAt?: number;
       mediaUrl?: string | null;
       mediaType?: "gif";
       author: null | { _id: Id<"users">; name: string; username?: string; avatarUrl?: string | null; isPro: boolean };
@@ -798,7 +804,7 @@ function CommentThread({
   replyBody: string;
   replyMedia?: CommentMediaDraft;
   editingCommentId: string | null;
-  editingBody: string;
+  editingCommentBodies: Record<string, string>;
   openCommentMenuId: string | null;
   onToggleExpanded: () => void;
   onReplyToggle: () => void;
@@ -808,11 +814,11 @@ function CommentThread({
   onSubmitReply: () => void;
   onLike: (commentId: Id<"social_comments">) => void;
   onOpenCommentMenu: (commentId: string | null) => void;
-  onEditComment: () => void;
+  onEditComment: (commentId: Id<"social_comments">, body: string) => void;
   onDeleteComment: (commentId: Id<"social_comments">) => void;
-  onEditingBodyChange: (value: string) => void;
+  onEditingBodyChange: (commentId: Id<"social_comments">, value: string) => void;
   onCancelEdit: () => void;
-  onSaveEdit: () => void;
+  onSaveEdit: (commentId: Id<"social_comments">, body: string) => void;
 }) {
   const shownReplies = expanded ? comment.replies : comment.replies.slice(0, 1);
   const hiddenReplyCount = Math.max(0, comment.replyCount - shownReplies.length);
@@ -823,16 +829,16 @@ function CommentThread({
         comment={comment}
         userId={userId}
         isEditing={editingCommentId === comment._id}
-        editingBody={editingBody}
+        editingBody={editingCommentBodies[comment._id] ?? comment.body}
         openCommentMenuId={openCommentMenuId}
         onLike={() => onLike(comment._id)}
         onReply={onReplyToggle}
         onOpenCommentMenu={onOpenCommentMenu}
-        onEditComment={onEditComment}
+        onEditComment={() => onEditComment(comment._id, comment.body)}
         onDeleteComment={() => onDeleteComment(comment._id)}
-        onEditingBodyChange={onEditingBodyChange}
+        onEditingBodyChange={(value) => onEditingBodyChange(comment._id, value)}
         onCancelEdit={onCancelEdit}
-        onSaveEdit={onSaveEdit}
+        onSaveEdit={() => onSaveEdit(comment._id, comment.body)}
       />
 
       {shownReplies.length > 0 && (
@@ -844,15 +850,15 @@ function CommentThread({
               userId={userId}
               isReply
               isEditing={editingCommentId === reply._id}
-              editingBody={editingBody}
+              editingBody={editingCommentBodies[reply._id] ?? reply.body}
               openCommentMenuId={openCommentMenuId}
               onLike={() => onLike(reply._id)}
               onOpenCommentMenu={onOpenCommentMenu}
-              onEditComment={() => undefined}
+              onEditComment={() => onEditComment(reply._id, reply.body)}
               onDeleteComment={() => onDeleteComment(reply._id)}
-              onEditingBodyChange={onEditingBodyChange}
+              onEditingBodyChange={(value) => onEditingBodyChange(reply._id, value)}
               onCancelEdit={onCancelEdit}
-              onSaveEdit={onSaveEdit}
+              onSaveEdit={() => onSaveEdit(reply._id, reply.body)}
             />
           ))}
         </div>
@@ -918,6 +924,8 @@ function CommentItem({
   onSaveEdit: () => void;
 }) {
   const isOwnComment = Boolean(userId && comment.author?._id === userId);
+  const { t } = useAppPreferences();
+  const edited = Boolean(comment.updatedAt && comment.updatedAt > comment.createdAt);
 
   return (
     <div className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3 text-sm">
@@ -928,6 +936,7 @@ function CommentItem({
             <p className="truncate font-semibold leading-5">
               {comment.author?.username ?? comment.author?.name ?? "Unbekannt"}
               <span className="ml-2 font-normal text-muted-foreground">{formatRelativeTime(comment.createdAt)}</span>
+              {edited && <span className="ml-2 font-normal text-muted-foreground">{t("socialPage.edited")}</span>}
             </p>
           </div>
           {isOwnComment && (
@@ -937,12 +946,10 @@ function CommentItem({
               </button>
               {openCommentMenuId === comment._id && (
                 <div className="absolute right-0 z-10 mt-1 w-36 overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-sm">
-                  {!isReply && (
-                    <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition hover:bg-muted" onClick={onEditComment}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      Bearbeiten
-                    </button>
-                  )}
+                  <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition hover:bg-muted" onClick={onEditComment}>
+                    <Pencil className="h-3.5 w-3.5" />
+                    Bearbeiten
+                  </button>
                   <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-destructive transition hover:bg-destructive/10" onClick={onDeleteComment}>
                     <Trash2 className="h-3.5 w-3.5" />
                     Löschen
@@ -994,6 +1001,7 @@ type CommentLike = {
   _id: Id<"social_comments">;
   body: string;
   createdAt: number;
+  updatedAt?: number;
   author: null | { _id: Id<"users">; name: string; username?: string; avatarUrl?: string | null; isPro: boolean };
   mediaUrl?: string | null;
   mediaType?: "gif";

@@ -7,12 +7,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeSwitcher } from "@/components/dev/ThemeSwitcher";
 import "./globals.css";
 
-// Synchronously restore the persisted theme before React renders to
-// avoid a flash of the default Orange palette on every page load.
-const themeInitScript = `
-(function(){try{var t=localStorage.getItem('gymlogs-theme');if(t&&t!=='orange')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
-`;
-
 const audiowide = Audiowide({
   variable: "--font-audiowide",
   weight: "400",
@@ -37,9 +31,6 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" className="dark" suppressHydrationWarning>
-        <head>
-          <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        </head>
         <body
           className={`${audiowide.variable} ${mozillaText.variable} antialiased`}
         >

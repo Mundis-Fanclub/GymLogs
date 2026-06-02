@@ -45,6 +45,7 @@ next-env.d.ts
 /.clerk/
 
 # local dev server logs
+.codex-*.log
 .devserver.*.log
 dev-server.log
 .convex-dev*.log

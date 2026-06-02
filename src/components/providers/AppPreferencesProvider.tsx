@@ -18,6 +18,9 @@ import {
 
 type Theme = "dark" | "light";
 
+const COLOR_MODE_STORAGE_KEY = "gymlogs-color-mode";
+const PALETTE_STORAGE_KEY = "gymlogs-theme";
+
 type AppPreferencesContextValue = {
   locale: Locale;
   setLocale: (locale: Locale) => void;
@@ -52,8 +55,17 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
       : detectLocale();
     setLocaleState(nextLocale);
 
-    const storedTheme = window.localStorage.getItem("gymlogs-theme");
-    setTheme(storedTheme === "light" || storedTheme === "dark" ? storedTheme : detectTheme());
+    const storedMode =
+      window.localStorage.getItem(COLOR_MODE_STORAGE_KEY) ??
+      window.localStorage.getItem(PALETTE_STORAGE_KEY);
+    setTheme(storedMode === "light" || storedMode === "dark" ? storedMode : detectTheme());
+
+    const storedPalette = window.localStorage.getItem(PALETTE_STORAGE_KEY);
+    if (storedPalette && storedPalette !== "orange" && storedPalette !== "light" && storedPalette !== "dark") {
+      document.documentElement.setAttribute("data-theme", storedPalette);
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
   }, []);
 
   useEffect(() => {
@@ -64,7 +76,7 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.classList.toggle("light", theme === "light");
-    window.localStorage.setItem("gymlogs-theme", theme);
+    window.localStorage.setItem(COLOR_MODE_STORAGE_KEY, theme);
   }, [theme]);
 
   const value = useMemo<AppPreferencesContextValue>(
