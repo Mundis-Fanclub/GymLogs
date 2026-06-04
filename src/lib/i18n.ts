@@ -290,6 +290,7 @@ export const dictionaries = {
         sendImage: "Send image",
         blockedPlaceholder: "You blocked this person.",
         inputPlaceholder: "Write a message...",
+        jumpToLatest: "Jump to latest",
         spamNotice: "Spam protection runs server-side with rate limits, duplicate checks, and link limits.",
       },
       networkPanel: {
@@ -330,6 +331,10 @@ export const dictionaries = {
     },
     socialPage: {
       composerPlaceholder: "What's new?",
+      forYou: "For You",
+      following: "Following",
+      forYouDescription: "Recommended posts from the whole GymLogs community.",
+      followingDescription: "Latest posts from athletes you follow.",
       discoverMore: "Discover more",
       createPost: "Create post",
       newPost: "Write a new post",
@@ -338,6 +343,20 @@ export const dictionaries = {
       attachMedia: "Attach image or video",
       post: "Post",
       edited: "(edited)",
+      feedLoading: "Loading feed...",
+      threadLoading: "Loading post...",
+      threadNotFound: "Post not found.",
+      threadTitle: "Post",
+      threadSubtitle: "Comments and replies",
+      backToFeed: "Back to feed",
+      popular: "Most popular",
+      comments: "Comments",
+      noComments: "No comments yet.",
+      emptyForYou: "No posts yet. Start the feed with a training update, image, or top-log video.",
+      emptyFollowing: "No posts from followed athletes yet. Follow people to build this feed.",
+      signInTitle: "Social requires login",
+      signInDescription: "Sign in to create, like, and comment on posts.",
+      signInAction: "Sign in",
     },
     dashboard: {
       eyebrow: "GymLogs MVP",
@@ -794,6 +813,7 @@ export const dictionaries = {
         sendImage: "Bild senden",
         blockedPlaceholder: "Du hast diese Person blockiert.",
         inputPlaceholder: "Nachricht schreiben...",
+        jumpToLatest: "Zu Neueste springen",
         spamNotice: "Spam-Schutz: Rate Limits, Duplicate-Check und Link-Limit laufen serverseitig.",
       },
       networkPanel: {
@@ -834,6 +854,10 @@ export const dictionaries = {
     },
     socialPage: {
       composerPlaceholder: "Was gibt's Neues?",
+      forYou: "Für Dich",
+      following: "Gefolgt",
+      forYouDescription: "Empfohlene Beiträge aus der ganzen GymLogs-Community.",
+      followingDescription: "Neueste Beiträge von Athleten, denen du folgst.",
       discoverMore: "Mehr entdecken",
       createPost: "Beitrag erstellen",
       newPost: "Neuen Beitrag schreiben",
@@ -842,6 +866,20 @@ export const dictionaries = {
       attachMedia: "Bild oder Video anhaengen",
       post: "Posten",
       edited: "(bearbeitet)",
+      feedLoading: "Feed wird geladen...",
+      threadLoading: "Post wird geladen...",
+      threadNotFound: "Post nicht gefunden.",
+      threadTitle: "Post",
+      threadSubtitle: "Kommentare und Antworten",
+      backToFeed: "Zurück zum Feed",
+      popular: "Beliebteste",
+      comments: "Kommentare",
+      noComments: "Noch keine Kommentare.",
+      emptyForYou: "Noch keine Posts. Starte den Feed mit einem Trainingsupdate, Bild oder Top-Log-Video.",
+      emptyFollowing: "Noch keine Beiträge von gefolgten Athleten. Folge Personen, um diesen Feed aufzubauen.",
+      signInTitle: "Social nur mit Login",
+      signInDescription: "Melde dich an, um Posts zu erstellen, zu liken und zu kommentieren.",
+      signInAction: "Anmelden",
     },
     dashboard: {
       eyebrow: "GymLogs MVP",
@@ -1027,47 +1065,51 @@ type Dictionary = typeof dictionaries.en;
 
 function withGermanUmlauts(value: string): string {
   return value
-    .replaceAll("Ueb", "Üb")
-    .replaceAll("ueb", "üb")
-    .replaceAll("Ae", "Ä")
-    .replaceAll("ae", "ä")
-    .replaceAll("Oe", "Ö")
-    .replaceAll("oe", "ö")
-    .replaceAll("Woe", "Wö")
-    .replaceAll("woe", "wö")
-    .replaceAll("fuer", "für")
-    .replaceAll("Fuer", "Für")
-    .replaceAll("spaeter", "später")
-    .replaceAll("Spaeter", "Später")
-    .replaceAll("waehlen", "wählen")
-    .replaceAll("Waehlen", "Wählen")
-    .replaceAll("aendern", "ändern")
-    .replaceAll("Aendern", "Ändern")
-    .replaceAll("koennen", "können")
-    .replaceAll("Koennen", "Können")
-    .replaceAll("gehoert", "gehört")
-    .replaceAll("Gehoert", "Gehört")
-    .replaceAll("groesser", "größer")
-    .replaceAll("Groesser", "Größer")
-    .replaceAll("schuetzt", "schützt")
-    .replaceAll("Schuetzt", "Schützt")
-    .replaceAll("glaubwuerdig", "glaubwürdig")
-    .replaceAll("Glaubwuerdig", "Glaubwürdig")
-    .replaceAll("erhoehen", "erhöhen")
-    .replaceAll("Erhoehen", "Erhöhen")
-    .replaceAll("staerk", "stärk")
-    .replaceAll("Staerk", "Stärk")
-    .replaceAll("hinzufuegen", "hinzufügen")
-    .replaceAll("Hinzufuegen", "Hinzufügen")
-    .replaceAll("Persoen", "Persön")
-    .replaceAll("persoen", "persön")
-    .replaceAll("Ruecken", "Rücken")
-    .replaceAll("Gesaess", "Gesäß")
-    .replaceAll("Ganzkoerper", "Ganzkörper")
-    .replaceAll("Unterkoerper", "Unterkörper")
-    .replaceAll("Praesi", "Präsi")
-    .replaceAll("Laedt", "Lädt")
-    .replaceAll("Pruefung", "Prüfung");
+    .replaceAll("schliessen", "schlie\u00dfen")
+    .replaceAll("Schliessen", "Schlie\u00dfen")
+    .replaceAll("loeschen", "l\u00f6schen")
+    .replaceAll("Loeschen", "L\u00f6schen")
+    .replaceAll("Gesaess", "Ges\u00e4\u00df")
+    .replaceAll("groesser", "gr\u00f6\u00dfer")
+    .replaceAll("Groesser", "Gr\u00f6\u00dfer")
+    .replaceAll("Ueb", "\u00dcb")
+    .replaceAll("ueb", "\u00fcb")
+    .replaceAll("Ae", "\u00c4")
+    .replaceAll("ae", "\u00e4")
+    .replaceAll("Oe", "\u00d6")
+    .replaceAll("oe", "\u00f6")
+    .replaceAll("Woe", "W\u00f6")
+    .replaceAll("woe", "w\u00f6")
+    .replaceAll("fuer", "f\u00fcr")
+    .replaceAll("Fuer", "F\u00fcr")
+    .replaceAll("spaeter", "sp\u00e4ter")
+    .replaceAll("Spaeter", "Sp\u00e4ter")
+    .replaceAll("waehlen", "w\u00e4hlen")
+    .replaceAll("Waehlen", "W\u00e4hlen")
+    .replaceAll("aendern", "\u00e4ndern")
+    .replaceAll("Aendern", "\u00c4ndern")
+    .replaceAll("koennen", "k\u00f6nnen")
+    .replaceAll("Koennen", "K\u00f6nnen")
+    .replaceAll("gehoert", "geh\u00f6rt")
+    .replaceAll("Gehoert", "Geh\u00f6rt")
+    .replaceAll("schuetzt", "sch\u00fctzt")
+    .replaceAll("Schuetzt", "Sch\u00fctzt")
+    .replaceAll("glaubwuerdig", "glaubw\u00fcrdig")
+    .replaceAll("Glaubwuerdig", "Glaubw\u00fcrdig")
+    .replaceAll("erhoehen", "erh\u00f6hen")
+    .replaceAll("Erhoehen", "Erh\u00f6hen")
+    .replaceAll("staerk", "st\u00e4rk")
+    .replaceAll("Staerk", "St\u00e4rk")
+    .replaceAll("hinzufuegen", "hinzuf\u00fcgen")
+    .replaceAll("Hinzufuegen", "Hinzuf\u00fcgen")
+    .replaceAll("Persoen", "Pers\u00f6n")
+    .replaceAll("persoen", "pers\u00f6n")
+    .replaceAll("Ruecken", "R\u00fccken")
+    .replaceAll("Ganzkoerper", "Ganzk\u00f6rper")
+    .replaceAll("Unterkoerper", "Unterk\u00f6rper")
+    .replaceAll("Praesi", "Pr\u00e4si")
+    .replaceAll("Laedt", "L\u00e4dt")
+    .replaceAll("Pruefung", "Pr\u00fcfung");
 }
 
 export function getNestedTranslation(

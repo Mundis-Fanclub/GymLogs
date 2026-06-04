@@ -9,7 +9,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="flex h-dvh min-w-0 flex-1 flex-col">
         <TopBar />
-        <main className="min-h-0 flex-1 overflow-auto px-3 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] pt-3 has-[[data-flush]]:pt-0 sm:px-5 sm:pt-5 md:p-6 md:pb-6 md:has-[[data-flush]]:pt-0">
+        <main className="min-h-0 flex-1 overflow-auto px-3 pb-[calc(env(safe-area-inset-bottom)+6.25rem)] pt-3 has-[[data-flush]]:pt-0 sm:px-5 sm:pt-5 md:px-6 md:pb-6 md:pt-5 md:has-[[data-flush]]:pt-0 lg:px-8">
           {children}
         </main>
       </div>

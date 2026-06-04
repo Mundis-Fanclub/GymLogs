@@ -280,6 +280,40 @@ export const listFeed = query({
   },
 });
 
+export const listFollowingFeed = query({
+  args: {
+    viewerId: v.id("users"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit ?? 30, 50);
+    const following = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.viewerId))
+      .order("desc")
+      .take(100);
+
+    if (following.length === 0) return [];
+
+    const postsByAuthor = await Promise.all(
+      following.map((row) =>
+        ctx.db
+          .query("social_posts")
+          .withIndex("by_author", (q) => q.eq("authorId", row.followingId))
+          .order("desc")
+          .take(8)
+      )
+    );
+
+    const posts = postsByAuthor
+      .flat()
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, limit);
+
+    return await Promise.all(posts.map((post) => renderPostSummary(ctx, post, args.viewerId)));
+  },
+});
+
 export const getPostThread = query({
   args: {
     postId: v.id("social_posts"),
@@ -345,78 +379,7 @@ export const listByAuthor = query({
       .order("desc")
       .take(args.limit ?? 30);
 
-    return await Promise.all(
-      posts.map(async (post) => {
-        const [likes, comments, reposts, viewerLike, viewerSave, linkedSubmission] = await Promise.all([
-          ctx.db
-            .query("social_likes")
-            .withIndex("by_post", (q) => q.eq("postId", post._id))
-            .take(200),
-          ctx.db
-            .query("social_comments")
-            .withIndex("by_post_and_parent_comment", (q) =>
-              q.eq("postId", post._id).eq("parentCommentId", undefined)
-            )
-            .order("asc")
-            .take(6),
-          ctx.db
-            .query("social_posts")
-            .withIndex("by_repost", (q) => q.eq("repostOfPostId", post._id))
-            .take(200),
-          args.viewerId
-            ? ctx.db
-                .query("social_likes")
-                .withIndex("by_post_and_user", (q) =>
-                  q.eq("postId", post._id).eq("userId", args.viewerId!)
-                )
-                .unique()
-            : null,
-          args.viewerId
-            ? ctx.db
-                .query("social_saves")
-                .withIndex("by_post_and_user", (q) =>
-                  q.eq("postId", post._id).eq("userId", args.viewerId!)
-                )
-                .unique()
-            : null,
-          post.linkedSubmissionId ? ctx.db.get(post.linkedSubmissionId) : null,
-        ]);
-
-        const renderedComments = await Promise.all(
-          comments.map(async (comment) => renderComment(ctx, comment, args.viewerId, 4))
-        );
-
-        let linkedExerciseName = null as string | null;
-        if (linkedSubmission) {
-          const exercise = await ctx.db.get(linkedSubmission.exerciseId);
-          linkedExerciseName = exercise?.name ?? linkedSubmission.liftType;
-        }
-
-        return {
-          ...post,
-          mediaUrl: await mediaUrl(ctx, post),
-          author: await userPreview(ctx, author),
-          likedByViewer: Boolean(viewerLike),
-          savedByViewer: Boolean(viewerSave),
-          likeCount: likes.length,
-          commentCount:
-            renderedComments.length +
-            renderedComments.reduce((count, comment) => count + comment.replies.length, 0),
-          repostCount: reposts.length,
-          comments: renderedComments,
-          linkedLog: linkedSubmission
-            ? {
-                exerciseName: linkedExerciseName,
-                liftType: linkedSubmission.liftType,
-                weightKg: linkedSubmission.weightKg,
-                reps: linkedSubmission.reps,
-                score: linkedSubmission.score,
-                status: linkedSubmission.status,
-              }
-            : null,
-        };
-      })
-    );
+    return await Promise.all(posts.map((post) => renderPostSummary(ctx, post, args.viewerId)));
   },
 });
 

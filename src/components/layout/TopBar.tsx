@@ -99,13 +99,13 @@ export function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 relative grid h-[3.75rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-background/95 px-3 backdrop-blur sm:h-14 sm:px-5 md:px-6">
+    <header className="sticky top-0 z-30 relative grid h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur-xl sm:px-5 md:h-[3.75rem] md:px-6">
       <Link
         href="/dashboard"
-        className="pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 md:hidden"
+        className="pointer-events-auto absolute left-1/2 top-1/2 flex size-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg md:hidden"
         aria-label={t("common.appName")}
       >
-        <Logo size={44} priority />
+        <Logo size={38} priority />
       </Link>
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
         <div className="hidden md:block">
@@ -113,7 +113,7 @@ export function TopBar() {
           <p className="text-xs text-muted-foreground">{t("topbar.subtitle")}</p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
         {showUserSearch && (
           <UserSearchButton compact triggerClassName="order-0" />
         )}
@@ -122,7 +122,7 @@ export function TopBar() {
           variant="outline"
           aria-label={t("common.proPrice")}
           title={t("common.proPrice")}
-          className="gap-1.5 !border-amber-300 !bg-amber-300 !text-slate-950 hover:!bg-amber-200 sm:w-auto sm:px-3 lg:inline-flex"
+          className="h-9 w-9 gap-1.5 rounded-lg !border-amber-300/70 !bg-amber-300 !text-slate-950 hover:!bg-amber-200 sm:w-auto sm:px-3 lg:inline-flex"
         >
           <Crown className="h-4 w-4" />
           <span className="hidden sm:inline">{t("common.proPrice")}</span>
@@ -131,11 +131,11 @@ export function TopBar() {
           size="icon-sm"
           onClick={handleNewWorkout}
           aria-label={t("common.newWorkout")}
-          className="order-1 lg:hidden"
+          className="order-1 h-9 w-9 rounded-lg lg:hidden"
         >
           <Plus className="h-4 w-4" />
         </Button>
-        <Button size="sm" onClick={handleNewWorkout} className="hidden gap-1.5 lg:inline-flex">
+        <Button size="sm" onClick={handleNewWorkout} className="hidden h-9 gap-1.5 rounded-lg lg:inline-flex">
           <Plus className="h-4 w-4" />
           <span>{t("common.newWorkout")}</span>
         </Button>
@@ -148,7 +148,7 @@ export function TopBar() {
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen}
             title={t("topbar.profileMenu")}
-            className="relative overflow-hidden rounded-full p-0"
+            className="relative h-9 w-9 overflow-hidden rounded-full p-0 ring-1 ring-border"
             onClick={() => setProfileMenuOpen((open) => !open)}
           >
             {profileImageUrl ? (

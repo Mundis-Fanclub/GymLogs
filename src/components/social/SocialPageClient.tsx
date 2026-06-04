@@ -16,7 +16,9 @@ import {
   Search,
   Send,
   Share2,
+  Sparkles,
   Trash2,
+  Users,
   Video,
   X,
 } from "lucide-react";
@@ -37,6 +39,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
+import { cn } from "@/lib/utils";
 
 type MediaKind = "image" | "video" | "gif";
 type MediaSize = "sm" | "md" | "lg";
@@ -45,13 +48,19 @@ type CommentMediaDraft = {
   mediaType: "gif";
   previewUrl: string;
 };
+type SocialFeedTab = "forYou" | "following";
 
 export function SocialPageClient() {
   const { userId, isLoaded } = useConvexUser();
   const { t } = useAppPreferences();
   const [loadFeed, setLoadFeed] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<Id<"social_posts"> | null>(null);
-  const posts = useQuery(api.social.listFeed, loadFeed ? { viewerId: userId, limit: 12 } : "skip");
+  const [activeFeedTab, setActiveFeedTab] = useState<SocialFeedTab>("forYou");
+  const forYouPosts = useQuery(api.social.listFeed, loadFeed ? { viewerId: userId, limit: 18 } : "skip");
+  const followingPosts = useQuery(
+    api.social.listFollowingFeed,
+    loadFeed && userId ? { viewerId: userId, limit: 18 } : "skip"
+  );
   const currentUser = useQuery(api.users.get, userId ? { userId } : "skip");
   const thread = useQuery(
     api.social.getPostThread,
@@ -105,15 +114,25 @@ export function SocialPageClient() {
     return () => window.clearTimeout(timeoutId);
   }, []);
 
+  const posts = activeFeedTab === "forYou" ? forYouPosts : followingPosts;
+  const feedDescription =
+    activeFeedTab === "forYou"
+      ? t("socialPage.forYouDescription")
+      : t("socialPage.followingDescription");
+  const emptyFeedCopy =
+    activeFeedTab === "forYou"
+      ? t("socialPage.emptyForYou")
+      : t("socialPage.emptyFollowing");
+
   if (isLoaded && !userId) {
     return (
       <EmptyState
         icon={MessageCircle}
-        title="Social nur mit Login"
-        description="Melde dich an, um Posts zu erstellen, zu liken und zu kommentieren."
+        title={t("socialPage.signInTitle")}
+        description={t("socialPage.signInDescription")}
         action={
           <Link href="/sign-in">
-            <Button>Anmelden</Button>
+            <Button>{t("socialPage.signInAction")}</Button>
           </Link>
         }
       />
@@ -335,19 +354,19 @@ export function SocialPageClient() {
       <>
         <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-border bg-card">
           <div className="flex items-center gap-3 border-b border-border px-3 py-3">
-            <Button variant="ghost" size="icon-sm" onClick={() => setSelectedPostId(null)} aria-label="Zurück zum Feed">
+            <Button variant="ghost" size="icon-sm" onClick={() => setSelectedPostId(null)} aria-label={t("socialPage.backToFeed")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-base font-semibold leading-none">Post</h1>
-              <p className="mt-1 text-xs text-muted-foreground">Kommentare und Antworten</p>
+              <h1 className="text-base font-semibold leading-none">{t("socialPage.threadTitle")}</h1>
+              <p className="mt-1 text-xs text-muted-foreground">{t("socialPage.threadSubtitle")}</p>
             </div>
           </div>
 
           {thread === undefined ? (
-            <p className="p-4 text-sm text-muted-foreground">Post wird geladen...</p>
+            <p className="p-4 text-sm text-muted-foreground">{t("socialPage.threadLoading")}</p>
           ) : thread === null ? (
-            <p className="p-4 text-sm text-muted-foreground">Post nicht gefunden.</p>
+            <p className="p-4 text-sm text-muted-foreground">{t("socialPage.threadNotFound")}</p>
           ) : (
             <>
               <PostCard
@@ -423,13 +442,13 @@ export function SocialPageClient() {
 
               <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm">
                 <button type="button" className="inline-flex items-center gap-1 font-medium">
-                  Beliebteste
+                  {t("socialPage.popular")}
                 </button>
-                <span className="text-muted-foreground">{thread.comments.length} Kommentare</span>
+                <span className="text-muted-foreground">{thread.comments.length} {t("socialPage.comments")}</span>
               </div>
 
               {thread.comments.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">Noch keine Kommentare.</p>
+                <p className="p-4 text-sm text-muted-foreground">{t("socialPage.noComments")}</p>
               ) : (
                 <div>
                   {thread.comments.map((comment) => (
@@ -483,16 +502,46 @@ export function SocialPageClient() {
 
   return (
     <>
-      <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-border bg-card">
-        <div className="border-b border-border px-4 py-3">
-          <h1 className="text-base font-semibold leading-none">Social</h1>
+      <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+        <div className="border-b border-border px-4 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold leading-none tracking-normal">{t("common.social")}</h1>
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">{feedDescription}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 rounded-lg border border-border bg-muted/25 p-1">
+            {([
+              { id: "forYou" as const, label: t("socialPage.forYou"), icon: Sparkles },
+              { id: "following" as const, label: t("socialPage.following"), icon: Users },
+            ]).map(({ id, label, icon: Icon }) => {
+              const selected = activeFeedTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={selected}
+                  className={cn(
+                    "flex h-10 min-w-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition-colors",
+                    selected
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => setActiveFeedTab(id)}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
         {composer}
         {posts === undefined ? (
-          <p className="border-b border-border p-4 text-sm text-muted-foreground">Feed wird geladen...</p>
+          <p className="border-b border-border p-4 text-sm text-muted-foreground">{t("socialPage.feedLoading")}</p>
         ) : posts.length === 0 ? (
           <div className="flex min-h-40 items-center justify-center p-4 text-center text-sm text-muted-foreground">
-            Noch keine Posts. Starte den Feed mit einem Trainingsupdate, Bild oder Top-Log-Video.
+            {emptyFeedCopy}
           </div>
         ) : (
           posts.map((post) => (
@@ -705,7 +754,7 @@ function PostCard({
           {post.bodyAfter && <p className="whitespace-pre-wrap text-[0.95rem] leading-6">{post.bodyAfter}</p>}
           {post.repostOf && <QuotedPost post={post.repostOf} onOpen={() => onComment(post.repostOf!._id)} />}
 
-          <div className="flex max-w-sm items-center justify-between gap-3 text-muted-foreground">
+          <div className="grid max-w-sm grid-cols-5 items-center text-muted-foreground">
             <ActionButton active={post.likedByViewer} activeClass="text-rose-500 hover:text-rose-500" onClick={() => onLike(post._id)} ariaLabel={post.likedByViewer ? "Like entfernen" : "Liken"}>
               <Heart className={`h-4 w-4 ${post.likedByViewer ? "fill-current" : ""}`} />
               <span>{post.likeCount}</span>
@@ -721,7 +770,7 @@ function PostCard({
               onClick={() => onRepost(post._id)}
               ariaLabel={
                 isOwnPost
-                  ? "Eigene Posts koennen nicht repostet werden"
+                  ? "Eigene Posts können nicht repostet werden"
                   : post.repostedByViewer
                     ? "Bereits repostet"
                     : "Reposten"
@@ -1027,7 +1076,7 @@ function ActionButton({
   return (
     <button
       type="button"
-      className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-1 text-sm transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 ${active ? activeClass : ""}`}
+      className={`inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-sm transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 ${active ? activeClass : ""}`}
       onClick={onClick}
       aria-label={ariaLabel}
       aria-pressed={active}

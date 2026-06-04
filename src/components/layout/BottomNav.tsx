@@ -54,10 +54,10 @@ export function BottomNav() {
   }, [pathname]);
 
   return (
-    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-[7%] pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:hidden">
+    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:hidden">
       <div
         ref={containerRef}
-        className="pointer-events-auto relative mx-auto flex h-[56px] w-full max-w-[380px] items-center justify-around rounded-full px-1.5"
+        className="pointer-events-auto relative mx-auto flex h-14 w-full max-w-[23.5rem] items-center justify-around rounded-2xl px-1.5"
         style={{
           background:
             "linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 55%, rgba(0, 0, 0, 0.03) 100%), rgba(10, 10, 12, 0.22)",
@@ -71,7 +71,7 @@ export function BottomNav() {
         {indicator && (
           <span
             aria-hidden="true"
-            className="absolute top-[9px] bottom-[9px] rounded-full transition-[left,width] duration-300 ease-out"
+            className="absolute top-1.5 bottom-1.5 rounded-xl transition-[left,width] duration-300 ease-out"
             style={{
               left: indicator.left,
               width: indicator.width,
@@ -95,7 +95,7 @@ export function BottomNav() {
               active={active}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative z-10 flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-2 text-[10.5px] font-medium leading-none transition-colors duration-300 ease-out active:scale-[0.96]",
+                "relative z-10 flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[10.5px] font-medium leading-none transition-colors duration-300 ease-out active:scale-[0.96]",
                 active
                   ? "text-brand"
                   : "text-muted-foreground/55 hover:text-foreground/80"

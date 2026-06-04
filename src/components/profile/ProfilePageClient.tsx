@@ -189,11 +189,17 @@ type VisibleProfile = {
 
 type ProfilePost = {
   _id: Id<"social_posts">;
+  authorId: Id<"users">;
   body: string;
+  bodyAfter?: string;
   createdAt: number;
   updatedAt?: number;
   mediaUrl?: string | null;
   mediaType?: "image" | "video" | "gif";
+  mediaSize?: "sm" | "md" | "lg";
+  mediaScale?: number;
+  repostOfPostId?: Id<"social_posts">;
+  repostedByViewer?: boolean;
   likedByViewer: boolean;
   savedByViewer: boolean;
   likeCount: number;
@@ -205,8 +211,37 @@ type ProfilePost = {
     reps: number;
     score?: number;
   };
-  comments?: ProfilePostComment[];
+  repostOf?: null | {
+    _id: Id<"social_posts">;
+    body: string;
+    bodyAfter?: string;
+    createdAt: number;
+    mediaUrl?: string | null;
+    mediaType?: "image" | "video" | "gif";
+    mediaSize?: "sm" | "md" | "lg";
+    mediaScale?: number;
+    author: null | {
+      _id: Id<"users">;
+      name: string;
+      username?: string;
+      avatarUrl?: string | null;
+      isPro: boolean;
+    };
+    linkedLog: null | {
+      exerciseName: string | null;
+      weightKg: number;
+      reps: number;
+      score?: number;
+    };
+  };
 };
+
+type ProfilePostThread =
+  | {
+      comments: ProfilePostComment[];
+    }
+  | null
+  | undefined;
 
 type MessageImageDraft = {
   storageId: Id<"_storage">;
@@ -275,6 +310,7 @@ export function ProfilePageClient() {
   const togglePostLike = useMutation(api.social.toggleLike);
   const togglePostSave = useMutation(api.social.toggleSave);
   const addProfilePostComment = useMutation(api.social.addComment);
+  const repostProfilePost = useMutation(api.social.createPost);
   const addFriend = useMutation(api.friends.addByUsername);
   const removeFriend = useMutation(api.friends.remove);
   const followUser = useMutation(api.follows.follow);
@@ -305,6 +341,17 @@ export function ProfilePageClient() {
   const [profilePostBody, setProfilePostBody] = useState("");
   const [profilePostCommentBodies, setProfilePostCommentBodies] = useState<Record<string, string>>({});
   const [activeProfileCommentPostId, setActiveProfileCommentPostId] = useState<string | null>(null);
+  const profilePostThread = useQuery(
+    api.social.getPostThread,
+    activeProfileCommentPostId
+      ? {
+          postId: activeProfileCommentPostId as Id<"social_posts">,
+          viewerId: userId ?? undefined,
+          commentLimit: 40,
+          replyLimit: 12,
+        }
+      : "skip"
+  );
   const [openProfilePostMenuId, setOpenProfilePostMenuId] = useState<string | null>(null);
   const [editingProfilePostId, setEditingProfilePostId] = useState<string | null>(null);
   const [editingProfilePostBodies, setEditingProfilePostBodies] = useState<Record<string, string>>({});
@@ -339,8 +386,13 @@ export function ProfilePageClient() {
   const [messagesDialogOpen, setMessagesDialogOpen] = useState(false);
   const [networkDialogOpen, setNetworkDialogOpen] = useState(false);
   const [followDialogOpen, setFollowDialogOpen] = useState(false);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
+  const profileTabRefs = useRef<Partial<Record<ProfileTab, HTMLButtonElement | null>>>({});
+  const previewTabRefs = useRef<Partial<Record<ProfilePreviewTab, HTMLButtonElement | null>>>({});
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const latestMessageRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState<ProfileForm>({
     name: "",
     username: "",
@@ -432,10 +484,41 @@ export function ProfilePageClient() {
   }, [activeConversation, markRead, userId, thread?.messages.length]);
 
   useEffect(() => {
+    if (!messagesDialogOpen || !thread?.messages.length) return;
+    requestAnimationFrame(() => {
+      latestMessageRef.current?.scrollIntoView({ block: "end" });
+      setShowJumpToLatest(false);
+    });
+  }, [activeConversation, messagesDialogOpen, thread?.messages.length]);
+
+  function handleMessagesScroll() {
+    const element = messagesScrollRef.current;
+    if (!element) return;
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    setShowJumpToLatest(distanceFromBottom > 180);
+  }
+
+  useEffect(() => {
     if (!isOwnProfile && activeProfileTab === "saved") {
       setActiveProfileTab("posts");
     }
   }, [activeProfileTab, isOwnProfile]);
+
+  useEffect(() => {
+    profileTabRefs.current[activeProfileTab]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [activeProfileTab]);
+
+  useEffect(() => {
+    previewTabRefs.current[previewProfileTab]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [previewProfileTab]);
 
   useEffect(() => {
     return () => {
@@ -742,11 +825,11 @@ export function ProfilePageClient() {
     if (!userId || !file) return;
     setMessageUploadError("");
     if (!file.type.startsWith("image/")) {
-      setMessageUploadError("Bitte wÃ¤hle eine Bilddatei aus.");
+      setMessageUploadError("Bitte wähle eine Bilddatei aus.");
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
-      setMessageUploadError("Bildnachrichten dÃ¼rfen maximal 8 MB groÃŸ sein.");
+      setMessageUploadError("Bildnachrichten dürfen maximal 8 MB groß sein.");
       return;
     }
 
@@ -785,11 +868,11 @@ export function ProfilePageClient() {
             ? "image"
             : null;
     if (!mediaType) {
-      setProfilePostError("Bitte Bild oder Video auswÃ¤hlen.");
+      setProfilePostError("Bitte Bild oder Video auswählen.");
       return;
     }
     if (file.size > 30 * 1024 * 1024) {
-      setProfilePostError("Medien dÃ¼rfen maximal 30 MB groÃŸ sein.");
+      setProfilePostError("Medien dürfen maximal 30 MB groß sein.");
       return;
     }
 
@@ -868,7 +951,15 @@ export function ProfilePageClient() {
     if (!body) return;
     await addProfilePostComment({ userId, postId, body });
     setProfilePostCommentBodies((current) => ({ ...current, [postId]: "" }));
-    setActiveProfileCommentPostId(null);
+  }
+
+  async function repostFromProfile(postId: Id<"social_posts">) {
+    if (!userId) return;
+    try {
+      await repostProfilePost({ authorId: userId, body: "", repostOfPostId: postId });
+    } catch (repostError) {
+      setProfilePostError(repostError instanceof Error ? repostError.message : "Repost fehlgeschlagen.");
+    }
   }
 
   async function saveProfilePostEdit(post: ProfilePost) {
@@ -1094,15 +1185,18 @@ export function ProfilePageClient() {
                 ))}
               </div>
             )}
-            <div className="overflow-x-auto border-b border-border">
-              <div className="flex min-w-max gap-4 sm:gap-5">
+            <div className="-mx-5 overflow-x-auto border-b border-border px-5 sm:mx-0 sm:px-0">
+              <div className="flex w-max min-w-full gap-3 sm:gap-5">
                 {profileTabs.map((tab) => (
                   <button
                     key={tab.id}
+                    ref={(node) => {
+                      profileTabRefs.current[tab.id] = node;
+                    }}
                     type="button"
                     onClick={() => setActiveProfileTab(tab.id)}
                     className={cn(
-                      "relative min-h-11 whitespace-nowrap px-1 text-base font-semibold text-muted-foreground transition-colors hover:text-foreground sm:min-h-12 sm:text-lg",
+                      "relative min-h-11 shrink-0 whitespace-nowrap px-1.5 text-base font-semibold text-muted-foreground transition-colors hover:text-foreground sm:min-h-12 sm:px-1 sm:text-lg",
                       activeProfileTab === tab.id && "text-foreground"
                     )}
                   >
@@ -1140,11 +1234,13 @@ export function ProfilePageClient() {
                 canManagePosts={isOwnProfile}
                 commentBodies={profilePostCommentBodies}
                 activeCommentPostId={activeProfileCommentPostId}
+                activeThread={profilePostThread}
                 openPostMenuId={openProfilePostMenuId}
                 editingPostId={editingProfilePostId}
                 editingPostBodies={editingProfilePostBodies}
                 onLike={(postId) => userId && togglePostLike({ userId, postId })}
                 onSave={(postId) => userId && togglePostSave({ userId, postId })}
+                onRepost={repostFromProfile}
                 onOpenPostMenu={setOpenProfilePostMenuId}
                 onEditPost={(post) => {
                   setOpenProfilePostMenuId(null);
@@ -1187,11 +1283,13 @@ export function ProfilePageClient() {
                 canManagePosts={false}
                 commentBodies={profilePostCommentBodies}
                 activeCommentPostId={activeProfileCommentPostId}
+                activeThread={profilePostThread}
                 openPostMenuId={openProfilePostMenuId}
                 editingPostId={editingProfilePostId}
                 editingPostBodies={editingProfilePostBodies}
                 onLike={(postId) => userId && togglePostLike({ userId, postId })}
                 onSave={(postId) => userId && togglePostSave({ userId, postId })}
+                onRepost={repostFromProfile}
                 onOpenPostMenu={setOpenProfilePostMenuId}
                 onEditPost={(post) => {
                   setOpenProfilePostMenuId(null);
@@ -1235,11 +1333,13 @@ export function ProfilePageClient() {
                 canManagePosts={isOwnProfile}
                 commentBodies={profilePostCommentBodies}
                 activeCommentPostId={activeProfileCommentPostId}
+                activeThread={profilePostThread}
                 openPostMenuId={openProfilePostMenuId}
                 editingPostId={editingProfilePostId}
                 editingPostBodies={editingProfilePostBodies}
                 onLike={(postId) => userId && togglePostLike({ userId, postId })}
                 onSave={(postId) => userId && togglePostSave({ userId, postId })}
+                onRepost={repostFromProfile}
                 onOpenPostMenu={setOpenProfilePostMenuId}
                 onEditPost={(post) => {
                   setOpenProfilePostMenuId(null);
@@ -1300,7 +1400,7 @@ export function ProfilePageClient() {
               />
             )}
             <div className="hidden">
-              {visibleProfile?.heightCm && <QuickStat label="GrÃ¶ÃŸe" value={`${visibleProfile.heightCm} cm`} />}
+              {visibleProfile?.heightCm && <QuickStat label="Größe" value={`${visibleProfile.heightCm} cm`} />}
               {visibleProfile?.weightKg && <QuickStat label="Gewicht" value={`${visibleProfile.weightKg} kg`} />}
               {visibleProfile?.birthDate && (
                 <QuickStat label="Geburtsdatum" value={new Date(visibleProfile.birthDate).toLocaleDateString(locale)} />
@@ -1635,15 +1735,18 @@ export function ProfilePageClient() {
                     )}
                     {form.isPublic && (
                       <>
-                        <div className="overflow-x-auto border-b border-border">
-                          <div className="flex min-w-max gap-5 sm:gap-7">
+                        <div className="-mx-5 overflow-x-auto border-b border-border px-5 sm:mx-0 sm:px-0">
+                          <div className="flex w-max min-w-full gap-3 sm:gap-7">
                             {previewTabs.map((tab) => (
                               <button
                                 key={tab.id}
+                                ref={(node) => {
+                                  previewTabRefs.current[tab.id] = node;
+                                }}
                                 type="button"
                                 onClick={() => setPreviewProfileTab(tab.id)}
                                 className={cn(
-                                  "relative min-h-12 whitespace-nowrap px-1 text-base font-semibold text-muted-foreground transition-colors hover:text-foreground sm:min-h-14 sm:text-xl",
+                                  "relative min-h-12 shrink-0 whitespace-nowrap px-1.5 text-base font-semibold text-muted-foreground transition-colors hover:text-foreground sm:min-h-14 sm:px-1 sm:text-xl",
                                   previewProfileTab === tab.id && "text-foreground"
                                 )}
                               >
@@ -1666,11 +1769,13 @@ export function ProfilePageClient() {
                             canManagePosts={false}
                             commentBodies={{}}
                             activeCommentPostId={null}
+                            activeThread={null}
                             openPostMenuId={null}
                             editingPostId={null}
                             editingPostBodies={{}}
                             onLike={() => undefined}
                             onSave={() => undefined}
+                            onRepost={() => undefined}
                             onOpenPostMenu={() => undefined}
                             onEditPost={() => undefined}
                             onDeletePost={() => undefined}
@@ -1693,11 +1798,13 @@ export function ProfilePageClient() {
                             canManagePosts={false}
                             commentBodies={{}}
                             activeCommentPostId={null}
+                            activeThread={null}
                             openPostMenuId={null}
                             editingPostId={null}
                             editingPostBodies={{}}
                             onLike={() => undefined}
                             onSave={() => undefined}
+                            onRepost={() => undefined}
                             onOpenPostMenu={() => undefined}
                             onEditPost={() => undefined}
                             onDeletePost={() => undefined}
@@ -1862,212 +1969,271 @@ export function ProfilePageClient() {
 
 
         <Dialog open={messagesDialogOpen} onOpenChange={setMessagesDialogOpen}>
-          <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-y-auto rounded-none border-border bg-background p-0 sm:h-auto sm:max-h-[90dvh] sm:max-w-5xl sm:rounded-xl">
-            <Card id="messages" className="min-h-full overflow-hidden border-0 bg-card/95 shadow-none sm:min-h-0">
-          <CardHeader className="border-b border-border/70 bg-muted/10">
-            <CardTitle className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5" />
-              {t("profile.messagesPanel.title")}
-              {unreadTotal > 0 && <Badge>{unreadTotal} {t("profile.messagesPanel.unread")}</Badge>}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 p-3.5 sm:p-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
-            <div className="max-h-[34rem] space-y-2 overflow-auto pr-1">
-              {conversations === undefined ? (
-                <p className="text-sm text-muted-foreground">{t("profile.messagesPanel.loading")}</p>
-              ) : conversations.length === 0 ? (
-                <ProfileEmpty icon={MessageCircle} title={t("profile.messagesPanel.emptyTitle")} copy={t("profile.messagesPanel.emptyCopy")} />
-              ) : (
-                conversations.map((conversation) => (
-                  <button
-                    key={conversation._id}
-                    type="button"
-                    onClick={() => setActiveConversation(conversation._id)}
-                    className={cn(
-                      "w-full rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      activeConversation === conversation._id
-                        ? "border-primary bg-primary/10"
-                        : conversation.unreadCount > 0
-                          ? "border-primary/40 bg-primary/5 hover:bg-primary/10"
-                          : "border-border bg-muted/30 hover:bg-muted"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar name={conversation.otherUser?.name ?? "?"} avatarUrl={conversation.otherUser?.avatarUrl} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="flex items-center gap-1 truncate font-medium">
-                            <span className="truncate">{conversation.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}</span>
-                            {conversation.otherUser?.isPro && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
-                          </p>
-                          {conversation.unreadCount > 0 && <Badge>{conversation.unreadCount}</Badge>}
-                        </div>
-                        <p className="truncate text-xs text-muted-foreground">{conversation.lastMessagePreview ?? t("profile.messagesPanel.newConversation")}</p>
-                      </div>
+          <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden rounded-none border-border bg-[#090b0d] p-0 text-foreground sm:h-[86dvh] sm:max-w-6xl sm:rounded-xl">
+            <div id="messages" className="grid h-full min-h-0 bg-[#090b0d] md:grid-cols-[22rem_minmax(0,1fr)]">
+              <aside className={cn("min-h-0 border-r border-white/10 bg-[#0d1013]", thread && "hidden md:flex", "flex flex-col")}>
+                <div className="shrink-0 border-b border-white/10 px-4 pb-4 pt-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xl font-bold tracking-normal">{t("profile.messagesPanel.title")}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {unreadTotal > 0 ? `${unreadTotal} ${t("profile.messagesPanel.unread")}` : t("profile.messagesPanel.emptyTitle")}
+                      </p>
                     </div>
-                  </button>
-                ))
-              )}
-            </div>
-
-            <div className="min-h-[28rem] overflow-hidden rounded-lg border border-border bg-background">
-              {!thread ? (
-                <div className="flex h-full min-h-[24rem] flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
-                  <MessageCircle className="h-8 w-8 text-primary" />
-                  {t("profile.messagesPanel.selectThread")}
+                    <Button type="button" size="icon-sm" variant="ghost" aria-label={t("profile.networkPanel.newMessage")} onClick={() => setNetworkDialogOpen(true)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="mt-4 flex h-10 items-center gap-2 rounded-full bg-white/[0.08] px-3 text-sm text-muted-foreground">
+                    <Search className="h-4 w-4" />
+                    <span>{t("profile.networkPanel.searchPlaceholder")}</span>
+                  </div>
                 </div>
-              ) : (
-                <div className="flex min-h-[28rem] flex-col">
-                  <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/20 p-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={t("profile.messagesPanel.closeThread")}
-                        title={t("profile.messagesPanel.closeThread")}
-                        onClick={() => {
-                          setActiveConversation(null);
-                          setReportedMessage(null);
-                          clearMessageImageDraft();
-                        }}
-                      >
-                        <ArrowLeft className="h-4 w-4" />
-                      </Button>
-                      <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} />
-                      <div className="min-w-0">
-                        <p className="flex min-w-0 items-center gap-1 font-medium">
-                          <span className="truncate">
-                          {thread.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}
-                          </span>
-                          {thread.otherUser?.isPro && <Crown className="h-3.5 w-3.5 text-amber-500" />}
-                        </p>
-                        <p className="text-xs text-muted-foreground">@{thread.otherUser?.username ?? "user"}</p>
+                <div className="min-h-0 flex-1 overflow-auto px-2 py-3">
+                  {conversations === undefined ? (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">{t("profile.messagesPanel.loading")}</p>
+                  ) : conversations.length === 0 ? (
+                    <div className="flex min-h-[18rem] flex-col items-center justify-center px-6 text-center">
+                      <div className="mb-4 flex size-16 items-center justify-center rounded-full border border-white/15">
+                        <Send className="h-7 w-7 text-primary" />
                       </div>
+                      <p className="font-semibold">{t("profile.messagesPanel.emptyTitle")}</p>
+                      <p className="mt-2 text-sm leading-5 text-muted-foreground">{t("profile.messagesPanel.emptyCopy")}</p>
                     </div>
-                    {thread.otherUser && (
-                      <div className="flex gap-2">
+                  ) : (
+                    conversations.map((conversation) => (
+                      <button
+                        key={conversation._id}
+                        type="button"
+                        onClick={() => setActiveConversation(conversation._id)}
+                        className={cn(
+                          "group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          activeConversation === conversation._id
+                            ? "bg-white/[0.11]"
+                            : "hover:bg-white/[0.07]"
+                        )}
+                      >
+                        <div className="relative shrink-0">
+                          <Avatar name={conversation.otherUser?.name ?? "?"} avatarUrl={conversation.otherUser?.avatarUrl} />
+                          {conversation.unreadCount > 0 && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-[#0d1013] bg-primary" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="flex min-w-0 items-center gap-1 truncate font-semibold">
+                              <span className="truncate">{conversation.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}</span>
+                              {conversation.otherUser?.isPro && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                            </p>
+                            {conversation.unreadCount > 0 && <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[0.65rem] font-bold text-primary-foreground">{conversation.unreadCount}</span>}
+                          </div>
+                          <p className={cn("mt-0.5 truncate text-sm", conversation.unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground")}>
+                            {conversation.lastMessagePreview ?? t("profile.messagesPanel.newConversation")}
+                          </p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </aside>
+
+              <section className={cn("min-h-0 flex-col bg-[#07090b]", thread ? "flex" : "hidden md:flex")}>
+                {!thread ? (
+                  <div className="flex h-full min-h-0 flex-col items-center justify-center px-8 text-center">
+                    <div className="mb-5 flex size-24 items-center justify-center rounded-full border border-white/20">
+                      <Send className="h-10 w-10 text-foreground" />
+                    </div>
+                    <p className="text-xl font-semibold">{t("profile.messagesPanel.emptyTitle")}</p>
+                    <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{t("profile.messagesPanel.selectThread")}</p>
+                    <Button type="button" className="mt-5" onClick={() => setNetworkDialogOpen(true)}>
+                      {t("profile.networkPanel.newMessage")}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#0b0d10] px-3 sm:px-5">
+                      <div className="flex min-w-0 items-center gap-3">
                         <Button
-                          size="sm"
-                          variant="outline"
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          className="md:hidden"
+                          aria-label={t("profile.messagesPanel.closeThread")}
+                          title={t("profile.messagesPanel.closeThread")}
+                          onClick={() => {
+                            setActiveConversation(null);
+                            setReportedMessage(null);
+                            clearMessageImageDraft();
+                          }}
+                        >
+                          <ArrowLeft className="h-4 w-4" />
+                        </Button>
+                        <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} />
+                        <div className="min-w-0">
+                          <p className="flex min-w-0 items-center gap-1 truncate font-semibold leading-5">
+                            <span className="truncate">{thread.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}</span>
+                            {thread.otherUser?.isPro && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">@{thread.otherUser?.username ?? "user"}</p>
+                        </div>
+                      </div>
+                      {thread.otherUser && (
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={thread.isBlocked ? t("profile.messagesPanel.unblock") : t("profile.messagesPanel.block")}
+                          title={thread.isBlocked ? t("profile.messagesPanel.unblock") : t("profile.messagesPanel.block")}
                           onClick={() =>
                             thread.isBlocked
                               ? unblockUser({ blockerId: userId!, blockedId: thread.otherUser!._id })
                               : blockUser({ blockerId: userId!, blockedId: thread.otherUser!._id })
                           }
                         >
-                          <Ban className="h-3.5 w-3.5" />
-                          {thread.isBlocked ? t("profile.messagesPanel.unblock") : t("profile.messagesPanel.block")}
+                          <Ban className="h-4 w-4" />
                         </Button>
+                      )}
+                    </div>
+
+                    <div
+                      ref={messagesScrollRef}
+                      onScroll={handleMessagesScroll}
+                      className="relative min-h-0 flex-1 overflow-auto px-4 py-5 font-[var(--font-mozilla-text)] sm:px-8"
+                    >
+                      {showJumpToLatest && (
+                        <button
+                          type="button"
+                          className="sticky top-3 z-10 mx-auto mb-3 flex h-8 items-center gap-1.5 rounded-full border border-white/10 bg-[#171b20]/95 px-3 text-xs font-semibold text-foreground shadow-lg shadow-black/25 backdrop-blur transition hover:bg-[#20252c]"
+                          onClick={() => {
+                            latestMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+                            setShowJumpToLatest(false);
+                          }}
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                          {t("profile.messagesPanel.jumpToLatest")}
+                        </button>
+                      )}
+                      <div className="mb-10 mt-4 flex flex-col items-center text-center">
+                        <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} size="lg" />
+                        <p className="mt-3 text-lg font-semibold tracking-normal">{thread.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}</p>
+                        <p className="text-sm text-muted-foreground">@{thread.otherUser?.username ?? "user"}</p>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-3 overflow-auto bg-[radial-gradient(circle_at_top_left,color-mix(in_oklab,var(--color-primary)_10%,transparent),transparent_35%)] p-3 sm:p-4">
-                    {thread.messages.map((message) => {
-                      const mine = message.senderId === userId;
-                      return (
-                        <div key={message._id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
-                          <div
-                            className={cn(
-                              "max-w-[88%] rounded-2xl border px-3 py-2.5 text-sm shadow-sm sm:max-w-[76%]",
-                              mine
-                                ? "rounded-br-md border-primary/30 bg-primary text-primary-foreground shadow-primary/10"
-                                : message.readAt
-                                  ? "rounded-bl-md border-border bg-card"
-                                  : "rounded-bl-md border-primary/30 bg-muted/70"
-                            )}
-                          >
-                            {message.type === "post_share" ? (
-                              <PostShareCard message={message} mine={mine} />
-                            ) : message.type === "image" ? (
-                              <ImageMessage message={message} />
-                            ) : (
-                              <p className="whitespace-pre-wrap break-words leading-5">{message.body}</p>
-                            )}
-                            <div className={cn("mt-2 flex items-center justify-between gap-3 text-[0.7rem]", mine ? "text-primary-foreground/75" : "text-muted-foreground")}>
-                              <span>{new Date(message.createdAt).toLocaleString(locale)}</span>
-                              {mine ? <span>{message.readAt ? t("profile.messagesPanel.read") : t("profile.messagesPanel.unreadStatus")}</span> : (
-                                <button type="button" className="inline-flex items-center gap-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setReportedMessage(message._id)}>
-                                  <Flag className="h-3 w-3" />
-                                  {t("profile.messagesPanel.report")}
-                                </button>
-                              )}
+                      <div className="space-y-3">
+                        {thread.messages.map((message, index) => {
+                          const mine = message.senderId === userId;
+                          const isPostShare = message.type === "post_share";
+                          const isLatest = index === thread.messages.length - 1;
+                          return (
+                            <div key={message._id} ref={isLatest ? latestMessageRef : undefined} className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
+                              {!mine && <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} size="sm" />}
+                              <div className={cn("min-w-0", isPostShare ? "max-w-[19rem] sm:max-w-[22rem]" : "max-w-[82%] sm:max-w-[62%]", mine ? "items-end" : "items-start")}>
+                                <div
+                                  className={cn(
+                                    "text-sm",
+                                    isPostShare
+                                      ? "p-0"
+                                      : cn(
+                                          "rounded-[1.25rem] px-4 py-2.5 shadow-sm",
+                                          mine
+                                            ? "rounded-br-md bg-primary text-[0.95rem] text-primary-foreground"
+                                            : "rounded-bl-md bg-white/[0.10] text-[0.95rem] text-foreground"
+                                        )
+                                  )}
+                                >
+                                  {isPostShare ? (
+                                    <PostShareCard message={message} mine={mine} />
+                                  ) : message.type === "image" ? (
+                                    <ImageMessage message={message} />
+                                  ) : (
+                                    <p className="whitespace-pre-wrap break-words leading-6">{message.body}</p>
+                                  )}
+                                </div>
+                                <div className={cn("mt-1 flex items-center gap-2 px-1 text-[0.7rem] leading-none text-muted-foreground", mine ? "justify-end" : "justify-start")}>
+                                  <span>{new Date(message.createdAt).toLocaleString(locale)}</span>
+                                  {mine ? (
+                                    <span>{message.readAt ? t("profile.messagesPanel.read") : t("profile.messagesPanel.unreadStatus")}</span>
+                                  ) : (
+                                    <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setReportedMessage(message._id)}>
+                                      <Flag className="h-3 w-3" />
+                                      {t("profile.messagesPanel.report")}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {reportedMessage && (
-                    <div className="border-t border-border bg-muted/30 p-3">
-                      <Label>{t("profile.messagesPanel.reportReason")}</Label>
-                      <Input value={reportReason} onChange={(event) => setReportReason(event.target.value)} />
-                      <div className="mt-2 flex gap-2">
-                        <Button size="sm" variant="destructive" onClick={submitReport}>{t("profile.messagesPanel.report")}</Button>
-                        <Button size="sm" variant="outline" onClick={() => setReportedMessage(null)}>{t("profile.messagesPanel.cancel")}</Button>
+                          );
+                        })}
                       </div>
                     </div>
-                  )}
-                  <div className="border-t border-border bg-card/60 p-3">
-                    {messageImageDraft && (
-                      <div className="mb-3 flex items-center gap-3 rounded-lg border border-border bg-background p-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={messageImageDraft.url} alt="" className="h-14 w-14 rounded-md object-cover" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{messageImageDraft.name}</p>
-                          <p className="text-xs text-muted-foreground">{t("profile.messagesPanel.sendImageHint")}</p>
+
+                    {reportedMessage && (
+                      <div className="shrink-0 border-t border-white/10 bg-[#0d1013] p-3">
+                        <Label>{t("profile.messagesPanel.reportReason")}</Label>
+                        <Input value={reportReason} onChange={(event) => setReportReason(event.target.value)} />
+                        <div className="mt-2 flex gap-2">
+                          <Button size="sm" variant="destructive" onClick={submitReport}>{t("profile.messagesPanel.report")}</Button>
+                          <Button size="sm" variant="outline" onClick={() => setReportedMessage(null)}>{t("profile.messagesPanel.cancel")}</Button>
                         </div>
-                        <Button type="button" size="icon-sm" variant="ghost" aria-label={t("profile.messagesPanel.removeImage")} onClick={clearMessageImageDraft}>
-                          <X className="h-4 w-4" />
-                        </Button>
                       </div>
                     )}
-                    {messageUploadError && <p className="mb-2 text-xs text-destructive">{messageUploadError}</p>}
-                    <div className="flex gap-2">
-                      <label
-                        className={cn(
-                          "inline-flex size-9 cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-sm transition-colors hover:bg-muted sm:size-8",
-                          (thread.isBlocked || uploadingMessageImage) && "pointer-events-none opacity-50"
-                        )}
-                        aria-label={t("profile.messagesPanel.sendImage")}
-                        title={t("profile.messagesPanel.sendImage")}
-                      >
-                          <Paperclip className="h-4 w-4" />
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="sr-only"
-                          disabled={thread.isBlocked || uploadingMessageImage}
-                          onChange={(event) => uploadMessageImage(event.target.files?.[0])}
+
+                    <div className="shrink-0 border-t border-white/10 bg-[#0b0d10]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-16px_40px_rgba(0,0,0,0.22)] backdrop-blur sm:px-5 sm:pb-4">
+                      {messageImageDraft && (
+                        <div className="mb-3 flex max-w-md items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={messageImageDraft.url} alt="" className="h-14 w-14 rounded-xl object-cover" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{messageImageDraft.name}</p>
+                            <p className="text-xs text-muted-foreground">{t("profile.messagesPanel.sendImageHint")}</p>
+                          </div>
+                          <Button type="button" size="icon-sm" variant="ghost" aria-label={t("profile.messagesPanel.removeImage")} onClick={clearMessageImageDraft}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      {messageUploadError && <p className="mb-2 text-xs text-destructive">{messageUploadError}</p>}
+                      <div className="flex items-center gap-2">
+                        <label
+                          className={cn(
+                            "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white/[0.075] text-muted-foreground transition-colors hover:bg-white/[0.13] hover:text-foreground",
+                            (thread.isBlocked || uploadingMessageImage) && "pointer-events-none opacity-50"
+                          )}
+                          aria-label={t("profile.messagesPanel.sendImage")}
+                          title={t("profile.messagesPanel.sendImage")}
+                        >
+                          <Paperclip className="h-5 w-5" />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            disabled={thread.isBlocked || uploadingMessageImage}
+                            onChange={(event) => uploadMessageImage(event.target.files?.[0])}
+                          />
+                        </label>
+                        <Input
+                          value={messageBody}
+                          disabled={thread.isBlocked}
+                          placeholder={thread.isBlocked ? t("profile.messagesPanel.blockedPlaceholder") : t("profile.messagesPanel.inputPlaceholder")}
+                          onChange={(event) => setMessageBody(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" && !event.shiftKey) {
+                              event.preventDefault();
+                              void submitMessage();
+                            }
+                          }}
+                          maxLength={600}
+                          className="h-10 rounded-full border-white/10 bg-white/[0.075] px-4 text-[0.95rem] shadow-inner shadow-black/10 placeholder:text-muted-foreground/80 focus-visible:ring-1 focus-visible:ring-primary/45"
                         />
-                      </label>
-                      <Input
-                        value={messageBody}
-                        disabled={thread.isBlocked}
-                        placeholder={thread.isBlocked ? t("profile.messagesPanel.blockedPlaceholder") : t("profile.messagesPanel.inputPlaceholder")}
-                        onChange={(event) => setMessageBody(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" && !event.shiftKey) {
-                            event.preventDefault();
-                            void submitMessage();
-                          }
-                        }}
-                        maxLength={600}
-                      />
-                      <Button size="icon" disabled={thread.isBlocked || (!messageBody.trim() && !messageImageDraft)} onClick={() => submitMessage()}>
-                        <Send className="h-4 w-4" />
-                      </Button>
+                        <Button size="icon" className="size-10 shrink-0 rounded-full shadow-sm shadow-primary/15" disabled={thread.isBlocked || (!messageBody.trim() && !messageImageDraft)} onClick={() => submitMessage()}>
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="mt-2 flex items-start gap-1.5 px-1 text-[0.7rem] leading-4 text-muted-foreground/80">
+                        <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0" />
+                        {t("profile.messagesPanel.spamNotice")}
+                      </p>
                     </div>
-                    <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                      {t("profile.messagesPanel.spamNotice")}
-                    </p>
-                  </div>
-                </div>
-              )}
+                  </>
+                )}
+              </section>
             </div>
-          </CardContent>
-        </Card>
           </DialogContent>
         </Dialog>
       </div>
@@ -2285,11 +2451,13 @@ function ProfilePostsCard({
   canManagePosts,
   commentBodies,
   activeCommentPostId,
+  activeThread,
   openPostMenuId,
   editingPostId,
   editingPostBodies,
   onLike,
   onSave,
+  onRepost,
   onOpenPostMenu,
   onEditPost,
   onDeletePost,
@@ -2310,11 +2478,13 @@ function ProfilePostsCard({
   canManagePosts: boolean;
   commentBodies: Record<string, string>;
   activeCommentPostId: string | null;
+  activeThread: ProfilePostThread;
   openPostMenuId: string | null;
   editingPostId: string | null;
   editingPostBodies: Record<string, string>;
   onLike: (postId: Id<"social_posts">) => void;
   onSave: (postId: Id<"social_posts">) => void;
+  onRepost: (postId: Id<"social_posts">) => void;
   onOpenPostMenu: (postId: string | null) => void;
   onEditPost: (post: ProfilePost) => void;
   onDeletePost: (postId: Id<"social_posts">) => void;
@@ -2362,13 +2532,15 @@ function ProfilePostsCard({
         const isPreviewPost = post._id === ("preview" as Id<"social_posts">);
         const commentBody = commentBodies[post._id] ?? "";
         const showCommentInput = activeCommentPostId === post._id;
-        const visibleComments = post.comments ?? [];
+        const threadForPost = showCommentInput ? activeThread : undefined;
         const isEditing = editingPostId === post._id;
         const editingBody = editingPostBodies[post._id] ?? post.body ?? "";
         const canSaveEdit = Boolean(editingBody.trim() || post.mediaUrl || post.linkedLog);
         const edited = Boolean(post.updatedAt && post.updatedAt > post.createdAt);
+        const isOwnPost = Boolean(userId && post.authorId === userId);
+        const canRepost = Boolean(userId && !isOwnPost && !post.repostedByViewer && !post.repostOfPostId);
         return (
-        <article key={post._id} className="border-b border-border bg-background px-6 py-4 last:border-b-0 sm:px-8">
+        <article key={post._id} className="border-b border-border bg-background px-4 py-4 last:border-b-0 sm:px-8">
           <div className="flex items-start gap-3">
             <Avatar name={profileName} avatarUrl={avatarUrl} />
             <div className="min-w-0 flex-1">
@@ -2436,6 +2608,7 @@ function ProfilePostsCard({
               ) : (
                 post.body && <p className="mt-4 whitespace-pre-wrap text-base leading-6 text-white sm:text-lg">{post.body}</p>
               )}
+              {post.repostOfPostId && <p className="mt-2 text-sm text-muted-foreground">reposted</p>}
               {post.linkedLog && (
                 <div className="mt-4 rounded-lg border border-white/10 bg-black/25 p-3 text-sm">
                   <p className="font-medium">{post.linkedLog.exerciseName ?? "Top Log"}</p>
@@ -2454,33 +2627,54 @@ function ProfilePostsCard({
                   )}
                 </div>
               )}
-              <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-white/58 min-[420px]:grid-cols-5">
-                <button type="button" disabled={!userId || isPreviewPost} onClick={() => onLike(post._id)} className={`inline-flex items-center gap-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60 ${post.likedByViewer ? "text-rose-500 hover:text-rose-500" : ""}`}><Heart className={`h-5 w-5 ${post.likedByViewer ? "fill-current" : ""}`} />{post.likeCount}</button>
-                <button type="button" disabled={!userId || isPreviewPost} onClick={() => onToggleComment(post._id)} className="inline-flex items-center gap-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60"><MessageSquare className="h-5 w-5" />{post.commentCount}</button>
-                <button type="button" disabled className="inline-flex cursor-not-allowed items-center gap-2 opacity-60"><Repeat2 className="h-5 w-5" />{post.repostCount}</button>
-                <button type="button" disabled={!userId || isPreviewPost} onClick={() => onSave(post._id)} className={`inline-flex items-center justify-end transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60 ${post.savedByViewer ? "text-primary hover:text-primary" : ""}`} aria-label={post.savedByViewer ? t("profile.public.removeSavedPost") : t("profile.public.savePostAria")}><Bookmark className={`h-5 w-5 ${post.savedByViewer ? "fill-current" : ""}`} /></button>
-                <button type="button" disabled={isPreviewPost} onClick={() => sharePost(post._id)} className="inline-flex items-center justify-end gap-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60" aria-label={t("profile.public.sharePost")}><Share2 className="h-5 w-5" />{t("profile.public.sharePost")}</button>
+              <div className="mt-4 grid grid-cols-5 items-center text-sm text-white/58">
+                <ProfilePostActionButton active={post.likedByViewer} activeClass="text-rose-500 hover:text-rose-500" disabled={!userId || isPreviewPost} onClick={() => onLike(post._id)} ariaLabel={post.likedByViewer ? "Like entfernen" : "Liken"}>
+                  <Heart className={`h-5 w-5 ${post.likedByViewer ? "fill-current" : ""}`} />
+                  <span>{post.likeCount}</span>
+                </ProfilePostActionButton>
+                <ProfilePostActionButton disabled={!userId || isPreviewPost} onClick={() => onToggleComment(post._id)} ariaLabel="Kommentare öffnen">
+                  <MessageSquare className="h-5 w-5" />
+                  <span>{post.commentCount}</span>
+                </ProfilePostActionButton>
+                <ProfilePostActionButton active={post.repostedByViewer} activeClass="text-sky-500 hover:text-sky-500" disabled={!canRepost || isPreviewPost} onClick={() => onRepost(post._id)} ariaLabel={isOwnPost ? "Eigene Posts können nicht repostet werden" : post.repostedByViewer ? "Bereits repostet" : "Reposten"}>
+                  <Repeat2 className="h-5 w-5" />
+                  <span>{post.repostCount}</span>
+                </ProfilePostActionButton>
+                <ProfilePostActionButton active={post.savedByViewer} activeClass="text-primary hover:text-primary" disabled={!userId || isPreviewPost} onClick={() => onSave(post._id)} ariaLabel={post.savedByViewer ? t("profile.public.removeSavedPost") : t("profile.public.savePostAria")}>
+                  <Bookmark className={`h-5 w-5 ${post.savedByViewer ? "fill-current" : ""}`} />
+                </ProfilePostActionButton>
+                <ProfilePostActionButton disabled={isPreviewPost} onClick={() => sharePost(post._id)} ariaLabel={t("profile.public.sharePost")}>
+                  <Share2 className="h-5 w-5" />
+                </ProfilePostActionButton>
               </div>
-              {visibleComments.length > 0 && (
-                <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
-                  {visibleComments.map((comment) => (
-                    <ProfileCommentPreview key={comment._id} comment={comment} postId={post._id} userId={userId} />
-                  ))}
-                </div>
-              )}
               {!isPreviewPost && showCommentInput && (
-                <div className="mt-3 flex gap-2">
-                  <input
-                    id={`profile-comment-${post._id}`}
-                    value={commentBody}
-                    onChange={(event) => onCommentBodyChange(post._id, event.target.value)}
-                    placeholder={t("profile.public.commentPlaceholder")}
-                    maxLength={600}
-                    className="min-h-9 min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/60"
-                  />
-                  <Button type="button" size="sm" disabled={!userId || !commentBody.trim()} onClick={() => onSubmitComment(post._id)}>
-                    {t("profile.networkPanel.send")}
-                  </Button>
+                <div className="mt-4 border-t border-white/10 pt-4">
+                  <div className="flex gap-2">
+                    <input
+                      id={`profile-comment-${post._id}`}
+                      value={commentBody}
+                      onChange={(event) => onCommentBodyChange(post._id, event.target.value)}
+                      placeholder={t("profile.public.commentPlaceholder")}
+                      maxLength={600}
+                      className="min-h-9 min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/60"
+                    />
+                    <Button type="button" size="sm" disabled={!userId || !commentBody.trim()} onClick={() => onSubmitComment(post._id)}>
+                      {t("profile.networkPanel.send")}
+                    </Button>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {threadForPost === undefined ? (
+                      <p className="text-sm text-white/45">{t("profile.public.postsLoading")}</p>
+                    ) : threadForPost === null ? (
+                      <p className="text-sm text-white/45">{t("profile.public.unavailablePost")}</p>
+                    ) : threadForPost.comments.length === 0 ? (
+                      <p className="text-sm text-white/45">Noch keine Kommentare.</p>
+                    ) : (
+                      threadForPost.comments.map((comment) => (
+                        <ProfileCommentPreview key={comment._id} comment={comment} postId={post._id} userId={userId} />
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -2492,6 +2686,38 @@ function ProfilePostsCard({
         {t("socialPage.discoverMore")}
       </Link>
     </div>
+  );
+}
+
+function ProfilePostActionButton({
+  children,
+  active = false,
+  activeClass = "text-white",
+  disabled = false,
+  ariaLabel,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  activeClass?: string;
+  disabled?: boolean;
+  ariaLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-label={ariaLabel}
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60",
+        active && activeClass
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -2704,7 +2930,7 @@ function TrainingTab({
       )}
       {!showGoal && !showFavoriteLift && !showHistory && !showTemplates && (
         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm text-white/55">
-          Keine Ã¶ffentlich sichtbaren Trainingsinfos.
+          Keine öffentlich sichtbaren Trainingsinfos.
         </div>
       )}
     </div>
@@ -2757,7 +2983,7 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
             </Badge>
           )}
         </CardTitle>
-        <p className="text-sm text-muted-foreground">Verified Lifts mit Leaderboard-GefÃ¼hl und Platz fÃ¼r kÃ¼nftige Video-Highlights.</p>
+        <p className="text-sm text-muted-foreground">Verified Lifts mit Leaderboard-Gefühl und Platz für künftige Video-Highlights.</p>
       </CardHeader>
       <CardContent className="space-y-3 p-3 sm:p-6">
         {logs === undefined ? (
@@ -3054,6 +3280,7 @@ type ChatMessageView = {
   body: string;
   postId?: Id<"social_posts">;
   mediaUrl?: string | null;
+  sender?: { name: string; avatarUrl?: string | null } | null;
   postPreview?: {
     _id: Id<"social_posts">;
     author: { name: string; username?: string } | null;
@@ -3067,40 +3294,59 @@ function PostShareCard({ message, mine }: { message: ChatMessageView; mine: bool
   const { t } = useAppPreferences();
   const postId = message.postId ?? message.postPreview?._id;
   const href = postId ? `/social?post=${postId}` : "/social";
+  const authorName = message.postPreview?.author?.name ?? t("profile.public.unknownAuthor");
   const authorLabel = message.postPreview?.author
     ? `@${message.postPreview.author.username ?? message.postPreview.author.name}`
     : t("profile.public.unknownAuthor");
+  const excerpt = message.postPreview?.excerpt || t("profile.public.unavailablePost");
 
   return (
     <Link
       href={href}
       className={cn(
-        "block overflow-hidden rounded-xl border bg-background text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        mine ? "border-primary-foreground/25 hover:bg-primary-foreground/10" : "border-border hover:bg-muted/40"
+        "group block overflow-hidden rounded-3xl border text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        mine
+          ? "border-primary/40 bg-[#11160d] hover:bg-[#151d0f]"
+          : "border-white/10 bg-white/[0.055] hover:bg-white/[0.08]"
       )}
     >
-      <div className="flex gap-3 p-3">
+      <div className="p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold", mine ? "border-primary text-primary" : "border-white/20 text-foreground")}>
+              {authorName.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold leading-4">{authorName}</p>
+              <p className="truncate text-xs text-muted-foreground">{authorLabel}</p>
+            </div>
+          </div>
+          <span className={cn("shrink-0 rounded-full px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wide", mine ? "bg-primary/20 text-primary" : "bg-white/[0.08] text-muted-foreground")}>
+            {t("profile.public.sharedPost")}
+          </span>
+        </div>
+
         {message.postPreview?.mediaUrl ? (
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+          <div className="mb-3 overflow-hidden rounded-2xl bg-black/40">
             {message.postPreview.mediaType === "video" ? (
-              <video src={message.postPreview.mediaUrl} className="h-full w-full object-cover" muted />
+              <video src={message.postPreview.mediaUrl} className="aspect-video w-full object-cover" muted />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={message.postPreview.mediaUrl} alt="" className="h-full w-full object-cover" />
+              <img src={message.postPreview.mediaUrl} alt="" className="aspect-video w-full object-cover" />
             )}
           </div>
         ) : (
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <MessageCircle className="h-5 w-5 text-muted-foreground" />
+          <div className="mb-3 flex aspect-[2.2/1] items-center justify-center rounded-2xl bg-black/35">
+            <MessageCircle className="h-6 w-6 text-muted-foreground" />
           </div>
         )}
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">{t("profile.public.sharedPost")}</p>
-          <p className="mt-1 truncate text-sm font-medium">{authorLabel}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-            {message.postPreview?.excerpt || t("profile.public.unavailablePost")}
-          </p>
-          <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
+
+        <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm leading-5 text-foreground">
+          {excerpt}
+        </p>
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+          <span className="text-xs text-muted-foreground">GymLogs</span>
+          <span className={cn("inline-flex items-center gap-1 text-xs font-semibold transition-colors", mine ? "text-primary" : "text-primary group-hover:text-primary/90")}>
             {t("profile.public.viewPost")}
             <ExternalLink className="h-3 w-3" />
           </span>
@@ -3115,9 +3361,9 @@ function ImageMessage({ message }: { message: ChatMessageView }) {
     <div className="space-y-2">
       {message.mediaUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={message.mediaUrl} alt="" className="max-h-72 w-full rounded-xl object-contain" />
+        <img src={message.mediaUrl} alt="" className="max-h-[22rem] w-full rounded-2xl object-contain" />
       ) : (
-        <div className="flex min-h-32 items-center justify-center rounded-xl border border-dashed border-border bg-muted/40">
+        <div className="flex min-h-32 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.05]">
           <ImageIcon className="h-6 w-6 text-muted-foreground" />
         </div>
       )}
