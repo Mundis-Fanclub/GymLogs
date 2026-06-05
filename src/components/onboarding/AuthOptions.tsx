@@ -18,6 +18,8 @@ export function AuthOptions({
   appleLabel: string;
 }) {
   const signupHref = "/sign-up?onboarding=1";
+  const googleHref = "/sign-up?onboarding=1&strategy=google";
+  const appleHref = "/sign-up?onboarding=1&strategy=apple";
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -37,13 +39,13 @@ export function AuthOptions({
             {emailLabel}
           </Button>
         </Link>
-        <Link href={signupHref}>
+        <Link href={googleHref}>
           <Button type="button" variant="outline" className="h-12 w-full justify-start rounded-lg text-base">
             <span className="grid size-5 place-items-center rounded-full border border-border text-xs font-black">G</span>
             {googleLabel}
           </Button>
         </Link>
-        <Link href={signupHref}>
+        <Link href={appleHref}>
           <Button type="button" variant="outline" className="h-12 w-full justify-start rounded-lg text-base">
             <Apple className="h-5 w-5" />
             {appleLabel}
