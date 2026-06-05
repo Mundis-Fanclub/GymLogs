@@ -119,6 +119,42 @@ const LIFT_LABELS = {
   deadlift: "Deadlift",
 } as const;
 
+type LogPerformanceSummary = {
+  average: number;
+  best: number;
+  median: number;
+  count: number;
+};
+
+function getLogPerformanceSummary(logs: ProfileTopLog[] | undefined): LogPerformanceSummary | null {
+  const percentiles = logs
+    ?.map((log) => log.percentile)
+    .filter((percentile): percentile is number => typeof percentile === "number");
+  if (!percentiles?.length) return null;
+
+  const sorted = [...percentiles].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 === 0
+      ? (sorted[middle - 1] + sorted[middle]) / 2
+      : sorted[middle];
+  const average = percentiles.reduce((total, value) => total + value, 0) / percentiles.length;
+
+  return {
+    average: Math.round(average * 10) / 10,
+    best: Math.max(...percentiles),
+    median: Math.round(median * 10) / 10,
+    count: percentiles.length,
+  };
+}
+
+function formatLogPercentile(value: number, locale: string) {
+  return value.toLocaleString(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
 export default function PublicProfilePage() {
   const params = useParams<{ userId: string }>();
   const viewedUserId = params.userId as Id<"users">;
@@ -425,18 +461,18 @@ function PublicProfileContent({
       {profile.isPublic !== false && (
         <>
           <div className="border-b border-border">
-            <div className="flex gap-4 sm:gap-5">
+            <div className="grid min-w-0 grid-flow-col auto-cols-fr">
               {(["posts", "media"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
-                  className={`relative min-h-11 px-1 text-base font-semibold transition-colors sm:min-h-12 sm:text-lg ${
+                  className={`relative flex min-h-12 min-w-0 items-center justify-center px-1 text-center text-[0.78rem] font-semibold leading-none transition-colors min-[380px]:text-sm sm:min-h-14 sm:text-base ${
                     activePublicTab === tab ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                   }`}
                   onClick={() => setActivePublicTab(tab)}
                 >
-                  {tab === "posts" ? t("profile.tabs.posts") : t("profile.tabs.media")}
-                  {activePublicTab === tab && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />}
+                  <span className="min-w-0">{tab === "posts" ? t("profile.tabs.posts") : t("profile.tabs.media")}</span>
+                  {activePublicTab === tab && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />}
                 </button>
               ))}
             </div>
@@ -473,6 +509,7 @@ function PublicProfileContent({
 
 function TopLogsPanel({ logs }: { logs: ProfileTopLog[] | undefined }) {
   const { locale, t } = useAppPreferences();
+  const performance = getLogPerformanceSummary(logs);
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4">
@@ -494,6 +531,41 @@ function TopLogsPanel({ logs }: { logs: ProfileTopLog[] | undefined }) {
         <p className="text-sm text-muted-foreground">{t("profile.topLogs.empty")}</p>
       ) : (
         <div className="space-y-2">
+          {performance && (
+            <div className="rounded-xl border border-primary/25 bg-background p-4 shadow-inner shadow-primary/5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    {t("profile.topLogs.bestPerformanceAverage")}
+                  </p>
+                  <p className="mt-2 text-5xl font-black leading-none tracking-tight text-fuchsia-400">
+                    {formatLogPercentile(performance.average, locale)}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {performance.count} {t("profile.topLogs.verifiedLifts")}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:min-w-60">
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {t("profile.topLogs.bestPerformance")}
+                    </p>
+                    <p className="mt-1 text-lg font-bold text-foreground">
+                      {formatLogPercentile(performance.best, locale)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {t("profile.topLogs.medianPerformance")}
+                    </p>
+                    <p className="mt-1 text-lg font-bold text-foreground">
+                      {formatLogPercentile(performance.median, locale)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {logs.map((log) => (
             <div key={log.submission._id} className="rounded-lg border border-border bg-background p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

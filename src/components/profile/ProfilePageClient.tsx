@@ -262,6 +262,42 @@ const LIFT_LABELS = {
   deadlift: "Deadlift",
 } as const;
 
+type LogPerformanceSummary = {
+  average: number;
+  best: number;
+  median: number;
+  count: number;
+};
+
+function getLogPerformanceSummary(logs: ProfileTopLog[] | undefined): LogPerformanceSummary | null {
+  const percentiles = logs
+    ?.map((log) => log.percentile)
+    .filter((percentile): percentile is number => typeof percentile === "number");
+  if (!percentiles?.length) return null;
+
+  const sorted = [...percentiles].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 === 0
+      ? (sorted[middle - 1] + sorted[middle]) / 2
+      : sorted[middle];
+  const average = percentiles.reduce((total, value) => total + value, 0) / percentiles.length;
+
+  return {
+    average: Math.round(average * 10) / 10,
+    best: Math.max(...percentiles),
+    median: Math.round(median * 10) / 10,
+    count: percentiles.length,
+  };
+}
+
+function formatLogPercentile(value: number, locale: string) {
+  return value.toLocaleString(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
 type ProfileTab = "posts" | "saved" | "media" | "logs" | "training";
 type ProfilePreviewTab = "posts" | "media" | "logs" | "training";
 type ProfileEditSection = "details" | "visibility";
@@ -564,6 +600,7 @@ export function ProfilePageClient() {
         : null
       : publicPreview?.trainingSummary;
   const topLog = topLogs?.[0];
+  const topLogPerformance = getLogPerformanceSummary(topLogs);
   const bestSet = trainingSummary?.bestSet;
   const primaryLift = bestSet
     ? `${bestSet.weight} kg x ${bestSet.reps}`
@@ -593,15 +630,25 @@ export function ProfilePageClient() {
   ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
   const profileTabs = [
     { id: "posts", label: t("profile.tabs.posts") },
-    ...(isOwnProfile ? [{ id: "saved", label: t("profile.tabs.saved") } as const] : []),
     { id: "media", label: t("profile.tabs.media") },
     { id: "logs", label: t("profile.tabs.logs") },
     { id: "training", label: t("profile.tabs.training") },
+    ...(isOwnProfile ? [{ id: "saved", label: t("profile.tabs.saved") } as const] : []),
   ] satisfies Array<{ id: ProfileTab; label: string }>;
   const previewTrainingSummary =
     form.isPublic && form.showTrainingSummary && hasAnyPublicWorkoutStat ? trainingSummary : null;
   const previewBestSet = previewTrainingSummary?.bestSet;
   const profileMetricItems = [
+    topLogPerformance
+      ? {
+          key: "logAverage",
+          icon: Trophy,
+          iconClassName: "text-fuchsia-400",
+          value: formatLogPercentile(topLogPerformance.average, locale),
+          label: t("profile.topLogs.bestPerformanceAverage"),
+          detail: `${topLogPerformance.count} ${t("profile.topLogs.verifiedLifts")}`,
+        }
+      : null,
     form.publicTrainingStreak && trainingSummary
       ? {
           key: "streak",
@@ -647,6 +694,16 @@ export function ProfilePageClient() {
     detail?: string;
   }>;
   const previewMetricItems = [
+    form.isPublic && topLogPerformance
+      ? {
+          key: "logAverage",
+          icon: Trophy,
+          iconClassName: "text-fuchsia-400",
+          value: formatLogPercentile(topLogPerformance.average, locale),
+          label: t("profile.topLogs.bestPerformanceAverage"),
+          detail: `${topLogPerformance.count} ${t("profile.topLogs.verifiedLifts")}`,
+        }
+      : null,
     form.publicTrainingStreak && previewTrainingSummary
       ? {
           key: "streak",
@@ -691,8 +748,7 @@ export function ProfilePageClient() {
     label: string;
     detail?: string;
   }>;
-  const hasVisiblePreviewMetric =
-    Boolean(previewTrainingSummary) && previewMetricItems.length > 0;
+  const hasVisiblePreviewMetric = previewMetricItems.length > 0;
   const previewVisibleProfile: VisibleProfile = publicVisibleProfile;
   const previewMeta = [
     previewVisibleProfile.location ? { icon: MapPin, value: previewVisibleProfile.location } : null,
@@ -1169,7 +1225,8 @@ export function ProfilePageClient() {
             {profileMetricItems.length > 0 && (
               <div
                 className={cn(
-                  "grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-muted/20 shadow-sm",
+                  "grid overflow-hidden rounded-lg border border-border bg-muted/20 shadow-sm",
+                  profileMetricItems.length === 1 ? "grid-cols-1" : "grid-cols-2",
                   profileMetricItems.length > 2 && "min-[420px]:grid-cols-4"
                 )}
               >
@@ -1185,8 +1242,8 @@ export function ProfilePageClient() {
                 ))}
               </div>
             )}
-            <div className="-mx-5 overflow-x-auto border-b border-border px-5 sm:mx-0 sm:px-0">
-              <div className="flex w-max min-w-full gap-3 sm:gap-5">
+            <div className="-mx-5 border-b border-border sm:-mx-7 lg:-mx-9">
+              <div className="grid min-w-0 grid-flow-col auto-cols-fr">
                 {profileTabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -1196,13 +1253,13 @@ export function ProfilePageClient() {
                     type="button"
                     onClick={() => setActiveProfileTab(tab.id)}
                     className={cn(
-                      "relative min-h-11 shrink-0 whitespace-nowrap px-1.5 text-base font-semibold text-muted-foreground transition-colors hover:text-foreground sm:min-h-12 sm:px-1 sm:text-lg",
+                      "relative flex min-h-12 min-w-0 items-center justify-center px-1 text-center text-[0.78rem] font-semibold leading-none text-muted-foreground transition-colors hover:text-foreground min-[380px]:text-sm sm:min-h-14 sm:text-base",
                       activeProfileTab === tab.id && "text-foreground"
                     )}
                   >
-                    {tab.label}
+                    <span className="min-w-0">{tab.label}</span>
                     {activeProfileTab === tab.id && (
-                      <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />
+                      <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />
                     )}
                   </button>
                 ))}
@@ -1709,10 +1766,11 @@ export function ProfilePageClient() {
                         {form.heightCm && <Badge variant="secondary" className="bg-white/10 text-white"><Ruler className="h-3 w-3" />{form.heightCm} cm</Badge>}
                       </div>
                     </div>
-                    {previewTrainingSummary && hasVisiblePreviewMetric && (
+                    {hasVisiblePreviewMetric && (
                       <div
                         className={cn(
-                        "grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-muted/20 shadow-sm",
+                          "grid overflow-hidden rounded-lg border border-border bg-muted/20 shadow-sm",
+                          previewMetricItems.length === 1 ? "grid-cols-1" : "grid-cols-2",
                           previewMetricItems.length > 2 && "min-[420px]:grid-cols-4"
                         )}
                       >
@@ -1735,8 +1793,8 @@ export function ProfilePageClient() {
                     )}
                     {form.isPublic && (
                       <>
-                        <div className="-mx-5 overflow-x-auto border-b border-border px-5 sm:mx-0 sm:px-0">
-                          <div className="flex w-max min-w-full gap-3 sm:gap-7">
+                        <div className="-mx-5 border-b border-border sm:-mx-7 lg:-mx-9">
+                          <div className="grid min-w-0 grid-flow-col auto-cols-fr">
                             {previewTabs.map((tab) => (
                               <button
                                 key={tab.id}
@@ -1746,13 +1804,13 @@ export function ProfilePageClient() {
                                 type="button"
                                 onClick={() => setPreviewProfileTab(tab.id)}
                                 className={cn(
-                                  "relative min-h-12 shrink-0 whitespace-nowrap px-1.5 text-base font-semibold text-muted-foreground transition-colors hover:text-foreground sm:min-h-14 sm:px-1 sm:text-xl",
+                                  "relative flex min-h-12 min-w-0 items-center justify-center px-1 text-center text-[0.78rem] font-semibold leading-none text-muted-foreground transition-colors hover:text-foreground min-[380px]:text-sm sm:min-h-14 sm:text-base",
                                   previewProfileTab === tab.id && "text-foreground"
                                 )}
                               >
-                                {tab.label}
+                                <span className="min-w-0">{tab.label}</span>
                                 {previewProfileTab === tab.id && (
-                                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />
+                                  <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />
                                 )}
                               </button>
                             ))}
@@ -2964,9 +3022,50 @@ function WorkoutHistoryCard({
   );
 }
 
+function LogPerformanceCard({ performance }: { performance: LogPerformanceSummary }) {
+  const { locale, t } = useAppPreferences();
+
+  return (
+    <div className="rounded-xl border border-primary/25 bg-background p-4 shadow-inner shadow-primary/5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            {t("profile.topLogs.bestPerformanceAverage")}
+          </p>
+          <p className="mt-2 text-5xl font-black leading-none tracking-tight text-fuchsia-400 sm:text-6xl">
+            {formatLogPercentile(performance.average, locale)}
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {performance.count} {t("profile.topLogs.verifiedLifts")}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:min-w-64">
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("profile.topLogs.bestPerformance")}
+            </p>
+            <p className="mt-1 text-lg font-bold text-foreground">
+              {formatLogPercentile(performance.best, locale)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("profile.topLogs.medianPerformance")}
+            </p>
+            <p className="mt-1 text-lg font-bold text-foreground">
+              {formatLogPercentile(performance.median, locale)}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undefined; embedded?: boolean }) {
   const { locale, t } = useAppPreferences();
   const highlight = logs?.[0];
+  const performance = getLogPerformanceSummary(logs);
 
   return (
     <Card className={cn("overflow-hidden border-cyan-500/15 bg-card/95 shadow-xl shadow-cyan-950/5", embedded && "shadow-none")}>
@@ -2983,7 +3082,7 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
             </Badge>
           )}
         </CardTitle>
-        <p className="text-sm text-muted-foreground">Verified Lifts mit Leaderboard-Gefühl und Platz für künftige Video-Highlights.</p>
+        <p className="text-sm text-muted-foreground">{t("profile.topLogs.copy")}</p>
       </CardHeader>
       <CardContent className="space-y-3 p-3 sm:p-6">
         {logs === undefined ? (
@@ -2994,6 +3093,7 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
           </p>
         ) : (
           <>
+          {performance && <LogPerformanceCard performance={performance} />}
           {highlight && (
             <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/12 via-muted/20 to-background p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-950/10">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

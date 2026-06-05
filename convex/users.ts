@@ -537,3 +537,58 @@ export const updateProfile = mutation({
     });
   },
 });
+
+export const applyOnboarding = mutation({
+  args: {
+    userId: v.id("users"),
+    name: v.string(),
+    age: v.optional(v.number()),
+    weightKg: v.optional(v.number()),
+    trainingFrequencyPerWeek: v.optional(v.number()),
+    desiredWorkoutDurationMinutes: v.optional(v.number()),
+    trainingGoal: v.optional(v.string()),
+    trainingGoals: v.optional(v.array(v.string())),
+    preferredSplit: v.optional(v.string()),
+    onboardingInterests: v.optional(v.array(v.string())),
+    avatarStorageId: v.optional(v.id("_storage")),
+    bio: v.optional(v.string()),
+    heightCm: v.optional(v.number()),
+    favoriteLift: v.optional(v.string()),
+    location: v.optional(v.string()),
+    trainingLevel: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await ctx.db.get(args.userId);
+    if (!currentUser) throw new Error("User not found.");
+
+    const name = args.name.trim().slice(0, 80);
+    const fallbackUsername = normalizeUsername(name || currentUser.email.split("@")[0] || "user");
+    const username = currentUser.username ?? (fallbackUsername ? `${fallbackUsername}_${args.userId.slice(-4)}` : `user_${args.userId.slice(-4)}`);
+
+    if (!currentUser.username) {
+      await reserveUsername(ctx, username, args.userId);
+    }
+
+    await ctx.db.patch(args.userId, {
+      name: name || currentUser.name || "GymLogs User",
+      username,
+      searchText: profileSearchText(name || currentUser.name || "GymLogs User", username, currentUser.email),
+      age: args.age,
+      weightKg: args.weightKg,
+      trainingFrequencyPerWeek: args.trainingFrequencyPerWeek,
+      desiredWorkoutDurationMinutes: args.desiredWorkoutDurationMinutes,
+      trainingGoal: (args.trainingGoal ?? args.trainingGoals?.[0])?.trim().slice(0, 120),
+      trainingGoals: args.trainingGoals?.slice(0, 2),
+      preferredSplit: args.preferredSplit?.trim().slice(0, 80),
+      onboardingInterests: args.onboardingInterests?.slice(0, 16),
+      avatarStorageId: args.avatarStorageId,
+      bio: args.bio?.trim().slice(0, 180),
+      heightCm: args.heightCm,
+      favoriteLift: args.favoriteLift?.trim().slice(0, 60),
+      location: args.location?.trim().slice(0, 80),
+      trainingLevel: args.trainingLevel?.trim().slice(0, 40),
+      onboardingCompletedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  },
+});

@@ -52,6 +52,14 @@ export default defineSchema({
     location: v.optional(v.string()),
     favoriteLift: v.optional(v.string()),
     trainingGoal: v.optional(v.string()),
+    trainingGoals: v.optional(v.array(v.string())),
+    trainingLevel: v.optional(v.string()),
+    age: v.optional(v.number()),
+    trainingFrequencyPerWeek: v.optional(v.number()),
+    desiredWorkoutDurationMinutes: v.optional(v.number()),
+    preferredSplit: v.optional(v.string()),
+    onboardingInterests: v.optional(v.array(v.string())),
+    onboardingCompletedAt: v.optional(v.number()),
     profileAccent: v.optional(v.string()),
     heightCm: v.optional(v.number()),
     weightKg: v.optional(v.number()),
@@ -176,10 +184,12 @@ export default defineSchema({
     date: v.number(),
     notes: v.optional(v.string()),
     sourceTemplateId: v.optional(v.id("workout_templates")),
+    durationMinutes: v.optional(v.number()),
     isCompleted: v.boolean(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_date", ["userId", "date"]),
+    .index("by_user_date", ["userId", "date"])
+    .index("by_source_template_completed", ["sourceTemplateId", "isCompleted", "date"]),
 
   workout_templates: defineTable({
     userId: v.id("users"),
@@ -191,6 +201,12 @@ export default defineSchema({
     showWeights: v.optional(v.boolean()),
     description: v.optional(v.string()),
     executionCount: v.optional(v.number()),
+    savedCount: v.optional(v.number()),
+    averageDurationMinutes: v.optional(v.number()),
+    trainingGoal: v.optional(v.string()),
+    trainingGoals: v.optional(v.array(v.string())),
+    split: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
     exercises: v.array(
       v.object({
         exerciseId: v.id("exercises"),
@@ -208,7 +224,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_created", ["userId", "createdAt"]),
+    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_visibility_and_created", ["visibility", "createdAt"]),
 
   sets: defineTable({
     workoutId: v.id("workouts"),

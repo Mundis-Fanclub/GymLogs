@@ -39,6 +39,131 @@ function toBodyPart(muscleGroup: string): string {
   return "other";
 }
 
+const ONBOARDING_PRESETS = [
+  {
+    id: "full_body_beginner",
+    name: "Ganzkoerper Anfaenger",
+    description: "Ein einfacher Einstieg mit Grunduebungen fuer den ganzen Koerper.",
+    duration: 45,
+    goal: "general_fitness",
+    split: "full_body",
+    tags: ["beginner", "gym", "strength"],
+    exercises: ["Squat", "Bench Press", "Lat Pulldown", "Overhead Press", "Plank"],
+  },
+  {
+    id: "upper_60",
+    name: "Oberkoerper 60 Min",
+    description: "Brust, Ruecken, Schultern und Arme in einer fokussierten Einheit.",
+    duration: 60,
+    goal: "muscle_gain",
+    split: "upper_lower",
+    tags: ["gym", "bodybuilding", "upper"],
+    exercises: ["Bench Press", "Barbell Row", "Overhead Press", "Lat Pulldown", "Tricep Pushdown", "Barbell Curl"],
+  },
+  {
+    id: "lower_60",
+    name: "Unterkoerper 60 Min",
+    description: "Solide Unterkoerper-Einheit mit Squat-Fokus und Zubehoer.",
+    duration: 60,
+    goal: "strength",
+    split: "upper_lower",
+    tags: ["gym", "legs", "strength"],
+    exercises: ["Squat", "Leg Press", "Leg Curl", "Hip Thrust", "Standing Calf Raise"],
+  },
+  {
+    id: "push_day",
+    name: "Push Day",
+    description: "Druecken fuer Brust, Schultern und Trizeps.",
+    duration: 60,
+    goal: "muscle_gain",
+    split: "push_pull_legs",
+    tags: ["push", "gym", "bodybuilding"],
+    exercises: ["Bench Press", "Incline Bench Press", "Overhead Press", "Lateral Raise", "Tricep Pushdown"],
+  },
+  {
+    id: "pull_day",
+    name: "Pull Day",
+    description: "Ruecken und Bizeps mit starkem Zug-Fokus.",
+    duration: 60,
+    goal: "muscle_gain",
+    split: "push_pull_legs",
+    tags: ["pull", "gym", "bodybuilding"],
+    exercises: ["Deadlift", "Pull-up", "Barbell Row", "Lat Pulldown", "Barbell Curl"],
+  },
+  {
+    id: "leg_day",
+    name: "Leg Day",
+    description: "Beine schwer, sauber und gut strukturiert.",
+    duration: 60,
+    goal: "strength",
+    split: "push_pull_legs",
+    tags: ["legs", "gym", "powerlifting"],
+    exercises: ["Squat", "Front Squat", "Leg Press", "Leg Curl", "Standing Calf Raise"],
+  },
+  {
+    id: "short_30",
+    name: "Kurzes 30-Minuten-Workout",
+    description: "Kurze, dichte Einheit fuer Tage mit wenig Zeit.",
+    duration: 30,
+    goal: "general_fitness",
+    split: "full_body",
+    tags: ["short", "beginner", "home"],
+    exercises: ["Squat", "Bench Press", "Barbell Row", "Plank"],
+  },
+] as const;
+
+function inferTemplateDuration(template: { averageDurationMinutes?: number; exercises: Array<{ sets: unknown[] }> }) {
+  return template.averageDurationMinutes ?? Math.min(90, Math.max(30, template.exercises.length * 10));
+}
+
+function inferTemplateSplit(template: { split?: string; name: string; description?: string; exercises: Array<{ category: string; muscleGroup: string }> }) {
+  if (template.split) return template.split;
+  const text = `${template.name} ${template.description ?? ""}`.toLowerCase();
+  if (text.includes("push")) return "push_pull_legs";
+  if (text.includes("pull")) return "push_pull_legs";
+  if (text.includes("leg") || text.includes("unterkoerper")) return "push_pull_legs";
+  if (text.includes("upper") || text.includes("oberkoerper") || text.includes("lower")) return "upper_lower";
+  const categories = new Set(template.exercises.map((exercise) => exercise.category));
+  if (categories.has("push") && categories.has("pull") && categories.has("legs")) return "full_body";
+  return "custom";
+}
+
+function templateMatchScore(
+  template: {
+    name: string;
+    description?: string;
+    executionCount?: number;
+    savedCount?: number;
+    averageDurationMinutes?: number;
+    trainingGoal?: string;
+    split?: string;
+    tags?: string[];
+    exercises: Array<{ category: string; muscleGroup: string; sets: unknown[] }>;
+  },
+  preferences: {
+    durationMinutes?: number;
+    trainingGoal?: string;
+    trainingGoals?: string[];
+    preferredSplit?: string;
+    interests?: string[];
+  }
+) {
+  let score = (template.executionCount ?? 0) * 3 + (template.savedCount ?? 0) * 4;
+  const duration = inferTemplateDuration(template);
+  if (preferences.durationMinutes) {
+    score += Math.max(0, 30 - Math.abs(duration - preferences.durationMinutes));
+  }
+  const goals = preferences.trainingGoals?.length ? preferences.trainingGoals : preferences.trainingGoal ? [preferences.trainingGoal] : [];
+  if (template.trainingGoal && goals.includes(template.trainingGoal)) score += 18;
+  const split = inferTemplateSplit(template);
+  if (preferences.preferredSplit && split === preferences.preferredSplit) score += 18;
+  const haystack = `${template.name} ${template.description ?? ""} ${(template.tags ?? []).join(" ")}`.toLowerCase();
+  for (const interest of preferences.interests ?? []) {
+    if (haystack.includes(interest.toLowerCase())) score += 8;
+  }
+  return score;
+}
+
 export const list = query({
   args: {
     userId: v.id("users"),
@@ -224,6 +349,8 @@ export const complete = mutation({
   handler: async (ctx, args) => {
     const workout = await ctx.db.get(args.workoutId);
     if (!workout) return;
+    const completedAt = Date.now();
+    const durationMinutes = Math.max(1, Math.round((completedAt - workout.date) / (60 * 1000)));
     if (!workout.isCompleted && workout.sourceTemplateId) {
       const template = await ctx.db.get(workout.sourceTemplateId);
       if (template) {
@@ -232,7 +359,7 @@ export const complete = mutation({
         });
       }
     }
-    await ctx.db.patch(args.workoutId, { isCompleted: true, date: Date.now() });
+    await ctx.db.patch(args.workoutId, { isCompleted: true, date: completedAt, durationMinutes });
   },
 });
 
@@ -424,6 +551,182 @@ export const listProfileTemplates = query({
             : null,
         };
       });
+  },
+});
+
+export const listOnboardingRecommendations = query({
+  args: {
+    durationMinutes: v.optional(v.number()),
+    trainingGoal: v.optional(v.string()),
+    trainingGoals: v.optional(v.array(v.string())),
+    preferredSplit: v.optional(v.string()),
+    interests: v.optional(v.array(v.string())),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(args.limit ?? 6, 1), 12);
+    const templates = await ctx.db
+      .query("workout_templates")
+      .withIndex("by_visibility_and_created", (q) => q.eq("visibility", "public"))
+      .order("desc")
+      .take(80);
+
+    const ranked = templates
+      .map((template) => ({
+        template,
+        score: templateMatchScore(template, {
+          durationMinutes: args.durationMinutes,
+          trainingGoal: args.trainingGoal,
+          trainingGoals: args.trainingGoals,
+          preferredSplit: args.preferredSplit,
+          interests: args.interests,
+        }),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    return await Promise.all(
+      ranked.map(async ({ template, score }) => {
+        const creator = await ctx.db.get(template.userId);
+        const avatarUrl = creator?.avatarStorageId
+          ? await ctx.storage.getUrl(creator.avatarStorageId)
+          : null;
+        const duration = inferTemplateDuration(template);
+        const split = inferTemplateSplit(template);
+        const repeatedWorkouts = await ctx.db
+          .query("workouts")
+          .withIndex("by_source_template_completed", (q) =>
+            q.eq("sourceTemplateId", template._id).eq("isCompleted", true)
+          )
+          .order("desc")
+          .take(8);
+        const durationSamples = repeatedWorkouts
+          .filter((workout) => typeof workout.durationMinutes === "number")
+          .slice(0, 4);
+        const durationValues = durationSamples.map((workout) => workout.durationMinutes as number);
+        const durationRangeMinutes = durationValues.length
+          ? {
+              min: Math.min(...durationValues),
+              max: Math.max(...durationValues),
+            }
+          : null;
+        const repeatSamples = await Promise.all(
+          durationSamples.slice(0, 3).map(async (workout) => {
+            const repeater = await ctx.db.get(workout.userId);
+            return {
+              name: repeater?.name ?? "GymLogs User",
+              username: repeater?.username,
+              durationMinutes: workout.durationMinutes as number,
+            };
+          })
+        );
+
+        return {
+          id: template._id,
+          kind: "community" as const,
+          title: template.name,
+          description: template.description,
+          durationMinutes: duration,
+          trainingGoal: template.trainingGoal,
+          split,
+          totalExercises: template.exercises.length,
+          saves: template.savedCount ?? 0,
+          repeats: template.executionCount ?? 0,
+          durationRangeMinutes,
+          repeatSamples,
+          creator: creator
+            ? {
+                id: creator._id,
+                name: creator.name,
+                username: creator.username,
+                avatarUrl: avatarUrl ?? creator.avatarUrl,
+              }
+            : null,
+          tags: template.tags ?? [],
+          score,
+        };
+      })
+    );
+  },
+});
+
+async function presetExercises(ctx: MutationCtx, exerciseNames: readonly string[]) {
+  const exercises = await ctx.db.query("exercises").take(500);
+  return exerciseNames.map((exerciseName) => {
+    const exercise = exercises.find((entry) => entry.name.toLowerCase() === exerciseName.toLowerCase());
+    if (!exercise) throw new Error(`Exercise missing from catalog: ${exerciseName}`);
+    return {
+      exerciseId: exercise._id,
+      exerciseName: exercise.name,
+      muscleGroup: exercise.muscleGroup,
+      category: exercise.category,
+      sets: [
+        { weight: 0, reps: exercise.name.toLowerCase() === "plank" ? 30 : 10 },
+        { weight: 0, reps: exercise.name.toLowerCase() === "plank" ? 30 : 10 },
+        { weight: 0, reps: exercise.name.toLowerCase() === "plank" ? 30 : 10 },
+      ],
+    };
+  });
+}
+
+export const saveRecommendedTemplate = mutation({
+  args: {
+    userId: v.id("users"),
+    templateId: v.optional(v.id("workout_templates")),
+    presetId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.templateId) {
+      const template = await ctx.db.get(args.templateId);
+      if (!template) throw new Error("Template not found.");
+      if ((template.visibility ?? "private") !== "public" && template.userId !== args.userId) {
+        throw new Error("Template not available.");
+      }
+
+      const inserted = await ctx.db.insert("workout_templates", {
+        userId: args.userId,
+        name: template.name,
+        sourceWorkoutId: template.sourceWorkoutId,
+        visibility: "private",
+        showWeights: template.showWeights ?? false,
+        description: template.description,
+        executionCount: 0,
+        savedCount: 0,
+        averageDurationMinutes: template.averageDurationMinutes,
+        trainingGoal: template.trainingGoal,
+        split: template.split,
+        tags: template.tags,
+        exercises: template.exercises,
+        createdAt: Date.now(),
+      });
+
+      if (template.userId !== args.userId) {
+        await ctx.db.patch(template._id, {
+          savedCount: (template.savedCount ?? 0) + 1,
+        });
+      }
+
+      return inserted;
+    }
+
+    const preset = ONBOARDING_PRESETS.find((entry) => entry.id === args.presetId);
+    if (!preset) throw new Error("Template not found.");
+
+    return await ctx.db.insert("workout_templates", {
+      userId: args.userId,
+      name: preset.name,
+      visibility: "private",
+      showWeights: false,
+      description: preset.description,
+      executionCount: 0,
+      savedCount: 0,
+      averageDurationMinutes: preset.duration,
+      trainingGoal: preset.goal,
+      split: preset.split,
+      tags: [...preset.tags],
+      exercises: await presetExercises(ctx, preset.exercises),
+      createdAt: Date.now(),
+    });
   },
 });
 

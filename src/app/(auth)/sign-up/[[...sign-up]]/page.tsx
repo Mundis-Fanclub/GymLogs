@@ -5,12 +5,12 @@ import { Logo } from "@/components/brand/Logo";
 
 export default async function SignUpPage() {
   const { userId } = await auth();
-  if (userId) redirect("/dashboard");
+  if (userId) redirect("/onboarding/complete");
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-4">
       <Logo size={96} priority alt="Logged" />
-      <SignUp />
+      <SignUp signInUrl="/sign-in" forceRedirectUrl="/onboarding/complete" fallbackRedirectUrl="/onboarding/complete" />
     </div>
   );
 }

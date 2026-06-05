@@ -16,6 +16,7 @@ const audiowide = Audiowide({
 const mozillaText = Mozilla_Text({
   variable: "--font-mozilla-text",
   subsets: ["latin"],
+  adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {
