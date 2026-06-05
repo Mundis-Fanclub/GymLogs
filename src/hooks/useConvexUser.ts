@@ -6,22 +6,53 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
+const DEV_CLERK_ID = "dev-local-user";
+const DEV_AUTH_STORAGE_KEY = "gymlogs-dev-auth";
+
+function isDevAuthEnabled() {
+  if (process.env.NODE_ENV === "production") return false;
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(DEV_AUTH_STORAGE_KEY) === "1";
+}
+
 export function useConvexUser() {
   const { user, isLoaded, isSignedIn } = useUser();
   const getOrCreate = useMutation(api.users.getOrCreate);
   const creatingForClerkId = useRef<string | null>(null);
+  const [devAuthEnabled, setDevAuthEnabled] = useState(false);
   const [createdUser, setCreatedUser] = useState<{
     clerkId: string;
     userId: Id<"users">;
   } | null>(null);
+  const effectiveClerkId = user?.id ?? (devAuthEnabled ? DEV_CLERK_ID : undefined);
+  const effectiveName = user
+    ? user.fullName ?? user.username ?? "Unknown"
+    : "GymLogs Dev";
+  const effectiveEmail = user?.primaryEmailAddress?.emailAddress ?? "dev@gymlogs.local";
+  const authSourceReady = isLoaded || devAuthEnabled;
 
   const convexUser = useQuery(
     api.users.getByClerkId,
-    user ? { clerkId: user.id } : "skip"
+    effectiveClerkId ? { clerkId: effectiveClerkId } : "skip"
   );
 
   useEffect(() => {
-    if (!isLoaded || !user) {
+    setDevAuthEnabled(isDevAuthEnabled());
+
+    function handleDevAuthChanged() {
+      setDevAuthEnabled(isDevAuthEnabled());
+    }
+
+    window.addEventListener("storage", handleDevAuthChanged);
+    window.addEventListener("gymlogs-dev-auth-changed", handleDevAuthChanged);
+    return () => {
+      window.removeEventListener("storage", handleDevAuthChanged);
+      window.removeEventListener("gymlogs-dev-auth-changed", handleDevAuthChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authSourceReady || !effectiveClerkId) {
       creatingForClerkId.current = null;
       setCreatedUser(null);
       return;
@@ -34,25 +65,25 @@ export function useConvexUser() {
       return;
     }
 
-    if (createdUser?.clerkId === user.id) return;
-    if (creatingForClerkId.current === user.id) return;
-    creatingForClerkId.current = user.id;
+    if (createdUser?.clerkId === effectiveClerkId) return;
+    if (creatingForClerkId.current === effectiveClerkId) return;
+    creatingForClerkId.current = effectiveClerkId;
 
     void getOrCreate({
-      clerkId: user.id,
-      name: user.fullName ?? user.username ?? "Unknown",
-      email: user.primaryEmailAddress?.emailAddress ?? "",
+      clerkId: effectiveClerkId,
+      name: effectiveName,
+      email: effectiveEmail,
     })
       .then((userId) => {
-        setCreatedUser({ clerkId: user.id, userId });
+        setCreatedUser({ clerkId: effectiveClerkId, userId });
       })
       .finally(() => {
         creatingForClerkId.current = null;
       });
-  }, [convexUser, createdUser, isLoaded, user, getOrCreate]);
+  }, [authSourceReady, convexUser, createdUser, effectiveClerkId, effectiveEmail, effectiveName, getOrCreate]);
 
   const createdUserId =
-    createdUser && createdUser.clerkId === user?.id
+    createdUser && createdUser.clerkId === effectiveClerkId
       ? createdUser.userId
       : undefined;
   const userId = convexUser?._id ?? createdUserId;
@@ -60,7 +91,8 @@ export function useConvexUser() {
   return {
     userId,
     convexUser,
-    isSignedIn: Boolean(isSignedIn),
-    isLoaded: isLoaded && (!user || userId !== undefined),
+    isSignedIn: Boolean(isSignedIn || devAuthEnabled),
+    isLoaded: authSourceReady && (!effectiveClerkId || userId !== undefined),
+    isDevAuth: devAuthEnabled && !user,
   };
 }

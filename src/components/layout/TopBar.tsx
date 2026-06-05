@@ -17,7 +17,7 @@ import { useAppPreferences } from "@/components/providers/AppPreferencesProvider
 export function TopBar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { userId } = useConvexUser();
+  const { userId, isDevAuth } = useConvexUser();
   const { user } = useUser();
   const { signOut } = useClerk();
   const profileImageUrl = user?.imageUrl;
@@ -196,6 +196,14 @@ export function TopBar() {
                 label={t("topbar.signOut")}
                 onClick={() => {
                   setProfileMenuOpen(false);
+                  if (isDevAuth) {
+                    window.localStorage.removeItem("gymlogs-dev-auth");
+                    document.cookie = "gymlogs-dev-auth=; Path=/; SameSite=Lax; Max-Age=0";
+                    window.dispatchEvent(new Event("gymlogs-dev-auth-changed"));
+                    router.push("/sign-in");
+                    router.refresh();
+                    return;
+                  }
                   void signOut({ redirectUrl: "/sign-in" });
                 }}
               />

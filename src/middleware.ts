@@ -10,6 +10,14 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
+  const devAuthEnabled =
+    process.env.NODE_ENV !== "production" &&
+    req.cookies.get("gymlogs-dev-auth")?.value === "1";
+
+  if (devAuthEnabled) {
+    return;
+  }
+
   if (!isPublicRoute(req)) {
     await auth.protect();
   }

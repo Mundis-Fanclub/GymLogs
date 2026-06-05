@@ -45,6 +45,8 @@ const COPY = {
     verifying: "Wird bestätigt...",
     resend: "Code erneut senden",
     sentAgain: "Code erneut gesendet.",
+    devAccess: "Lokalen Dev-Zugang nutzen",
+    devAccessHint: "Nur lokal sichtbar. Umgeht Clerk, solange du keinen Zugriff auf das Clerk Dashboard hast.",
     already: "Du hast schon einen Account?",
     noAccount: "Noch keinen Account?",
     goSignIn: "Einloggen",
@@ -82,6 +84,8 @@ const COPY = {
     verifying: "Verifying...",
     resend: "Send code again",
     sentAgain: "Code sent again.",
+    devAccess: "Use local dev access",
+    devAccessHint: "Only visible locally. Bypasses Clerk while you cannot access the Clerk dashboard.",
     already: "Already have an account?",
     noAccount: "No account yet?",
     goSignIn: "Sign in",
@@ -131,6 +135,7 @@ export function AuthPageClient({ mode, onboarding, redirectUrl, initialStrategy 
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const oauthStartedRef = useRef(false);
+  const showDevAccess = process.env.NODE_ENV !== "production";
 
   const isReady = signIn.isLoaded && signUp.isLoaded;
   const otherModeHref = useMemo(() => {
@@ -168,15 +173,34 @@ export function AuthPageClient({ mode, onboarding, redirectUrl, initialStrategy 
       } as const;
 
       if (mode === "sign-up") {
-        await signUp.signUp.authenticateWithRedirect(params);
+        await Promise.race([
+          signUp.signUp.authenticateWithRedirect(params),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => reject(new Error(copy.oauthError)), 12000);
+          }),
+        ]);
       } else {
-        await signIn.signIn.authenticateWithRedirect(params);
+        await Promise.race([
+          signIn.signIn.authenticateWithRedirect(params),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => reject(new Error(copy.oauthError)), 12000);
+          }),
+        ]);
       }
     } catch (authError) {
       setError(getClerkError(authError, copy.oauthError, copy.duplicateEmail));
       setIsOAuthStarting(null);
     }
   }, [copy.duplicateEmail, copy.oauthError, isReady, mode, redirectUrl, signIn.signIn, signUp.signUp]);
+
+  const enterDevMode = () => {
+    if (!showDevAccess) return;
+    window.localStorage.setItem("gymlogs-dev-auth", "1");
+    document.cookie = "gymlogs-dev-auth=1; Path=/; SameSite=Lax; Max-Age=2592000";
+    window.dispatchEvent(new Event("gymlogs-dev-auth-changed"));
+    router.push("/dashboard");
+    router.refresh();
+  };
 
   useEffect(() => {
     if (oauthStartedRef.current || !isReady) return;
@@ -394,6 +418,15 @@ export function AuthPageClient({ mode, onboarding, redirectUrl, initialStrategy 
               {mode === "sign-up" ? copy.goSignIn : copy.goSignUp}
             </Link>
           </div>
+
+          {showDevAccess && (
+            <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3">
+              <Button type="button" variant="outline" className="h-11 w-full rounded-lg border-amber-400/40 text-amber-200 hover:bg-amber-400/15" onClick={enterDevMode}>
+                {copy.devAccess}
+              </Button>
+              <p className="mt-2 text-xs leading-5 text-amber-100/75">{copy.devAccessHint}</p>
+            </div>
+          )}
         </section>
 
         <div className="grid gap-3 text-center">
