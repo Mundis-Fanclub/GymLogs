@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import {
   Activity,
+  AlertTriangle,
   ArrowLeft,
   Ban,
   BadgeCheck,
@@ -129,16 +130,59 @@ type ProfileWorkoutTemplate = {
   visibility: "private" | "friends" | "public";
   showWeights: boolean;
   description?: string;
+  sourceTemplateVersion?: number;
+  version?: number;
+  pendingSourceUpdate?: {
+    sourceTemplateId: Id<"workout_templates">;
+    sourceVersion: number;
+    createdAt: number;
+    summary: TemplateChangeSummary[];
+  };
   totalExercises: number;
   totalSets: number;
   totalVolume: number | null;
   executionCount: number;
-  exercises: Array<{
-    exerciseName: string;
-    muscleGroup: string;
-    category: string;
-    sets: Array<{ reps: number; weight: number | null }>;
-  }>;
+  exercises: ProfileWorkoutTemplateExercise[];
+};
+
+type TemplateChangeSummary = {
+  kind: "added" | "removed" | "changed";
+  exerciseName: string;
+  beforeName?: string;
+  afterName?: string;
+  beforeSets?: number;
+  afterSets?: number;
+};
+
+type ProfileWorkoutTemplateExercise = {
+  exerciseId: Id<"exercises">;
+  exerciseName: string;
+  muscleGroup: string;
+  category: string;
+  sets: Array<{ reps: number; weight: number | null }>;
+};
+
+type WorkoutTemplateDraftExercise = {
+  exerciseId: Id<"exercises">;
+  exerciseName: string;
+  muscleGroup: string;
+  category: string;
+  sets: Array<{ reps: number; weight: number }>;
+};
+
+type WorkoutTemplateDraft = {
+  name: string;
+  description: string;
+  visibility: "private" | "friends" | "public";
+  showWeights: boolean;
+  exercises: WorkoutTemplateDraftExercise[];
+};
+
+type ExerciseCatalogItem = {
+  _id: Id<"exercises">;
+  name: string;
+  muscleGroup: string;
+  category: string;
 };
 
 type ProfileTrainingSummary = {
@@ -306,6 +350,8 @@ export function ProfilePageClient() {
   const updateProfilePost = useMutation(api.social.updatePost);
   const deleteProfilePost = useMutation(api.social.deletePost);
   const updateWorkoutTemplate = useMutation(api.workouts.updateTemplateVisibility);
+  const acceptWorkoutTemplateUpdate = useMutation(api.workouts.acceptTemplateUpdate);
+  const keepWorkoutTemplateVersion = useMutation(api.workouts.keepTemplateVersion);
   const deleteWorkoutTemplate = useMutation(api.workouts.deleteTemplate);
   const togglePostLike = useMutation(api.social.toggleLike);
   const togglePostSave = useMutation(api.social.toggleSave);
@@ -358,12 +404,7 @@ export function ProfilePageClient() {
   const [pendingProfilePostDelete, setPendingProfilePostDelete] = useState<Id<"social_posts"> | null>(null);
   const [openWorkoutTemplateMenuId, setOpenWorkoutTemplateMenuId] = useState<string | null>(null);
   const [editingWorkoutTemplateId, setEditingWorkoutTemplateId] = useState<string | null>(null);
-  const [workoutTemplateDrafts, setWorkoutTemplateDrafts] = useState<Record<string, {
-    name: string;
-    description: string;
-    visibility: "private" | "friends" | "public";
-    showWeights: boolean;
-  }>>({});
+  const [workoutTemplateDrafts, setWorkoutTemplateDrafts] = useState<Record<string, WorkoutTemplateDraft>>({});
   const [pendingWorkoutTemplateDelete, setPendingWorkoutTemplateDelete] = useState<Id<"workout_templates"> | null>(null);
   const [profilePostMediaDraft, setProfilePostMediaDraft] = useState<ProfilePostMediaDraft | null>(null);
   const [profilePostError, setProfilePostError] = useState("");
@@ -991,6 +1032,21 @@ export function ProfilePageClient() {
     }
   }
 
+  function toWorkoutTemplateDraftExercise(
+    exercise: ProfileWorkoutTemplateExercise
+  ): WorkoutTemplateDraftExercise {
+    return {
+      exerciseId: exercise.exerciseId,
+      exerciseName: exercise.exerciseName,
+      muscleGroup: exercise.muscleGroup,
+      category: exercise.category,
+      sets: exercise.sets.map((set) => ({
+        reps: set.reps,
+        weight: set.weight ?? 0,
+      })),
+    };
+  }
+
   function editWorkoutTemplate(template: ProfileWorkoutTemplate) {
     setOpenWorkoutTemplateMenuId(null);
     setEditingWorkoutTemplateId(template._id);
@@ -1001,6 +1057,7 @@ export function ProfilePageClient() {
         description: template.description ?? "",
         visibility: template.visibility,
         showWeights: template.showWeights,
+        exercises: template.exercises.map(toWorkoutTemplateDraftExercise),
       },
     }));
   }
@@ -1025,8 +1082,19 @@ export function ProfilePageClient() {
       description: draft.description || undefined,
       visibility: draft.visibility,
       showWeights: draft.showWeights,
+      exercises: draft.exercises,
     });
     cancelWorkoutTemplateEdit(template._id);
+  }
+
+  async function acceptWorkoutTemplateSourceUpdate(templateId: Id<"workout_templates">) {
+    if (!userId) return;
+    await acceptWorkoutTemplateUpdate({ userId, templateId });
+  }
+
+  async function keepWorkoutTemplateSourceVersion(templateId: Id<"workout_templates">) {
+    if (!userId) return;
+    await keepWorkoutTemplateVersion({ userId, templateId });
   }
 
   async function confirmWorkoutTemplateDelete() {
@@ -1379,6 +1447,7 @@ export function ProfilePageClient() {
                 favoriteLift={visibleProfile?.favoriteLift}
                 trainingSummary={trainingSummary}
                 templates={workoutTemplates}
+                catalogExercises={catalogExercises}
                 ownerView
                 openTemplateMenuId={openWorkoutTemplateMenuId}
                 editingTemplateId={editingWorkoutTemplateId}
@@ -1392,11 +1461,13 @@ export function ProfilePageClient() {
                 onTemplateDraftChange={(templateId, draft) =>
                   setWorkoutTemplateDrafts((current) => ({
                     ...current,
-                    [templateId]: { ...current[templateId], ...draft },
+                    [templateId]: { ...current[templateId], ...draft } as WorkoutTemplateDraft,
                   }))
                 }
                 onCancelTemplateEdit={cancelWorkoutTemplateEdit}
                 onSaveTemplateEdit={saveWorkoutTemplateEdit}
+                onAcceptTemplateUpdate={acceptWorkoutTemplateSourceUpdate}
+                onKeepTemplateVersion={keepWorkoutTemplateSourceVersion}
               />
             )}
             <div className="hidden">
@@ -1824,6 +1895,7 @@ export function ProfilePageClient() {
                             favoriteLift={previewVisibleProfile.favoriteLift}
                             trainingSummary={previewTrainingSummary}
                             templates={previewTemplates}
+                            catalogExercises={catalogExercises}
                             ownerView={false}
                             openTemplateMenuId={null}
                             editingTemplateId={null}
@@ -1834,6 +1906,8 @@ export function ProfilePageClient() {
                             onTemplateDraftChange={() => undefined}
                             onCancelTemplateEdit={() => undefined}
                             onSaveTemplateEdit={() => undefined}
+                            onAcceptTemplateUpdate={() => undefined}
+                            onKeepTemplateVersion={() => undefined}
                           />
                         )}
                       </>
@@ -2845,6 +2919,7 @@ function TrainingTab({
   favoriteLift,
   trainingSummary,
   templates,
+  catalogExercises,
   ownerView,
   openTemplateMenuId,
   editingTemplateId,
@@ -2855,31 +2930,26 @@ function TrainingTab({
   onTemplateDraftChange,
   onCancelTemplateEdit,
   onSaveTemplateEdit,
+  onAcceptTemplateUpdate,
+  onKeepTemplateVersion,
 }: {
   trainingGoal?: string;
   favoriteLift?: string;
   trainingSummary: ProfileTrainingSummary | null | undefined;
   templates: ProfileWorkoutTemplate[] | undefined;
+  catalogExercises: ExerciseCatalogItem[] | undefined;
   ownerView: boolean;
   openTemplateMenuId: string | null;
   editingTemplateId: string | null;
-  templateDrafts: Record<string, {
-    name: string;
-    description: string;
-    visibility: "private" | "friends" | "public";
-    showWeights: boolean;
-  }>;
+  templateDrafts: Record<string, WorkoutTemplateDraft>;
   onOpenTemplateMenu: (templateId: string | null) => void;
   onEditTemplate: (template: ProfileWorkoutTemplate) => void;
   onDeleteTemplate: (templateId: Id<"workout_templates">) => void;
-  onTemplateDraftChange: (templateId: Id<"workout_templates">, draft: Partial<{
-    name: string;
-    description: string;
-    visibility: "private" | "friends" | "public";
-    showWeights: boolean;
-  }>) => void;
+  onTemplateDraftChange: (templateId: Id<"workout_templates">, draft: Partial<WorkoutTemplateDraft>) => void;
   onCancelTemplateEdit: (templateId: Id<"workout_templates">) => void;
   onSaveTemplateEdit: (template: ProfileWorkoutTemplate) => void;
+  onAcceptTemplateUpdate: (templateId: Id<"workout_templates">) => void;
+  onKeepTemplateVersion: (templateId: Id<"workout_templates">) => void;
 }) {
   const { t } = useAppPreferences();
   const showGoal = Boolean(trainingGoal);
@@ -2915,6 +2985,7 @@ function TrainingTab({
       {showTemplates && (
         <WorkoutTemplatesCard
           templates={templates}
+          catalogExercises={catalogExercises}
           ownerView={ownerView}
           embedded
           openTemplateMenuId={openTemplateMenuId}
@@ -2926,6 +2997,8 @@ function TrainingTab({
           onTemplateDraftChange={onTemplateDraftChange}
           onCancelTemplateEdit={onCancelTemplateEdit}
           onSaveTemplateEdit={onSaveTemplateEdit}
+          onAcceptTemplateUpdate={onAcceptTemplateUpdate}
+          onKeepTemplateVersion={onKeepTemplateVersion}
         />
       )}
       {!showGoal && !showFavoriteLift && !showHistory && !showTemplates && (
@@ -3052,8 +3125,77 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
   );
 }
 
+function TemplateUpdateNotice({
+  template,
+  onAccept,
+  onKeep,
+}: {
+  template: ProfileWorkoutTemplate;
+  onAccept: () => void;
+  onKeep: () => void;
+}) {
+  const { t } = useAppPreferences();
+  const summary = template.pendingSourceUpdate?.summary ?? [];
+
+  return (
+    <div className="mb-4 rounded-lg border border-primary/30 bg-primary/10 p-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <MoveRight className="h-4 w-4 text-primary" />
+            {t("profile.playlists.updateAvailable")}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {t("profile.playlists.updateAvailableCopy")}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={onKeep}>
+            {t("profile.playlists.keepOldVersion")}
+          </Button>
+          <Button type="button" size="sm" onClick={onAccept}>
+            {t("profile.playlists.acceptUpdate")}
+          </Button>
+        </div>
+      </div>
+      {summary.length > 0 && (
+        <div className="mt-3 grid gap-1.5">
+          {summary.map((change, index) => (
+            <div
+              key={`${template._id}-change-${index}`}
+              className={cn(
+                "grid gap-1 rounded-md border px-2.5 py-2 text-xs sm:grid-cols-[5rem_minmax(0,1fr)] sm:items-center",
+                change.kind === "added" && "border-emerald-500/25 bg-emerald-500/10",
+                change.kind === "removed" && "border-destructive/25 bg-destructive/10",
+                change.kind === "changed" && "border-amber-500/25 bg-amber-500/10"
+              )}
+            >
+              <span className="font-semibold">
+                {change.kind === "added"
+                  ? t("profile.playlists.changeAdded")
+                  : change.kind === "removed"
+                    ? t("profile.playlists.changeRemoved")
+                    : t("profile.playlists.changeChanged")}
+              </span>
+              <span className="min-w-0 break-words text-muted-foreground">
+                {change.beforeName && change.afterName && change.beforeName !== change.afterName
+                  ? `${change.beforeName} ${t("profile.playlists.changedTo")} ${change.afterName}`
+                  : change.exerciseName}
+                {typeof change.beforeSets === "number" || typeof change.afterSets === "number"
+                  ? ` · ${change.beforeSets ?? 0} ${t("profile.playlists.setsShort")} ${t("profile.playlists.changedTo")} ${change.afterSets ?? 0} ${t("profile.playlists.setsShort")}`
+                  : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WorkoutTemplatesCard({
   templates,
+  catalogExercises,
   ownerView = false,
   embedded = false,
   openTemplateMenuId,
@@ -3065,32 +3207,96 @@ function WorkoutTemplatesCard({
   onTemplateDraftChange,
   onCancelTemplateEdit,
   onSaveTemplateEdit,
+  onAcceptTemplateUpdate,
+  onKeepTemplateVersion,
 }: {
   templates: ProfileWorkoutTemplate[] | undefined;
+  catalogExercises: ExerciseCatalogItem[] | undefined;
   ownerView?: boolean;
   embedded?: boolean;
   openTemplateMenuId: string | null;
   editingTemplateId: string | null;
-  templateDrafts: Record<string, {
-    name: string;
-    description: string;
-    visibility: "private" | "friends" | "public";
-    showWeights: boolean;
-  }>;
+  templateDrafts: Record<string, WorkoutTemplateDraft>;
   onOpenTemplateMenu: (templateId: string | null) => void;
   onEditTemplate: (template: ProfileWorkoutTemplate) => void;
   onDeleteTemplate: (templateId: Id<"workout_templates">) => void;
-  onTemplateDraftChange: (templateId: Id<"workout_templates">, draft: Partial<{
-    name: string;
-    description: string;
-    visibility: "private" | "friends" | "public";
-    showWeights: boolean;
-  }>) => void;
+  onTemplateDraftChange: (templateId: Id<"workout_templates">, draft: Partial<WorkoutTemplateDraft>) => void;
   onCancelTemplateEdit: (templateId: Id<"workout_templates">) => void;
   onSaveTemplateEdit: (template: ProfileWorkoutTemplate) => void;
+  onAcceptTemplateUpdate: (templateId: Id<"workout_templates">) => void;
+  onKeepTemplateVersion: (templateId: Id<"workout_templates">) => void;
 }) {
   const { locale, t } = useAppPreferences();
   const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
+  const [exerciseToAddByTemplate, setExerciseToAddByTemplate] = useState<Record<string, string>>({});
+
+  function draftExerciseFromCatalog(
+    exercise: ExerciseCatalogItem,
+    fallbackSets?: WorkoutTemplateDraftExercise["sets"]
+  ): WorkoutTemplateDraftExercise {
+    return {
+      exerciseId: exercise._id,
+      exerciseName: exercise.name,
+      muscleGroup: exercise.muscleGroup,
+      category: exercise.category,
+      sets: fallbackSets && fallbackSets.length > 0 ? fallbackSets : [
+        { weight: 0, reps: 10 },
+        { weight: 0, reps: 10 },
+        { weight: 0, reps: 10 },
+      ],
+    };
+  }
+
+  function updateDraftExercises(
+    templateId: Id<"workout_templates">,
+    exercises: WorkoutTemplateDraftExercise[]
+  ) {
+    onTemplateDraftChange(templateId, { exercises });
+  }
+
+  function replaceDraftExercise(
+    templateId: Id<"workout_templates">,
+    draft: WorkoutTemplateDraft,
+    index: number,
+    exerciseId: string
+  ) {
+    const selected = catalogExercises?.find((exercise) => exercise._id === exerciseId);
+    if (!selected) return;
+    const next = [...draft.exercises];
+    next[index] = draftExerciseFromCatalog(selected, draft.exercises[index]?.sets);
+    updateDraftExercises(templateId, next);
+  }
+
+  function removeDraftExercise(
+    templateId: Id<"workout_templates">,
+    draft: WorkoutTemplateDraft,
+    index: number
+  ) {
+    updateDraftExercises(templateId, draft.exercises.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function addDraftExercise(templateId: Id<"workout_templates">, draft: WorkoutTemplateDraft) {
+    const selectedId = exerciseToAddByTemplate[templateId];
+    const selected = catalogExercises?.find((exercise) => exercise._id === selectedId);
+    if (!selected) return;
+    updateDraftExercises(templateId, [...draft.exercises, draftExerciseFromCatalog(selected)]);
+    setExerciseToAddByTemplate((current) => ({ ...current, [templateId]: "" }));
+  }
+
+  function draftChangesExercises(
+    template: ProfileWorkoutTemplate,
+    draft: WorkoutTemplateDraft
+  ) {
+    const current = template.exercises.map((exercise) => ({
+      exerciseId: exercise.exerciseId,
+      sets: exercise.sets.map((set) => ({ reps: set.reps, weight: set.weight ?? 0 })),
+    }));
+    const next = draft.exercises.map((exercise) => ({
+      exerciseId: exercise.exerciseId,
+      sets: exercise.sets.map((set) => ({ reps: set.reps, weight: set.weight })),
+    }));
+    return JSON.stringify(current) !== JSON.stringify(next);
+  }
 
   return (
     <Card className={cn("border-blue-500/10 bg-card/95 shadow-xl shadow-blue-950/5", embedded && "shadow-none")}>
@@ -3122,10 +3328,27 @@ function WorkoutTemplatesCard({
               description: template.description ?? "",
               visibility: template.visibility,
               showWeights: template.showWeights,
+              exercises: template.exercises.map((exercise) => ({
+                exerciseId: exercise.exerciseId,
+                exerciseName: exercise.exerciseName,
+                muscleGroup: exercise.muscleGroup,
+                category: exercise.category,
+                sets: exercise.sets.map((set) => ({
+                  reps: set.reps,
+                  weight: set.weight ?? 0,
+                })),
+              })),
             };
 
             return (
             <div key={template._id} className="min-w-0 rounded-xl border border-border bg-muted/25 p-3 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/40 hover:shadow-lg sm:p-4">
+              {ownerView && template.pendingSourceUpdate && !isEditing && (
+                <TemplateUpdateNotice
+                  template={template}
+                  onAccept={() => onAcceptTemplateUpdate(template._id)}
+                  onKeep={() => onKeepTemplateVersion(template._id)}
+                />
+              )}
               {isEditing && (
                 <div className="mb-4 grid gap-3 rounded-lg border border-border bg-background/70 p-3">
                   <div className="grid gap-1.5">
@@ -3162,11 +3385,96 @@ function WorkoutTemplatesCard({
                       {t("profile.playlists.showWeights")}
                     </label>
                   </div>
+                  <div className="grid gap-2">
+                    <div>
+                      <Label>{t("profile.playlists.editExercises")}</Label>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        {t("profile.playlists.editExercisesCopy")}
+                      </p>
+                    </div>
+                    <div className="grid gap-2">
+                      {draft.exercises.map((exercise, index) => (
+                        <div key={`${template._id}-draft-${index}-${exercise.exerciseId}`} className="grid gap-2 rounded-lg border border-border bg-muted/30 p-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                          <select
+                            value={exercise.exerciseId}
+                            disabled={!catalogExercises || catalogExercises.length === 0}
+                            className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                            onChange={(event) => replaceDraftExercise(template._id, draft, index, event.target.value)}
+                          >
+                            {!catalogExercises || catalogExercises.length === 0 ? (
+                              <option value={exercise.exerciseId}>{exercise.exerciseName}</option>
+                            ) : (
+                              catalogExercises.map((option) => (
+                                <option key={option._id} value={option._id}>
+                                  {option.name}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                          <div className="flex items-center justify-between gap-2 sm:justify-end">
+                            <span className="text-xs text-muted-foreground">
+                              {exercise.sets.length} Sets
+                            </span>
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="ghost"
+                              disabled={draft.exercises.length <= 1}
+                              aria-label={t("profile.playlists.removeExercise")}
+                              onClick={() => removeDraftExercise(template._id, draft, index)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <select
+                        value={exerciseToAddByTemplate[template._id] ?? ""}
+                        disabled={!catalogExercises || catalogExercises.length === 0}
+                        className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                        onChange={(event) =>
+                          setExerciseToAddByTemplate((current) => ({
+                            ...current,
+                            [template._id]: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">
+                          {catalogExercises === undefined
+                            ? t("profile.playlists.exerciseCatalogLoading")
+                            : t("profile.playlists.chooseExercise")}
+                        </option>
+                        {catalogExercises?.map((exercise) => (
+                          <option key={exercise._id} value={exercise._id}>
+                            {exercise.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="gap-2"
+                        disabled={!exerciseToAddByTemplate[template._id]}
+                        onClick={() => addDraftExercise(template._id, draft)}
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                        {t("profile.playlists.addExercise")}
+                      </Button>
+                    </div>
+                  </div>
+                  {draftChangesExercises(template, draft) && (
+                    <div className="flex gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <p>{t("profile.playlists.exerciseChangeWarning")}</p>
+                    </div>
+                  )}
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="ghost" onClick={() => onCancelTemplateEdit(template._id)}>
                       {t("profile.misc.cancel")}
                     </Button>
-                    <Button type="button" disabled={!draft.name.trim()} onClick={() => onSaveTemplateEdit(template)}>
+                    <Button type="button" disabled={!draft.name.trim() || draft.exercises.length === 0} onClick={() => onSaveTemplateEdit(template)}>
                       {t("profile.misc.save")}
                     </Button>
                   </div>

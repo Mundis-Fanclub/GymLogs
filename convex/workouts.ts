@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const templateVisibility = v.union(
@@ -9,8 +9,127 @@ const templateVisibility = v.union(
   v.literal("public")
 );
 
+const templateExerciseValidator = v.object({
+  exerciseId: v.id("exercises"),
+  exerciseName: v.string(),
+  muscleGroup: v.string(),
+  category: v.string(),
+  sets: v.array(
+    v.object({
+      weight: v.number(),
+      reps: v.number(),
+    })
+  ),
+});
+
+type TemplateExercise = Doc<"workout_templates">["exercises"][number];
+type TemplateChange = {
+  kind: "added" | "removed" | "changed";
+  exerciseName: string;
+  beforeName?: string;
+  afterName?: string;
+  beforeSets?: number;
+  afterSets?: number;
+};
+
 function estimated1RM(weight: number, reps: number): number {
   return weight * (1 + reps / 30);
+}
+
+function sanitizeTemplateExercises(
+  exercises: TemplateExercise[]
+): TemplateExercise[] {
+  return exercises.slice(0, 80).map((exercise) => ({
+    exerciseId: exercise.exerciseId,
+    exerciseName: exercise.exerciseName.trim().slice(0, 80),
+    muscleGroup: exercise.muscleGroup.trim().slice(0, 40),
+    category: exercise.category.trim().slice(0, 40),
+    sets: exercise.sets.slice(0, 20).map((set) => ({
+      weight: Number.isFinite(set.weight) ? Math.max(0, set.weight) : 0,
+      reps: Number.isFinite(set.reps) ? Math.max(0, Math.round(set.reps)) : 0,
+    })),
+  }));
+}
+
+function templateExerciseSignature(exercise: TemplateExercise) {
+  return JSON.stringify({
+    exerciseId: exercise.exerciseId,
+    exerciseName: exercise.exerciseName,
+    muscleGroup: exercise.muscleGroup,
+    category: exercise.category,
+    sets: exercise.sets.map((set) => ({ weight: set.weight, reps: set.reps })),
+  });
+}
+
+function templateExercisesEqual(
+  before: TemplateExercise[],
+  after: TemplateExercise[]
+) {
+  if (before.length !== after.length) return false;
+  return before.every(
+    (exercise, index) =>
+      templateExerciseSignature(exercise) ===
+      templateExerciseSignature(after[index])
+  );
+}
+
+function templateExerciseKey(exercise: TemplateExercise) {
+  return String(exercise.exerciseId);
+}
+
+function describeTemplateExerciseChanges(
+  before: TemplateExercise[],
+  after: TemplateExercise[]
+): TemplateChange[] {
+  const beforeByKey = new Map(before.map((exercise) => [templateExerciseKey(exercise), exercise]));
+  const afterByKey = new Map(after.map((exercise) => [templateExerciseKey(exercise), exercise]));
+  const changes: TemplateChange[] = [];
+
+  for (const exercise of after) {
+    const previous = beforeByKey.get(templateExerciseKey(exercise));
+    if (!previous) {
+      changes.push({
+        kind: "added",
+        exerciseName: exercise.exerciseName,
+        afterName: exercise.exerciseName,
+        afterSets: exercise.sets.length,
+      });
+      continue;
+    }
+
+    if (templateExerciseSignature(previous) !== templateExerciseSignature(exercise)) {
+      changes.push({
+        kind: "changed",
+        exerciseName: exercise.exerciseName,
+        beforeName: previous.exerciseName,
+        afterName: exercise.exerciseName,
+        beforeSets: previous.sets.length,
+        afterSets: exercise.sets.length,
+      });
+    }
+  }
+
+  for (const exercise of before) {
+    if (!afterByKey.has(templateExerciseKey(exercise))) {
+      changes.push({
+        kind: "removed",
+        exerciseName: exercise.exerciseName,
+        beforeName: exercise.exerciseName,
+        beforeSets: exercise.sets.length,
+      });
+    }
+  }
+
+  if (changes.length === 0 && !templateExercisesEqual(before, after)) {
+    changes.push({
+      kind: "changed",
+      exerciseName: "Exercise order",
+      beforeSets: before.length,
+      afterSets: after.length,
+    });
+  }
+
+  return changes.slice(0, 24);
 }
 
 function toBodyPart(muscleGroup: string): string {
@@ -288,6 +407,11 @@ export const saveAsTemplate = mutation({
       });
     }
 
+    const sourceTemplate = workout.sourceTemplateId
+      ? await ctx.db.get(workout.sourceTemplateId)
+      : null;
+    const now = Date.now();
+
     return await ctx.db.insert("workout_templates", {
       userId: workout.userId,
       name: args.name.trim().slice(0, 80),
@@ -296,7 +420,15 @@ export const saveAsTemplate = mutation({
       showWeights: args.showWeights ?? false,
       description: args.description?.trim().slice(0, 180),
       exercises: Array.from(exerciseMap.values()),
-      createdAt: Date.now(),
+      version: 1,
+      updatedAt: now,
+      ...(sourceTemplate
+        ? {
+            sourceTemplateId: sourceTemplate._id,
+            sourceTemplateVersion: sourceTemplate.version ?? 1,
+          }
+        : {}),
+      createdAt: now,
     });
   },
 });
@@ -309,6 +441,7 @@ export const updateTemplateVisibility = mutation({
     visibility: templateVisibility,
     showWeights: v.boolean(),
     description: v.optional(v.string()),
+    exercises: v.optional(v.array(templateExerciseValidator)),
   },
   handler: async (ctx, args) => {
     const template = await ctx.db.get(args.templateId);
@@ -316,12 +449,107 @@ export const updateTemplateVisibility = mutation({
       throw new Error("Template not found.");
     }
 
+    const now = Date.now();
+    const nextExercises = args.exercises
+      ? sanitizeTemplateExercises(args.exercises)
+      : null;
+    if (nextExercises && nextExercises.length === 0) {
+      throw new Error("A playlist needs at least one exercise.");
+    }
+    const exercisesChanged =
+      nextExercises !== null &&
+      !templateExercisesEqual(template.exercises, nextExercises);
+    const nextVersion = exercisesChanged ? (template.version ?? 1) + 1 : template.version ?? 1;
+    const changeSummary = exercisesChanged
+      ? describeTemplateExerciseChanges(template.exercises, nextExercises)
+      : undefined;
+
     await ctx.db.patch(args.templateId, {
       name: args.name?.trim().slice(0, 80) || template.name,
       visibility: args.visibility,
       showWeights: args.showWeights,
       description: args.description?.trim().slice(0, 180),
+      updatedAt: now,
+      ...(nextExercises ? { exercises: nextExercises } : {}),
+      ...(exercisesChanged
+        ? {
+            version: nextVersion,
+            lastChangeSummary: changeSummary,
+          }
+        : {}),
     });
+
+    if (exercisesChanged && changeSummary) {
+      const savedCopies = await ctx.db
+        .query("workout_templates")
+        .withIndex("by_source_template", (q) =>
+          q.eq("sourceTemplateId", args.templateId)
+        )
+        .take(100);
+
+      for (const copy of savedCopies) {
+        if (copy.sourceTemplateVersion === nextVersion) continue;
+        await ctx.db.patch(copy._id, {
+          pendingSourceUpdate: {
+            sourceTemplateId: args.templateId,
+            sourceVersion: nextVersion,
+            createdAt: now,
+            summary: changeSummary,
+          },
+        });
+      }
+    }
+  },
+});
+
+export const acceptTemplateUpdate = mutation({
+  args: {
+    templateId: v.id("workout_templates"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template || template.userId !== args.userId) {
+      throw new Error("Template not found.");
+    }
+    const pending = template.pendingSourceUpdate;
+    if (!pending) return false;
+
+    const source = await ctx.db.get(pending.sourceTemplateId);
+    if (!source) {
+      await ctx.db.patch(args.templateId, { pendingSourceUpdate: undefined });
+      throw new Error("The original playlist is no longer available.");
+    }
+
+    await ctx.db.patch(args.templateId, {
+      exercises: source.exercises,
+      sourceTemplateVersion: pending.sourceVersion,
+      pendingSourceUpdate: undefined,
+      updatedAt: Date.now(),
+    });
+    return true;
+  },
+});
+
+export const keepTemplateVersion = mutation({
+  args: {
+    templateId: v.id("workout_templates"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template || template.userId !== args.userId) {
+      throw new Error("Template not found.");
+    }
+    const pending = template.pendingSourceUpdate;
+    if (!pending) return false;
+
+    await ctx.db.patch(args.templateId, {
+      sourceTemplateVersion: pending.sourceVersion,
+      pendingSourceUpdate: undefined,
+      updatedAt: Date.now(),
+    });
+    return true;
   },
 });
 
@@ -399,6 +627,8 @@ export const listProfileTemplates = query({
           visibility: template.visibility ?? "private",
           showWeights: template.showWeights ?? false,
           executionCount: template.executionCount ?? 0,
+          pendingSourceUpdate: isSelf ? template.pendingSourceUpdate : undefined,
+          lastChangeSummary: isSelf ? template.lastChangeSummary : undefined,
           exercises: template.exercises.map((exercise) => ({
             ...exercise,
             sets: exercise.sets.map((set) => ({

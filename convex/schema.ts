@@ -37,6 +37,28 @@ export const verificationStatuses = [
 export const equipmentClasses = ["raw", "wraps", "single_ply", "multi_ply"] as const;
 export const sexClasses = ["female", "male", "open"] as const;
 
+const workoutTemplateExercise = v.object({
+  exerciseId: v.id("exercises"),
+  exerciseName: v.string(),
+  muscleGroup: v.string(),
+  category: v.string(),
+  sets: v.array(
+    v.object({
+      weight: v.number(),
+      reps: v.number(),
+    })
+  ),
+});
+
+const workoutTemplateChange = v.object({
+  kind: v.union(v.literal("added"), v.literal("removed"), v.literal("changed")),
+  exerciseName: v.string(),
+  beforeName: v.optional(v.string()),
+  afterName: v.optional(v.string()),
+  beforeSets: v.optional(v.number()),
+  afterSets: v.optional(v.number()),
+});
+
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
@@ -191,24 +213,25 @@ export default defineSchema({
     showWeights: v.optional(v.boolean()),
     description: v.optional(v.string()),
     executionCount: v.optional(v.number()),
-    exercises: v.array(
+    sourceTemplateId: v.optional(v.id("workout_templates")),
+    sourceTemplateVersion: v.optional(v.number()),
+    version: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+    lastChangeSummary: v.optional(v.array(workoutTemplateChange)),
+    pendingSourceUpdate: v.optional(
       v.object({
-        exerciseId: v.id("exercises"),
-        exerciseName: v.string(),
-        muscleGroup: v.string(),
-        category: v.string(),
-        sets: v.array(
-          v.object({
-            weight: v.number(),
-            reps: v.number(),
-          })
-        ),
+        sourceTemplateId: v.id("workout_templates"),
+        sourceVersion: v.number(),
+        createdAt: v.number(),
+        summary: v.array(workoutTemplateChange),
       })
     ),
+    exercises: v.array(workoutTemplateExercise),
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_created", ["userId", "createdAt"]),
+    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_source_template", ["sourceTemplateId"]),
 
   sets: defineTable({
     workoutId: v.id("workouts"),
