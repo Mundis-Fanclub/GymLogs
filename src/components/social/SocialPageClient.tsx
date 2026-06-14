@@ -336,7 +336,7 @@ export function SocialPageClient() {
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center justify-between gap-3">
-          <label className="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground">
+          <label className="inline-flex size-10 cursor-pointer items-center justify-center rounded-2xl text-muted-foreground transition hover:bg-muted hover:text-foreground">
             <ImagePlus className="h-4 w-4" />
             <span className="sr-only">{uploading ? t("socialPage.uploadRunning") : t("socialPage.attachMedia")}</span>
             <input type="file" accept="image/*,video/*,.gif" className="sr-only" onChange={(event) => uploadMedia(event.target.files?.[0])} />
@@ -352,7 +352,7 @@ export function SocialPageClient() {
   if (selectedPostId) {
     return (
       <>
-        <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-border bg-card">
+        <div className="premium-panel mx-auto max-w-2xl overflow-hidden rounded-3xl">
           <div className="flex items-center gap-3 border-b border-border px-3 py-3">
             <Button variant="ghost" size="icon-sm" onClick={() => setSelectedPostId(null)} aria-label={t("socialPage.backToFeed")}>
               <ArrowLeft className="h-4 w-4" />
@@ -429,7 +429,7 @@ export function SocialPageClient() {
                         />
                       )}
                     </div>
-                    <label className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground">
+                    <label className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-border text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground">
                       GIF
                       <input type="file" accept="image/gif,.gif" className="sr-only" onChange={(event) => uploadCommentGif(thread.post._id, event.target.files?.[0])} />
                     </label>
@@ -502,7 +502,7 @@ export function SocialPageClient() {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="premium-panel mx-auto w-full max-w-2xl overflow-hidden rounded-3xl">
         <div className="border-b border-border px-4 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -510,7 +510,7 @@ export function SocialPageClient() {
               <p className="mt-1 text-sm leading-5 text-muted-foreground">{feedDescription}</p>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 rounded-lg border border-border bg-muted/25 p-1">
+          <div className="mt-4 grid grid-cols-2 rounded-2xl border border-border bg-muted/25 p-1">
             {([
               { id: "forYou" as const, label: t("socialPage.forYou"), icon: Sparkles },
               { id: "following" as const, label: t("socialPage.following"), icon: Users },
@@ -522,7 +522,7 @@ export function SocialPageClient() {
                   type="button"
                   aria-pressed={selected}
                   className={cn(
-                    "flex h-10 min-w-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition-colors",
+                    "flex h-10 min-w-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors",
                     selected
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
@@ -681,7 +681,7 @@ function PostCard({
   const edited = Boolean(post.updatedAt && post.updatedAt > post.createdAt);
 
   return (
-    <article className={`border-b border-border p-3 transition-colors last:border-b-0 ${isThreadHeader ? "" : "hover:bg-muted/20"} sm:p-4`}>
+    <article className={`border-b border-border p-3 transition-colors last:border-b-0 ${isThreadHeader ? "bg-brand/5" : "hover:bg-muted/20"} sm:p-4`}>
       <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3">
         <Avatar name={post.author?.name ?? "?"} avatarUrl={post.author?.avatarUrl ?? undefined} />
         <div className="min-w-0 space-y-3">
@@ -691,7 +691,7 @@ function PostCard({
                 <Link href={post.author ? `/profile/${post.author._id}` : "/social"} className="min-w-0 truncate font-semibold hover:underline">
                   {post.author?.username ?? post.author?.name ?? "Unbekannt"}
                 </Link>
-                {post.author?.isPro && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 fill-sky-500 text-background dark:text-card" />}
+                {post.author?.isPro && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 fill-primary text-background dark:text-card" />}
                 {post.repostOfPostId && <span className="text-muted-foreground">reposted</span>}
                 <span className="text-muted-foreground">·</span>
                 <time className="text-sm text-muted-foreground" title={new Date(post.createdAt).toLocaleString("de-DE")}>
@@ -713,7 +713,7 @@ function PostCard({
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
                 {openPostMenuId === post._id && (
-                  <div className="absolute right-0 z-10 mt-1 w-36 overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-sm">
+                  <div className="premium-panel absolute right-0 z-10 mt-1 w-40 overflow-hidden rounded-2xl p-1 text-popover-foreground shadow-sm">
                     <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition hover:bg-muted" onClick={() => onEditPost(post)}>
                       <Pencil className="h-3.5 w-3.5" />
                       Bearbeiten
@@ -765,7 +765,7 @@ function PostCard({
             </ActionButton>
             <ActionButton
               active={post.repostedByViewer}
-              activeClass="text-sky-500 hover:text-sky-500"
+              activeClass="text-primary hover:text-primary"
               disabled={!canRepost}
               onClick={() => onRepost(post._id)}
               ariaLabel={
@@ -781,7 +781,7 @@ function PostCard({
             </ActionButton>
             <ActionButton
               active={post.savedByViewer}
-              activeClass="text-cyan-500 hover:text-cyan-500"
+              activeClass="text-primary hover:text-primary"
               disabled={!userId}
               onClick={() => onSave(post._id)}
               ariaLabel={post.savedByViewer ? "Gespeicherten Beitrag entfernen" : "Post speichern"}
@@ -1213,7 +1213,7 @@ function MediaPreview({
   return (
     <div
       ref={frameRef}
-      className={`relative select-none overflow-visible rounded-lg border bg-black/5 ${
+      className={`relative select-none overflow-visible rounded-2xl border bg-black/25 shadow-inner ${
         resizable ? "border-dashed border-foreground/70" : "border-border"
       }`}
       style={{ width: compact ? "100%" : `${currentScale}%` }}
@@ -1229,10 +1229,10 @@ function MediaPreview({
         </button>
       )}
       {mediaType === "video" ? (
-        <video src={mediaUrl} controls className={`${heightClass} w-full rounded-lg bg-black object-contain`} />
+        <video src={mediaUrl} controls className={`${heightClass} w-full rounded-2xl bg-black object-contain`} />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={mediaUrl} alt="" className={`${heightClass} w-full rounded-lg object-contain`} />
+        <img src={mediaUrl} alt="" className={`${heightClass} w-full rounded-2xl object-contain`} />
       )}
       {resizable && onScaleChange && (
         <>

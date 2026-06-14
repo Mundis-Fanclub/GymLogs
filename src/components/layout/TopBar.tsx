@@ -99,10 +99,10 @@ export function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 relative grid h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur-xl sm:px-5 md:h-[3.75rem] md:px-6">
+    <header className="sticky top-0 z-30 relative grid h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-background/72 px-3 backdrop-blur-2xl sm:px-5 md:h-[4.25rem] md:px-6">
       <Link
         href="/dashboard"
-        className="pointer-events-auto absolute left-1/2 top-1/2 flex size-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg md:hidden"
+        className="pointer-events-auto absolute left-1/2 top-1/2 flex size-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl md:hidden"
         aria-label={t("common.appName")}
       >
         <Logo size={38} priority />
@@ -122,7 +122,7 @@ export function TopBar() {
           variant="outline"
           aria-label={t("common.proPrice")}
           title={t("common.proPrice")}
-          className="h-9 w-9 gap-1.5 rounded-lg !border-amber-300/70 !bg-amber-300 !text-slate-950 hover:!bg-amber-200 sm:w-auto sm:px-3 lg:inline-flex"
+          className="h-9 w-9 gap-1.5 rounded-2xl !border-amber-300/70 !bg-amber-300 !text-slate-950 hover:!bg-amber-200 sm:w-auto sm:px-3 lg:inline-flex"
         >
           <Crown className="h-4 w-4" />
           <span className="hidden sm:inline">{t("common.proPrice")}</span>
@@ -131,11 +131,11 @@ export function TopBar() {
           size="icon-sm"
           onClick={handleNewWorkout}
           aria-label={t("common.newWorkout")}
-          className="order-1 h-9 w-9 rounded-lg lg:hidden"
+          className="order-1 h-9 w-9 rounded-2xl lg:hidden"
         >
           <Plus className="h-4 w-4" />
         </Button>
-        <Button size="sm" onClick={handleNewWorkout} className="hidden h-9 gap-1.5 rounded-lg lg:inline-flex">
+        <Button size="sm" onClick={handleNewWorkout} className="hidden h-9 gap-1.5 rounded-2xl lg:inline-flex">
           <Plus className="h-4 w-4" />
           <span>{t("common.newWorkout")}</span>
         </Button>
@@ -148,7 +148,7 @@ export function TopBar() {
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen}
             title={t("topbar.profileMenu")}
-            className="relative h-9 w-9 overflow-hidden rounded-full p-0 ring-1 ring-border"
+            className="relative h-9 w-9 overflow-hidden rounded-full p-0 ring-1 ring-brand/30"
             onClick={() => setProfileMenuOpen((open) => !open)}
           >
             {profileImageUrl ? (
@@ -173,7 +173,7 @@ export function TopBar() {
               role="menu"
               aria-label={t("topbar.profileMenu")}
               onKeyDown={handleProfileMenuKeyDown}
-              className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-lg border border-border bg-card p-1.5 text-card-foreground shadow-xl shadow-black/20"
+              className="premium-panel absolute right-0 top-[calc(100%+0.5rem)] z-50 w-60 rounded-2xl p-1.5 text-card-foreground shadow-xl shadow-black/20"
             >
               <ProfileMenuItem
                 icon={User}
@@ -223,7 +223,7 @@ function ProfileMenuItem({
       type="button"
       role="menuitem"
       className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors",
+        "flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm transition-colors",
         "hover:bg-muted focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       )}
       onClick={onClick}

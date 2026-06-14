@@ -16,7 +16,7 @@ import {
   type Locale,
 } from "@/lib/i18n";
 
-type Theme = "dark" | "light";
+type Theme = "dark";
 
 const COLOR_MODE_STORAGE_KEY = "gymlogs-color-mode";
 const PALETTE_STORAGE_KEY = "gymlogs-theme";
@@ -37,13 +37,6 @@ function detectLocale(): Locale {
   return navigator.language.toLowerCase().startsWith("de") ? "de" : "en";
 }
 
-function detectTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
-  return window.matchMedia("(prefers-color-scheme: light)").matches
-    ? "light"
-    : "dark";
-}
-
 export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>("en");
   const [theme, setTheme] = useState<Theme>("dark");
@@ -55,10 +48,8 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
       : detectLocale();
     setLocaleState(nextLocale);
 
-    const storedMode =
-      window.localStorage.getItem(COLOR_MODE_STORAGE_KEY) ??
-      window.localStorage.getItem(PALETTE_STORAGE_KEY);
-    setTheme(storedMode === "light" || storedMode === "dark" ? storedMode : detectTheme());
+    setTheme("dark");
+    window.localStorage.setItem(COLOR_MODE_STORAGE_KEY, "dark");
 
     const storedPalette = window.localStorage.getItem(PALETTE_STORAGE_KEY);
     if (storedPalette && storedPalette !== "orange" && storedPalette !== "light" && storedPalette !== "dark") {
@@ -74,9 +65,9 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    document.documentElement.classList.toggle("light", theme === "light");
-    window.localStorage.setItem(COLOR_MODE_STORAGE_KEY, theme);
+    document.documentElement.classList.add("dark");
+    document.documentElement.classList.remove("light");
+    window.localStorage.setItem(COLOR_MODE_STORAGE_KEY, "dark");
   }, [theme]);
 
   const value = useMemo<AppPreferencesContextValue>(
@@ -84,8 +75,7 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
       locale,
       setLocale: setLocaleState,
       theme,
-      toggleTheme: () =>
-        setTheme((current) => (current === "dark" ? "light" : "dark")),
+      toggleTheme: () => setTheme("dark"),
       t: (key) => getNestedTranslation(locale, key),
     }),
     [locale, theme]

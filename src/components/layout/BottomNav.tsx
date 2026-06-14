@@ -6,6 +6,7 @@ import {
   BarChart2,
   LayoutDashboard,
   MessageSquareText,
+  User,
 } from "lucide-react";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", labelKey: "common.dashboard", icon: LayoutDashboard },
   { href: "/analytics", labelKey: "common.analytics", icon: BarChart2 },
   { href: "/social", labelKey: "common.social", icon: MessageSquareText },
+  { href: "/profile", labelKey: "topbar.profile", icon: User },
 ];
 
 export function BottomNav() {
@@ -53,17 +55,14 @@ export function BottomNav() {
     return () => window.removeEventListener("resize", recompute);
   }, [pathname]);
 
+  if (pathname === "/workouts/new") return null;
+
   return (
-    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:hidden">
+    <nav className="pointer-events-none absolute inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
       <div
         ref={containerRef}
-        className="pointer-events-auto relative mx-auto flex h-14 w-full max-w-[23.5rem] items-center justify-around rounded-2xl px-1.5"
+        className="pointer-events-auto relative mx-auto flex h-[58px] w-full items-center justify-around border-t border-border bg-background/92 px-1.5 backdrop-blur-2xl"
         style={{
-          background:
-            "linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 55%, rgba(0, 0, 0, 0.03) 100%), rgba(10, 10, 12, 0.22)",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
-          boxShadow:
-            "0 24px 60px -16px rgba(0, 0, 0, 0.55), 0 6px 20px -10px rgba(0, 0, 0, 0.28), inset 0 1px 0 0 rgba(255, 255, 255, 0.14), inset 0 -1px 0 0 rgba(255, 255, 255, 0.02)",
           backdropFilter: "blur(32px) saturate(180%)",
           WebkitBackdropFilter: "blur(32px) saturate(180%)",
         }}
@@ -71,19 +70,16 @@ export function BottomNav() {
         {indicator && (
           <span
             aria-hidden="true"
-            className="absolute top-1.5 bottom-1.5 rounded-xl transition-[left,width] duration-300 ease-out"
+            className="absolute bottom-0 h-0.5 rounded-full transition-[left,width] duration-300 ease-out"
             style={{
               left: indicator.left,
               width: indicator.width,
-              background:
-                "linear-gradient(180deg, rgba(249, 138, 42, 0.13) 0%, rgba(249, 138, 42, 0.04) 100%)",
-              border: "1px solid rgba(249, 138, 42, 0.15)",
-              boxShadow:
-                "inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 0 24px -8px rgba(249, 115, 22, 0.6)",
+              background: "var(--brand)",
+              boxShadow: "0 0 18px -4px var(--brand)",
             }}
           />
         )}
-        {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
+        {NAV_ITEMS.map(({ href, labelKey, icon: Icon }, index) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <AppNavLink
@@ -95,7 +91,9 @@ export function BottomNav() {
               active={active}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative z-10 flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[10.5px] font-medium leading-none transition-colors duration-300 ease-out active:scale-[0.96]",
+                "relative z-10 flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[9px] font-medium leading-none transition-colors duration-300 ease-out active:scale-[0.96]",
+                index === 1 && "mr-8",
+                index === 2 && "ml-8",
                 active
                   ? "text-brand"
                   : "text-muted-foreground/55 hover:text-foreground/80"
@@ -103,7 +101,7 @@ export function BottomNav() {
             >
               <Icon
                 className={cn(
-                  "h-[20px] w-[20px] shrink-0 transition-transform duration-300 ease-out",
+                  "h-[18px] w-[18px] shrink-0 transition-transform duration-300 ease-out",
                   active && "scale-[1.08]"
                 )}
                 strokeWidth={active ? 2.2 : 1.8}

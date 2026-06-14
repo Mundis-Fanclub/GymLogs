@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex/react";
 import Link from "next/link";
+import Image from "next/image";
 import { format } from "date-fns";
 import { de, enUS } from "date-fns/locale";
 import { ChevronRight, Dumbbell } from "lucide-react";
@@ -13,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { formatVolume } from "@/lib/pr-utils";
-import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
 
 export function WorkoutsList({
   userId,
@@ -30,10 +30,10 @@ export function WorkoutsList({
 
   if (workouts === undefined) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">{t("workouts.loadingCopy")}</p>
+      <div className="space-y-2">
+        <p className="text-xs text-muted-foreground">{t("workouts.loadingCopy")}</p>
         {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 w-full" />
+          <Skeleton key={i} className="h-16 w-full" />
         ))}
       </div>
     );
@@ -61,25 +61,27 @@ export function WorkoutsList({
     <div className="space-y-2">
       {workouts.map((workout) => (
         <Link key={workout._id} href={`/workouts/${workout._id}`}>
-          <Card className="cursor-pointer transition-colors hover:bg-accent/30">
-            <CardContent className="flex items-center justify-between gap-4 px-4 py-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <WorkoutMuscleMap
-                  muscleGroups={workout.muscleGroups}
-                  compact
-                  className="w-16 border-0 bg-transparent p-0"
+          <Card className="group cursor-pointer transition-colors hover:border-brand/30">
+            <CardContent className="grid grid-cols-[54px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5">
+              <div className="relative h-12 overflow-hidden rounded-lg">
+                <Image
+                  src="/brand/playlist-hero.png"
+                  alt=""
+                  fill
+                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  sizes="54px"
                 />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {format(workout.date, "EEEE, MMMM d, yyyy", {
-                      locale: locale === "de" ? de : enUS,
-                    })}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {format(workout.date, "h:mm a")} · {formatVolume(workout.totalVolume)}{" "}
-                    {t("common.kg")} · {workout.totalSets} {t("common.sets")}
-                  </p>
-                </div>
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">
+                  {format(workout.date, "EEEE", {
+                    locale: locale === "de" ? de : enUS,
+                  })}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                  {format(workout.date, "dd.MM. HH:mm")} · {formatVolume(workout.totalVolume)}{" "}
+                  {t("common.kg")} · {workout.totalSets} {t("common.sets")}
+                </p>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </CardContent>

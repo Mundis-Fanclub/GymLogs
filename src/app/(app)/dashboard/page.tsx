@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import Link from "next/link";
+import Image from "next/image";
 import { format } from "date-fns";
 import { de, enUS } from "date-fns/locale";
 import { api } from "../../../../convex/_generated/api";
@@ -11,24 +12,16 @@ import { useConvexUser } from "@/hooks/useConvexUser";
 import { formatVolume } from "@/lib/pr-utils";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageTitle } from "@/components/ui/page-title";
-import {
-  SUB_LEG_PARTS,
-  type BodyPart,
-} from "@/lib/muscle-groups";
-import { ArrowRight, ChevronRight, Dumbbell, Trophy, User } from "lucide-react";
+import { SUB_LEG_PARTS, type BodyPart } from "@/lib/muscle-groups";
+import { Bell, ChevronRight, Dumbbell, Trophy, User } from "lucide-react";
 
 const BODY_PART_LABELS: Record<BodyPart, string> = {
   chest: "Brust",
-  back: "Rücken",
+  back: "Ruecken",
   biceps: "Bizeps",
   triceps: "Trizeps",
   core: "Core",
@@ -36,7 +29,7 @@ const BODY_PART_LABELS: Record<BodyPart, string> = {
   quads: "Quads",
   hamstrings: "Beinbeuger",
   calves: "Waden",
-  glutes: "Gesäß",
+  glutes: "Gesaess",
   shoulders: "Schultern",
   other: "Sonstiges",
 };
@@ -69,22 +62,21 @@ export default function DashboardPage() {
 
   if (!isLoaded) {
     return (
-      <div className="mx-auto max-w-5xl space-y-5">
-        <Skeleton className="h-9 w-40" />
-        <Skeleton className="h-[110px] w-full" />
-        <div className="grid grid-cols-2 gap-2.5">
+      <div className="space-y-3">
+        <Skeleton className="h-8 w-28" />
+        <Skeleton className="h-[104px] w-full" />
+        <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full" />
+            <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>
-        <Skeleton className="h-40 w-full" />
       </div>
     );
   }
 
   if (!userId) {
     return (
-      <div className="mx-auto max-w-3xl pt-8">
+      <div className="pt-8">
         <EmptyState
           icon={User}
           title={t("dashboard.signedOutTitle")}
@@ -99,22 +91,20 @@ export default function DashboardPage() {
     );
   }
 
-  // Aggregate sub-leg muscle groups into "legs" so the top focus matches
-  // what the analytics list shows. Done inline here rather than reaching
-  // into analytics-page's aggregator to keep the dashboard self-contained.
   const topFocus = (() => {
     if (!muscleAnalytics) return null;
     const isSubLeg = (part: BodyPart) =>
       (SUB_LEG_PARTS as readonly string[]).includes(part);
     const totals = new Map<BodyPart, number>();
-    for (const p of muscleAnalytics.bodyParts) {
-      if (p.sets === 0 || p.part === "other") continue;
-      const key = isSubLeg(p.part as BodyPart) ? ("legs" as BodyPart) : (p.part as BodyPart);
-      totals.set(key, (totals.get(key) ?? 0) + p.sets);
+    for (const part of muscleAnalytics.bodyParts) {
+      if (part.sets === 0 || part.part === "other") continue;
+      const key = isSubLeg(part.part as BodyPart)
+        ? ("legs" as BodyPart)
+        : (part.part as BodyPart);
+      totals.set(key, (totals.get(key) ?? 0) + part.sets);
     }
-    if (totals.size === 0) return null;
-    const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-    return { part: sorted[0][0], sets: sorted[0][1] };
+    const [part, sets] = [...totals.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+    return part ? { part, sets } : null;
   })();
 
   const trainingWeekSubtitle = (() => {
@@ -129,53 +119,80 @@ export default function DashboardPage() {
     (workoutFrequency && workoutFrequency.total > 0);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <PageTitle
-        title={t("common.dashboard")}
-        action={
-          <Link href="/workouts/new">
-            <Button className="gap-2">
-              <Dumbbell className="h-4 w-4" />
-              {t("common.startWorkout")}
-            </Button>
-          </Link>
-        }
-      />
+    <div className="space-y-3">
+      <PageTitle title={t("common.dashboard")} srOnly />
+
+      <header className="flex h-8 items-center justify-between">
+        <h1 className="text-[11px] font-semibold uppercase tracking-normal">
+          Dashboard
+        </h1>
+        <button
+          type="button"
+          aria-label="Notifications"
+          className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <Bell className="h-4 w-4" />
+        </button>
+      </header>
+
+      <section className="premium-panel relative min-h-[104px] overflow-hidden rounded-xl p-3">
+        <div className="absolute inset-y-0 right-0 w-[48%]">
+          <Image
+            src="/brand/gym-hero.png"
+            alt=""
+            fill
+            priority
+            className="object-cover"
+            sizes="180px"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/50 to-transparent" />
+        </div>
+        <div className="relative z-10 max-w-[12rem]">
+          <h2 className="text-lg font-semibold leading-tight">
+            Bereit fuer dein naechstes <span className="text-brand">Level?</span>
+          </h2>
+          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+            Wochenfokus, Workouts und Bestleistungen.
+          </p>
+        </div>
+      </section>
 
       {incompleteWorkout && (
         <Link
           href="/workouts/new"
-          className="group flex items-center justify-between gap-3 rounded-xl border border-brand/30 bg-brand/10 px-4 py-3 text-sm transition-colors hover:bg-brand/15"
+          className="group flex items-center justify-between gap-3 rounded-xl border border-brand/30 bg-brand/10 px-3 py-2 text-xs transition-colors hover:bg-brand/15"
         >
-          <span className="flex items-center gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand">
-              <Dumbbell className="h-4 w-4" />
+          <span className="flex items-center gap-2">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand">
+              <Dumbbell className="h-3.5 w-3.5" />
             </span>
             <span>
               <span className="font-medium text-brand">
                 {t("dashboard.unfinished")}
               </span>
-              <span className="ml-1.5 text-muted-foreground">
+              <span className="ml-1 text-muted-foreground">
                 {t("dashboard.resume")}
               </span>
             </span>
           </span>
-          <ArrowRight className="h-4 w-4 shrink-0 text-brand transition-transform group-hover:translate-x-0.5" />
+          <ChevronRight className="h-4 w-4 shrink-0 text-brand transition-transform group-hover:translate-x-0.5" />
         </Link>
       )}
 
-      {/* Trainingswoche */}
       {workoutFrequency === undefined ? (
-        <Skeleton className="h-[120px] w-full" />
+        <Skeleton className="h-[118px] w-full" />
       ) : (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">
-              Trainingswoche
-            </CardTitle>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {trainingWeekSubtitle}
-            </p>
+          <CardHeader className="pb-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-xs font-semibold">Trainingswoche</CardTitle>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  {trainingWeekSubtitle}
+                </p>
+              </div>
+              <span className="text-[10px] text-muted-foreground">Woche 24</span>
+            </div>
           </CardHeader>
           <CardContent>
             <WeekActivityStrip buckets={workoutFrequency.buckets} />
@@ -183,7 +200,6 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Empty state if no data anywhere */}
       {recentWorkouts !== undefined &&
       workoutFrequency !== undefined &&
       !hasAnyTrainingData ? (
@@ -202,33 +218,31 @@ export default function DashboardPage() {
         />
       ) : (
         <>
-          {/* Compact week stats — 2x2 */}
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-2">
             <CompactStat label="Workouts" value={workoutFrequency?.total ?? 0} />
-            <CompactStat label="Sätze" value={muscleAnalytics?.totalSets ?? 0} />
+            <CompactStat label="Saetze" value={muscleAnalytics?.totalSets ?? 0} />
             <CompactStat
               label="Volumen"
               value={
                 muscleAnalytics
                   ? `${formatVolume(muscleAnalytics.totalVolume)} kg`
-                  : "—"
+                  : "-"
               }
             />
             <CompactStat
               label="Top-Fokus"
-              value={topFocus ? BODY_PART_LABELS[topFocus.part] : "—"}
-              sub={topFocus ? `${topFocus.sets} Sätze` : undefined}
+              value={topFocus ? BODY_PART_LABELS[topFocus.part] : "-"}
+              sub={topFocus ? `${topFocus.sets} Saetze` : undefined}
             />
           </div>
 
-          {/* Letzte Workouts */}
           <section>
             <div className="mb-2 flex items-end justify-between">
-              <h2 className="text-sm font-semibold">Letzte Workouts</h2>
+              <h2 className="text-xs font-semibold">Letzte Workouts</h2>
               {recentWorkouts && recentWorkouts.length > 0 && (
                 <Link
                   href="/workouts"
-                  className="inline-flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
                 >
                   Alle anzeigen
                   <ChevronRight className="h-3 w-3" />
@@ -247,23 +261,31 @@ export default function DashboardPage() {
               </p>
             ) : (
               <div className="space-y-2">
-                {recentWorkouts.map((w) => (
+                {recentWorkouts.map((workout) => (
                   <Link
-                    key={w._id}
-                    href={`/workouts/${w._id}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card px-3.5 py-3 text-sm transition-colors hover:bg-accent/30"
+                    key={workout._id}
+                    href={`/workouts/${workout._id}`}
+                    className="premium-panel group grid min-h-[58px] grid-cols-[minmax(0,1fr)_58px_18px] items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:border-brand/30"
                   >
                     <div className="min-w-0">
-                      <p className="font-medium">
-                        {format(w.date, "EEE, dd.MM.", {
+                      <p className="text-xs font-semibold">
+                        {format(workout.date, "EEE, dd.MM.", {
                           locale: locale === "de" ? de : enUS,
                         })}
                       </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {w.totalSets} Sätze ·{" "}
-                        {formatVolume(w.totalVolume)} {t("common.kg")}
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        {workout.totalSets} Saetze · {formatVolume(workout.totalVolume)} {t("common.kg")}
                       </p>
                     </div>
+                    <span className="relative h-12 overflow-hidden rounded-lg">
+                      <Image
+                        src="/brand/playlist-hero.png"
+                        alt=""
+                        fill
+                        className="object-cover transition-transform group-hover:scale-105"
+                        sizes="58px"
+                      />
+                    </span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </Link>
                 ))}
@@ -271,23 +293,18 @@ export default function DashboardPage() {
             )}
           </section>
 
-          {/* PRs — compact summary link */}
           {recentPRs && recentPRs.length > 0 && (
             <Link
               href="/workouts"
-              className="flex items-center justify-between gap-3 rounded-lg border border-warning/25 bg-warning/5 px-3.5 py-3 text-sm transition-colors hover:bg-warning/10"
+              className="flex items-center justify-between gap-3 rounded-xl border border-warning/25 bg-warning/5 px-3 py-2 text-xs transition-colors hover:bg-warning/10"
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-warning/15 text-warning">
                   <Trophy className="h-3.5 w-3.5" />
                 </span>
                 <div>
-                  <p className="font-medium">
-                    Neue Bestleistungen: {recentPRs.length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    in den letzten 30 Tagen
-                  </p>
+                  <p className="font-medium">Neue Bestleistungen: {recentPRs.length}</p>
+                  <p className="text-[10px] text-muted-foreground">in den letzten 30 Tagen</p>
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -309,16 +326,14 @@ function CompactStat({
   sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-card px-3.5 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="premium-panel rounded-xl px-3 py-2.5">
+      <p className="text-[9px] font-medium uppercase text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-lg font-semibold leading-tight tabular-nums">
+      <p className="mt-1 text-base font-semibold leading-tight tabular-nums">
         {value}
       </p>
-      {sub && (
-        <p className="mt-0.5 text-[10px] text-muted-foreground">{sub}</p>
-      )}
+      {sub && <p className="mt-0.5 text-[9px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }

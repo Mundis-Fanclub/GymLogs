@@ -14,7 +14,7 @@ export default function WorkoutsPage() {
   const { t } = useAppPreferences();
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-4xl">
       <PageTitle
         title={t("workouts.title")}
         action={

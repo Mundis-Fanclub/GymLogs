@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Activity,
   ArrowLeft,
@@ -27,6 +28,7 @@ import {
   MoveRight,
   Paperclip,
   Pencil,
+  Phone,
   PlusCircle,
   Play,
   Repeat2,
@@ -45,6 +47,7 @@ import {
   User,
   UserPlus,
   Users,
+  Video,
   X,
 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -265,6 +268,7 @@ const LIFT_LABELS = {
 type ProfileTab = "posts" | "saved" | "media" | "logs" | "training";
 type ProfilePreviewTab = "posts" | "media" | "logs" | "training";
 type ProfileEditSection = "details" | "visibility";
+type MessageInboxFilter = "all" | "messages" | "comments" | "mentions";
 
 export function ProfilePageClient() {
   const { userId, isLoaded } = useConvexUser();
@@ -335,6 +339,8 @@ export function ProfilePageClient() {
     userId && activeConversation ? { userId, conversationId: activeConversation } : "skip"
   );
   const [messageBody, setMessageBody] = useState("");
+  const [messageSearch, setMessageSearch] = useState("");
+  const [messageInboxFilter, setMessageInboxFilter] = useState<MessageInboxFilter>("all");
   const [messageImageDraft, setMessageImageDraft] = useState<MessageImageDraft | null>(null);
   const [messageUploadError, setMessageUploadError] = useState("");
   const [uploadingMessageImage, setUploadingMessageImage] = useState(false);
@@ -387,6 +393,7 @@ export function ProfilePageClient() {
   const [networkDialogOpen, setNetworkDialogOpen] = useState(false);
   const [followDialogOpen, setFollowDialogOpen] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [messageThreadMenuOpen, setMessageThreadMenuOpen] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const profileTabRefs = useRef<Partial<Record<ProfileTab, HTMLButtonElement | null>>>({});
@@ -491,6 +498,10 @@ export function ProfilePageClient() {
     });
   }, [activeConversation, messagesDialogOpen, thread?.messages.length]);
 
+  useEffect(() => {
+    setMessageThreadMenuOpen(false);
+  }, [activeConversation]);
+
   function handleMessagesScroll() {
     const element = messagesScrollRef.current;
     if (!element) return;
@@ -536,6 +547,22 @@ export function ProfilePageClient() {
     () => conversations?.reduce((sum, item) => sum + item.unreadCount, 0) ?? 0,
     [conversations]
   );
+  const filteredConversations = useMemo(() => {
+    if (!conversations) return conversations;
+    if (messageInboxFilter === "comments" || messageInboxFilter === "mentions") return [];
+    const normalizedSearch = messageSearch.trim().toLowerCase();
+    if (!normalizedSearch) return conversations;
+
+    return conversations.filter((conversation) => {
+      const otherUser = conversation.otherUser;
+      return (
+        otherUser?.name?.toLowerCase().includes(normalizedSearch) ||
+        otherUser?.username?.toLowerCase().includes(normalizedSearch) ||
+        conversation.lastMessagePreview?.toLowerCase().includes(normalizedSearch)
+      );
+    });
+  }, [conversations, messageInboxFilter, messageSearch]);
+  const visibleConversations = filteredConversations ?? [];
   const mediaPosts = useMemo(() => posts?.filter((post) => Boolean(post.mediaUrl)), [posts]);
   const displayAvatarUrl = avatarPreviewUrl || form.avatarUrl;
   const displayCoverUrl = coverPreviewUrl || form.coverUrl;
@@ -606,7 +633,7 @@ export function ProfilePageClient() {
       ? {
           key: "streak",
           icon: Flame,
-          iconClassName: "text-orange-400",
+          iconClassName: "text-primary",
           value: streakDays,
           label: t("profile.metrics.streak"),
         }
@@ -651,7 +678,7 @@ export function ProfilePageClient() {
       ? {
           key: "streak",
           icon: Flame,
-          iconClassName: "text-orange-400",
+          iconClassName: "text-primary",
           value: String(previewTrainingSummary.currentStreakDays),
           label: t("profile.metrics.streak"),
         }
@@ -1098,18 +1125,18 @@ export function ProfilePageClient() {
   const profileCoverStyle = {
     backgroundImage: displayCoverUrl
       ? `url(${displayCoverUrl})`
-      : "url(https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80)",
+      : "url(/brand/profile-cover.png)",
   };
 
   return (
-    <div className="-mx-3 -mt-3 bg-background pb-8 text-foreground sm:mx-auto sm:mt-0 sm:max-w-5xl sm:overflow-hidden sm:rounded-lg sm:border sm:border-border">
+    <div className="-mx-3 -mt-3 bg-background pb-8 text-foreground sm:mx-auto sm:mt-0 sm:max-w-5xl sm:overflow-hidden sm:rounded-3xl sm:border sm:border-border">
       <div className="space-y-0">
         <Card className="overflow-hidden rounded-none border-0 bg-card py-0 text-card-foreground ring-0 shadow-none">
           <div
             className="relative min-h-[28.5rem] overflow-hidden bg-cover bg-center sm:min-h-[32rem]"
             style={profileCoverStyle}
           >
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/15 via-background/45 to-background" />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/10 via-background/42 to-background" />
             <div className="absolute left-3 right-3 top-3 z-20 flex items-center justify-between sm:left-7 sm:right-7 sm:top-6">
               <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label={t("profile.misc.back")} onClick={() => history.back()}>
                 <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -1124,7 +1151,7 @@ export function ProfilePageClient() {
             <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-6 sm:px-9 sm:pb-8">
               <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] items-center gap-5 min-[390px]:gap-6 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-8">
                 <div className="relative size-24 self-start min-[390px]:size-28 sm:size-44">
-                  <div className="pointer-events-none absolute -inset-2 rounded-full bg-primary/20 blur-2xl" />
+                  <div className="pointer-events-none absolute -inset-2 rounded-full bg-primary/25 blur-2xl" />
                   <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="hero" />
                 </div>
                 <div className="min-w-0">
@@ -1133,7 +1160,7 @@ export function ProfilePageClient() {
                   </Badge>
                   <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-none tracking-normal min-[390px]:text-[2.25rem] sm:text-6xl">
                     <span className="truncate">{form.name || "Steffen"}</span>
-                    <BadgeCheck className="h-7 w-7 shrink-0 fill-sky-400 text-black sm:h-10 sm:w-10" />
+                    <BadgeCheck className="h-7 w-7 shrink-0 fill-primary text-black sm:h-10 sm:w-10" />
                   </h1>
                   <p className="mt-2 text-[1.12rem] leading-tight text-muted-foreground min-[390px]:text-[1.25rem] sm:text-2xl">@{form.username || "shaker1"}</p>
                   <button
@@ -1162,14 +1189,14 @@ export function ProfilePageClient() {
           </div>
           <CardContent className="relative z-10 space-y-4 bg-background px-5 pb-7 pt-0 sm:space-y-6 sm:px-7 lg:px-9">
             <div className="grid gap-2.5 sm:gap-3">
-              <Button type="button" className="h-12 w-full rounded-lg text-base font-semibold transition-all hover:-translate-y-0.5 sm:h-14 sm:text-lg" onClick={() => setEditProfileOpen(true)}>
+              <Button type="button" className="h-12 w-full rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 sm:h-14 sm:text-lg" onClick={() => setEditProfileOpen(true)}>
                 {t("profile.edit.title")}
               </Button>
             </div>
             {profileMetricItems.length > 0 && (
               <div
                 className={cn(
-                  "grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-muted/20 shadow-sm",
+                  "premium-panel grid grid-cols-2 overflow-hidden rounded-2xl",
                   profileMetricItems.length > 2 && "min-[420px]:grid-cols-4"
                 )}
               >
@@ -1969,65 +1996,124 @@ export function ProfilePageClient() {
 
 
         <Dialog open={messagesDialogOpen} onOpenChange={setMessagesDialogOpen}>
-          <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden rounded-none border-border bg-[#090b0d] p-0 text-foreground sm:h-[86dvh] sm:max-w-6xl sm:rounded-xl">
-            <div id="messages" className="grid h-full min-h-0 bg-[#090b0d] md:grid-cols-[22rem_minmax(0,1fr)]">
-              <aside className={cn("min-h-0 border-r border-white/10 bg-[#0d1013]", thread && "hidden md:flex", "flex flex-col")}>
-                <div className="shrink-0 border-b border-white/10 px-4 pb-4 pt-5">
+          <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden rounded-none border-[#1c2b2f] bg-[#05090a] p-0 text-foreground shadow-2xl shadow-black/70 sm:h-[92dvh] sm:max-w-[460px] sm:rounded-[28px]">
+            <div id="messages" className="grid h-full min-h-0 bg-[#05090a]">
+              <aside className={cn("min-h-0 bg-[#071012]", thread ? "hidden" : "flex flex-col")}>
+                <div className="shrink-0 border-b border-white/[0.07] px-4 pb-3 pt-5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xl font-bold tracking-normal">{t("profile.messagesPanel.title")}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="text-xl font-extrabold tracking-normal">{t("profile.messagesPanel.title")}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         {unreadTotal > 0 ? `${unreadTotal} ${t("profile.messagesPanel.unread")}` : t("profile.messagesPanel.emptyTitle")}
                       </p>
                     </div>
-                    <Button type="button" size="icon-sm" variant="ghost" aria-label={t("profile.networkPanel.newMessage")} onClick={() => setNetworkDialogOpen(true)}>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      className="rounded-full text-muted-foreground hover:bg-white/[0.08] hover:text-foreground"
+                      aria-label={t("profile.networkPanel.newMessage")}
+                      onClick={() => {
+                        setMessagesDialogOpen(false);
+                        setNetworkDialogOpen(true);
+                      }}
+                    >
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="mt-4 flex h-10 items-center gap-2 rounded-full bg-white/[0.08] px-3 text-sm text-muted-foreground">
+                  <label className="mt-4 flex h-10 items-center gap-2 rounded-xl bg-white/[0.08] px-3 text-sm text-muted-foreground shadow-inner shadow-black/20 focus-within:ring-1 focus-within:ring-primary/45">
                     <Search className="h-4 w-4" />
-                    <span>{t("profile.networkPanel.searchPlaceholder")}</span>
+                    <input
+                      value={messageSearch}
+                      onChange={(event) => setMessageSearch(event.target.value)}
+                      placeholder="Suchen"
+                      className="min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
+                    />
+                    {messageSearch && (
+                      <button
+                        type="button"
+                        className="rounded-full p-1 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+                        onClick={() => setMessageSearch("")}
+                        aria-label="Suche leeren"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </label>
+                  <div className="mt-3 grid grid-cols-4 gap-1 text-[0.65rem] font-semibold">
+                    {([
+                      { id: "all" as const, label: "Alle" },
+                      { id: "messages" as const, label: "Nachrichten" },
+                      { id: "comments" as const, label: "Kommentare" },
+                      { id: "mentions" as const, label: "Mentions" },
+                    ]).map(({ id, label }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        aria-pressed={messageInboxFilter === id}
+                        onClick={() => setMessageInboxFilter(id)}
+                        className={cn(
+                          "h-8 rounded-full border px-1 transition",
+                          messageInboxFilter === id
+                            ? "border-primary/55 bg-primary/18 text-primary"
+                            : "border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <span className="block truncate">{label}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-auto px-2 py-3">
+                <div className="min-h-0 flex-1 overflow-auto px-3 py-2">
                   {conversations === undefined ? (
                     <p className="px-3 py-2 text-sm text-muted-foreground">{t("profile.messagesPanel.loading")}</p>
-                  ) : conversations.length === 0 ? (
+                  ) : visibleConversations.length === 0 ? (
                     <div className="flex min-h-[18rem] flex-col items-center justify-center px-6 text-center">
                       <div className="mb-4 flex size-16 items-center justify-center rounded-full border border-white/15">
                         <Send className="h-7 w-7 text-primary" />
                       </div>
-                      <p className="font-semibold">{t("profile.messagesPanel.emptyTitle")}</p>
-                      <p className="mt-2 text-sm leading-5 text-muted-foreground">{t("profile.messagesPanel.emptyCopy")}</p>
+                      <p className="font-semibold">
+                        {messageSearch || messageInboxFilter !== "all"
+                          ? "Nichts gefunden"
+                          : t("profile.messagesPanel.emptyTitle")}
+                      </p>
+                      <p className="mt-2 text-sm leading-5 text-muted-foreground">
+                        {messageSearch || messageInboxFilter !== "all"
+                          ? "Passe Suche oder Filter an."
+                          : t("profile.messagesPanel.emptyCopy")}
+                      </p>
                     </div>
                   ) : (
-                    conversations.map((conversation) => (
+                    visibleConversations.map((conversation) => (
                       <button
                         key={conversation._id}
                         type="button"
                         onClick={() => setActiveConversation(conversation._id)}
                         className={cn(
-                          "group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          "group grid w-full grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[1.35rem] px-1.5 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           activeConversation === conversation._id
-                            ? "bg-white/[0.11]"
-                            : "hover:bg-white/[0.07]"
+                            ? "bg-white/[0.12]"
+                            : "hover:bg-white/[0.06]"
                         )}
                       >
                         <div className="relative shrink-0">
                           <Avatar name={conversation.otherUser?.name ?? "?"} avatarUrl={conversation.otherUser?.avatarUrl} />
-                          {conversation.unreadCount > 0 && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-[#0d1013] bg-primary" />}
+                          <span className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-[#071012] bg-emerald-400" />
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-1.5">
                             <p className="flex min-w-0 items-center gap-1 truncate font-semibold">
                               <span className="truncate">{conversation.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}</span>
-                              {conversation.otherUser?.isPro && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                              {conversation.otherUser?.isPro && <Crown className="h-3.5 w-3.5 shrink-0 text-primary" />}
                             </p>
-                            {conversation.unreadCount > 0 && <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[0.65rem] font-bold text-primary-foreground">{conversation.unreadCount}</span>}
                           </div>
-                          <p className={cn("mt-0.5 truncate text-sm", conversation.unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground")}>
+                          <p className={cn("mt-0.5 truncate text-sm leading-5", conversation.unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground")}>
                             {conversation.lastMessagePreview ?? t("profile.messagesPanel.newConversation")}
                           </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <time className="text-[0.68rem] leading-none text-muted-foreground">{formatMessageTime(conversation.updatedAt)}</time>
+                          {conversation.unreadCount > 0 && <span className="min-w-5 rounded-full bg-primary px-1.5 text-center text-[0.65rem] font-bold leading-5 text-primary-foreground">{conversation.unreadCount}</span>}
                         </div>
                       </button>
                     ))
@@ -2035,7 +2121,7 @@ export function ProfilePageClient() {
                 </div>
               </aside>
 
-              <section className={cn("min-h-0 flex-col bg-[#07090b]", thread ? "flex" : "hidden md:flex")}>
+              <section className={cn("min-h-0 flex-col bg-[#05090a]", thread ? "flex" : "hidden")}>
                 {!thread ? (
                   <div className="flex h-full min-h-0 flex-col items-center justify-center px-8 text-center">
                     <div className="mb-5 flex size-24 items-center justify-center rounded-full border border-white/20">
@@ -2043,19 +2129,26 @@ export function ProfilePageClient() {
                     </div>
                     <p className="text-xl font-semibold">{t("profile.messagesPanel.emptyTitle")}</p>
                     <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{t("profile.messagesPanel.selectThread")}</p>
-                    <Button type="button" className="mt-5" onClick={() => setNetworkDialogOpen(true)}>
+                    <Button
+                      type="button"
+                      className="mt-5"
+                      onClick={() => {
+                        setMessagesDialogOpen(false);
+                        setNetworkDialogOpen(true);
+                      }}
+                    >
                       {t("profile.networkPanel.newMessage")}
                     </Button>
                   </div>
                 ) : (
                   <>
-                    <div className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#0b0d10] px-3 sm:px-5">
+                    <div className="flex h-24 shrink-0 items-center justify-between gap-3 border-b border-white/[0.07] bg-[#071012]/95 px-4 shadow-[0_14px_40px_rgba(0,0,0,0.18)] backdrop-blur">
                       <div className="flex min-w-0 items-center gap-3">
                         <Button
                           type="button"
                           size="icon-sm"
                           variant="ghost"
-                          className="md:hidden"
+                          className="size-9 shrink-0 rounded-full text-muted-foreground hover:bg-white/[0.08] hover:text-foreground"
                           aria-label={t("profile.messagesPanel.closeThread")}
                           title={t("profile.messagesPanel.closeThread")}
                           onClick={() => {
@@ -2064,38 +2157,95 @@ export function ProfilePageClient() {
                             clearMessageImageDraft();
                           }}
                         >
-                          <ArrowLeft className="h-4 w-4" />
+                          <ArrowLeft className="h-5 w-5" />
                         </Button>
-                        <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} />
+                        <div className="relative">
+                          <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} size="chat" />
+                          <span className="absolute bottom-1 right-0 size-4 rounded-full border-[3px] border-[#071012] bg-emerald-400" />
+                        </div>
                         <div className="min-w-0">
-                          <p className="flex min-w-0 items-center gap-1 truncate font-semibold leading-5">
+                          <p className="flex min-w-0 items-center gap-1.5 truncate text-xl font-extrabold leading-6">
                             <span className="truncate">{thread.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}</span>
-                            {thread.otherUser?.isPro && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                            {thread.otherUser?.isPro && <BadgeCheck className="h-5 w-5 shrink-0 fill-primary text-black" />}
                           </p>
-                          <p className="truncate text-xs text-muted-foreground">@{thread.otherUser?.username ?? "user"}</p>
+                          <p className="truncate text-base leading-5 text-muted-foreground">online</p>
                         </div>
                       </div>
                       {thread.otherUser && (
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label={thread.isBlocked ? t("profile.messagesPanel.unblock") : t("profile.messagesPanel.block")}
-                          title={thread.isBlocked ? t("profile.messagesPanel.unblock") : t("profile.messagesPanel.block")}
-                          onClick={() =>
-                            thread.isBlocked
-                              ? unblockUser({ blockerId: userId!, blockedId: thread.otherUser!._id })
-                              : blockUser({ blockerId: userId!, blockedId: thread.otherUser!._id })
-                          }
-                        >
-                          <Ban className="h-4 w-4" />
-                        </Button>
+                        <div className="relative flex shrink-0 items-center gap-2">
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            className="hidden size-11 rounded-full border border-white/[0.08] bg-white/[0.02] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground min-[400px]:inline-flex"
+                            aria-label="Anruf starten"
+                            title="Anruf starten"
+                          >
+                            <Phone className="h-5 w-5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            className="hidden size-11 rounded-full border border-white/[0.08] bg-white/[0.02] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground min-[400px]:inline-flex"
+                            aria-label="Videoanruf starten"
+                            title="Videoanruf starten"
+                          >
+                            <Video className="h-5 w-5" />
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            className="size-11 rounded-full border border-white/[0.08] bg-white/[0.02] text-muted-foreground hover:bg-white/[0.08] hover:text-foreground"
+                            aria-label="Chat Optionen"
+                            aria-haspopup="menu"
+                            aria-expanded={messageThreadMenuOpen}
+                            onClick={() => setMessageThreadMenuOpen((open) => !open)}
+                          >
+                            <MoreHorizontal className="h-5 w-5" />
+                          </Button>
+                          {messageThreadMenuOpen && (
+                            <div
+                              role="menu"
+                              className="absolute right-0 top-[calc(100%+0.4rem)] z-30 w-48 overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101619] p-1.5 text-sm shadow-2xl shadow-black/40"
+                            >
+                              <Link
+                                role="menuitem"
+                                href={`/profile/${thread.otherUser._id}`}
+                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-foreground transition hover:bg-white/[0.08]"
+                                onClick={() => {
+                                  setMessageThreadMenuOpen(false);
+                                  setMessagesDialogOpen(false);
+                                }}
+                              >
+                                <User className="h-4 w-4 text-primary" />
+                                Profil ansehen
+                              </Link>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-foreground transition hover:bg-white/[0.08]"
+                                onClick={() => {
+                                  if (!userId || !thread.otherUser) return;
+                                  void (thread.isBlocked
+                                    ? unblockUser({ blockerId: userId, blockedId: thread.otherUser._id })
+                                    : blockUser({ blockerId: userId, blockedId: thread.otherUser._id }));
+                                  setMessageThreadMenuOpen(false);
+                                }}
+                              >
+                                <Ban className="h-4 w-4 text-primary" />
+                                {thread.isBlocked ? t("profile.messagesPanel.unblock") : t("profile.messagesPanel.block")}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
                     <div
                       ref={messagesScrollRef}
                       onScroll={handleMessagesScroll}
-                      className="relative min-h-0 flex-1 overflow-auto px-4 py-5 font-[var(--font-mozilla-text)] sm:px-8"
+                      className="relative min-h-0 flex-1 overflow-auto bg-[radial-gradient(circle_at_30%_12%,rgba(255,143,0,0.08),transparent_19rem),radial-gradient(circle_at_90%_40%,rgba(255,143,0,0.045),transparent_20rem)] px-5 py-5 font-[var(--font-outfit)]"
                     >
                       {showJumpToLatest && (
                         <button
@@ -2110,30 +2260,28 @@ export function ProfilePageClient() {
                           {t("profile.messagesPanel.jumpToLatest")}
                         </button>
                       )}
-                      <div className="mb-10 mt-4 flex flex-col items-center text-center">
-                        <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} size="lg" />
-                        <p className="mt-3 text-lg font-semibold tracking-normal">{thread.otherUser?.name ?? t("profile.messagesPanel.unknownUser")}</p>
-                        <p className="text-sm text-muted-foreground">@{thread.otherUser?.username ?? "user"}</p>
-                      </div>
-                      <div className="space-y-3">
+                      <div className="mb-5 mt-1 text-center text-base font-bold text-muted-foreground">Heute</div>
+                      <div className="space-y-5">
                         {thread.messages.map((message, index) => {
                           const mine = message.senderId === userId;
                           const isPostShare = message.type === "post_share";
                           const isLatest = index === thread.messages.length - 1;
                           return (
-                            <div key={message._id} ref={isLatest ? latestMessageRef : undefined} className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
-                              {!mine && <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} size="sm" />}
-                              <div className={cn("min-w-0", isPostShare ? "max-w-[19rem] sm:max-w-[22rem]" : "max-w-[82%] sm:max-w-[62%]", mine ? "items-end" : "items-start")}>
+                            <div key={message._id} ref={isLatest ? latestMessageRef : undefined} className={cn("flex items-end gap-3", mine ? "justify-end" : "justify-start")}>
+                              {!mine && !isPostShare && (
+                                <Avatar name={thread.otherUser?.name ?? "?"} avatarUrl={thread.otherUser?.avatarUrl} size="sm" />
+                              )}
+                              <div className={cn("min-w-0", isPostShare ? "max-w-[18.5rem] min-[420px]:max-w-[21rem]" : "max-w-[78%]", mine ? "items-end" : "items-start")}>
                                 <div
                                   className={cn(
                                     "text-sm",
                                     isPostShare
                                       ? "p-0"
                                       : cn(
-                                          "rounded-[1.25rem] px-4 py-2.5 shadow-sm",
+                                          "rounded-[1.35rem] px-4 py-3 shadow-sm",
                                           mine
-                                            ? "rounded-br-md bg-primary text-[0.95rem] text-primary-foreground"
-                                            : "rounded-bl-md bg-white/[0.10] text-[0.95rem] text-foreground"
+                                            ? "rounded-br-md bg-primary text-[1.05rem] font-medium leading-7 text-primary-foreground shadow-[0_18px_42px_rgba(255,132,0,0.16)]"
+                                            : "rounded-bl-md bg-[#1b2225] text-[1.05rem] leading-7 text-foreground shadow-[0_18px_42px_rgba(0,0,0,0.18)]"
                                         )
                                   )}
                                 >
@@ -2145,8 +2293,8 @@ export function ProfilePageClient() {
                                     <p className="whitespace-pre-wrap break-words leading-6">{message.body}</p>
                                   )}
                                 </div>
-                                <div className={cn("mt-1 flex items-center gap-2 px-1 text-[0.7rem] leading-none text-muted-foreground", mine ? "justify-end" : "justify-start")}>
-                                  <span>{new Date(message.createdAt).toLocaleString(locale)}</span>
+                                <div className={cn("mt-1 flex items-center gap-2 px-1 text-[0.65rem] leading-none text-muted-foreground/75", mine ? "justify-end" : "justify-start")}>
+                                  <span>{new Date(message.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</span>
                                   {mine ? (
                                     <span>{message.readAt ? t("profile.messagesPanel.read") : t("profile.messagesPanel.unreadStatus")}</span>
                                   ) : (
@@ -2174,7 +2322,7 @@ export function ProfilePageClient() {
                       </div>
                     )}
 
-                    <div className="shrink-0 border-t border-white/10 bg-[#0b0d10]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-16px_40px_rgba(0,0,0,0.22)] backdrop-blur sm:px-5 sm:pb-4">
+                    <div className="shrink-0 border-t border-white/[0.07] bg-[#071012]/95 px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-[0_-16px_40px_rgba(0,0,0,0.32)] backdrop-blur">
                       {messageImageDraft && (
                         <div className="mb-3 flex max-w-md items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-2">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2192,13 +2340,13 @@ export function ProfilePageClient() {
                       <div className="flex items-center gap-2">
                         <label
                           className={cn(
-                            "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white/[0.075] text-muted-foreground transition-colors hover:bg-white/[0.13] hover:text-foreground",
+                            "inline-flex size-14 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white/[0.08] text-muted-foreground transition-colors hover:bg-white/[0.13] hover:text-foreground",
                             (thread.isBlocked || uploadingMessageImage) && "pointer-events-none opacity-50"
                           )}
                           aria-label={t("profile.messagesPanel.sendImage")}
                           title={t("profile.messagesPanel.sendImage")}
                         >
-                          <Paperclip className="h-5 w-5" />
+                          <Paperclip className="h-6 w-6" />
                           <input
                             type="file"
                             accept="image/*"
@@ -2219,13 +2367,13 @@ export function ProfilePageClient() {
                             }
                           }}
                           maxLength={600}
-                          className="h-10 rounded-full border-white/10 bg-white/[0.075] px-4 text-[0.95rem] shadow-inner shadow-black/10 placeholder:text-muted-foreground/80 focus-visible:ring-1 focus-visible:ring-primary/45"
+                          className="h-14 rounded-full border-white/[0.08] bg-white/[0.08] px-5 text-base shadow-inner shadow-black/20 placeholder:text-muted-foreground/80 focus-visible:ring-1 focus-visible:ring-primary/45"
                         />
-                        <Button size="icon" className="size-10 shrink-0 rounded-full shadow-sm shadow-primary/15" disabled={thread.isBlocked || (!messageBody.trim() && !messageImageDraft)} onClick={() => submitMessage()}>
-                          <Send className="h-4 w-4" />
+                        <Button size="icon" className="size-14 shrink-0 rounded-full shadow-[0_18px_42px_rgba(255,132,0,0.24)]" disabled={thread.isBlocked || (!messageBody.trim() && !messageImageDraft)} onClick={() => submitMessage()}>
+                          <Send className="h-6 w-6" />
                         </Button>
                       </div>
-                      <p className="mt-2 flex items-start gap-1.5 px-1 text-[0.7rem] leading-4 text-muted-foreground/80">
+                      <p className="sr-only">
                         <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0" />
                         {t("profile.messagesPanel.spamNotice")}
                       </p>
@@ -2244,7 +2392,7 @@ export function ProfilePageClient() {
         id="network"
         className="space-y-5"
       >
-        <Card className="border-cyan-500/10 bg-card/95 shadow-lg shadow-cyan-950/5">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Users className="h-4 w-4" />
@@ -2287,7 +2435,7 @@ export function ProfilePageClient() {
               ) : (
                 friends.map((entry) =>
                   entry.friend ? (
-                    <div key={entry.friendshipId} className="flex items-center gap-3 rounded-xl border border-border bg-muted/20 p-2.5 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/35">
+                    <div key={entry.friendshipId} className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 p-2.5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/35">
                       <Avatar name={entry.friend.name} avatarUrl={entry.friend.avatarUrl} />
                       <div className="min-w-0 flex-1">
                         <Link href={`/profile/${entry.friend._id}`} className="flex items-center gap-1 truncate text-sm font-medium hover:underline">
@@ -2311,7 +2459,7 @@ export function ProfilePageClient() {
           </CardContent>
         </Card>
 
-        <Card className="border-blue-500/10 bg-card/95 shadow-lg shadow-blue-950/5">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Search className="h-4 w-4" />
@@ -2322,7 +2470,7 @@ export function ProfilePageClient() {
             <Input placeholder={t("profile.networkPanel.searchPlaceholder")} value={query} onChange={(event) => setQuery(event.target.value)} />
             <div className="space-y-2">
               {searchResults?.map((result) => (
-                <div key={result._id} className="rounded-xl border border-border bg-muted/20 p-3 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/35">
+                <div key={result._id} className="rounded-2xl border border-border bg-muted/20 p-3 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/35">
                   <div className="flex items-center gap-3">
                 <Avatar name={result.name} avatarUrl={result.avatarUrl} />
                     <div className="min-w-0 flex-1">
@@ -2548,7 +2696,7 @@ function ProfilePostsCard({
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 truncate text-base font-bold text-white sm:text-lg">
                     {profileName}
-                    {isPro && <BadgeCheck className="h-5 w-5 shrink-0 fill-sky-400 text-black" />}
+                    {isPro && <BadgeCheck className="h-5 w-5 shrink-0 fill-primary text-black" />}
                     <span className="truncate text-sm font-normal text-white/45">@{username}</span>
                     <span className="text-sm font-normal text-white/45">· {formatProfilePostTime(post.createdAt, locale, t("profile.public.justNow"))}</span>
                     {edited && <span className="text-sm font-normal text-white/45">{t("profile.public.edited")}</span>}
@@ -2559,13 +2707,13 @@ function ProfilePostsCard({
                     <button
                       type="button"
                       aria-label="Post-Optionen"
-                      className="rounded-md text-white/55 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                      className="rounded-md text-white/55 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       onClick={() => onOpenPostMenu(openPostMenuId === post._id ? null : post._id)}
                     >
                       <MoreHorizontal className="h-5 w-5" />
                     </button>
                     {openPostMenuId === post._id && (
-                      <div className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-lg border border-white/10 bg-[#101416] p-1 text-white shadow-xl shadow-black/30">
+                      <div className="premium-panel absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-2xl p-1 text-white shadow-xl shadow-black/30">
                         <button
                           type="button"
                           className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
@@ -2594,7 +2742,7 @@ function ProfilePostsCard({
                     onChange={(event) => onEditingPostBodyChange(post._id, event.target.value)}
                     rows={3}
                     maxLength={1200}
-                    className="min-h-28 border-white/10 bg-white/[0.04] text-base text-white placeholder:text-white/35 focus:border-cyan-300/60 sm:text-lg"
+                    className="min-h-28 border-white/10 bg-white/[0.04] text-base text-white placeholder:text-white/35 focus:border-primary sm:text-lg"
                   />
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="ghost" className="text-white/70 hover:bg-white/10 hover:text-white" onClick={() => onCancelPostEdit(post._id)}>
@@ -2636,7 +2784,7 @@ function ProfilePostsCard({
                   <MessageSquare className="h-5 w-5" />
                   <span>{post.commentCount}</span>
                 </ProfilePostActionButton>
-                <ProfilePostActionButton active={post.repostedByViewer} activeClass="text-sky-500 hover:text-sky-500" disabled={!canRepost || isPreviewPost} onClick={() => onRepost(post._id)} ariaLabel={isOwnPost ? "Eigene Posts können nicht repostet werden" : post.repostedByViewer ? "Bereits repostet" : "Reposten"}>
+                <ProfilePostActionButton active={post.repostedByViewer} activeClass="text-primary hover:text-primary" disabled={!canRepost || isPreviewPost} onClick={() => onRepost(post._id)} ariaLabel={isOwnPost ? "Eigene Posts können nicht repostet werden" : post.repostedByViewer ? "Bereits repostet" : "Reposten"}>
                   <Repeat2 className="h-5 w-5" />
                   <span>{post.repostCount}</span>
                 </ProfilePostActionButton>
@@ -2656,7 +2804,7 @@ function ProfilePostsCard({
                       onChange={(event) => onCommentBodyChange(post._id, event.target.value)}
                       placeholder={t("profile.public.commentPlaceholder")}
                       maxLength={600}
-                      className="min-h-9 min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-300/60"
+                      className="min-h-9 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-primary"
                     />
                     <Button type="button" size="sm" disabled={!userId || !commentBody.trim()} onClick={() => onSubmitComment(post._id)}>
                       {t("profile.networkPanel.send")}
@@ -2772,7 +2920,7 @@ function ProfileCommentPreview({
               onChange={(event) => setEditingBody(event.target.value)}
               rows={2}
               maxLength={500}
-              className="min-h-16 border-white/10 bg-white/[0.04] text-sm text-white placeholder:text-white/35 focus:border-cyan-300/60"
+              className="min-h-16 border-white/10 bg-white/[0.04] text-sm text-white placeholder:text-white/35 focus:border-primary"
             />
             <div className="flex justify-end gap-2">
               <Button type="button" size="sm" variant="ghost" className="text-white/70 hover:bg-white/10 hover:text-white" onClick={() => setEditing(false)}>
@@ -2809,7 +2957,7 @@ function ProfileCommentPreview({
               onChange={(event) => setReplyBody(event.target.value)}
               placeholder={t("profile.public.replyPlaceholder")}
               maxLength={500}
-              className="min-h-9 border-white/10 bg-white/[0.04] text-sm text-white placeholder:text-white/35 focus:border-cyan-300/60"
+              className="min-h-9 border-white/10 bg-white/[0.04] text-sm text-white placeholder:text-white/35 focus:border-primary"
             />
             <Button type="button" size="icon" disabled={!replyBody.trim()} onClick={submitReply}>
               <Send className="h-4 w-4" />
@@ -2838,6 +2986,20 @@ function formatProfilePostTime(timestamp: number, locale: string, justNow: strin
   if (diffMs < hour) return `${Math.floor(diffMs / minute)} Min.`;
   if (diffMs < day) return `${Math.floor(diffMs / hour)} Std.`;
   return new Date(timestamp).toLocaleDateString(locale);
+}
+
+function formatMessageTime(timestamp: number) {
+  const diffMs = Date.now() - timestamp;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) return "Jetzt";
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)} Min`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)} Std`;
+  const days = Math.floor(diffMs / day);
+  if (days < 7) return `${days} Tg`;
+  return new Date(timestamp).toLocaleDateString("de-DE", { day: "2-digit", month: "short" });
 }
 
 function TrainingTab({
@@ -2969,7 +3131,7 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
   const highlight = logs?.[0];
 
   return (
-    <Card className={cn("overflow-hidden border-cyan-500/15 bg-card/95 shadow-xl shadow-cyan-950/5", embedded && "shadow-none")}>
+    <Card className={cn("overflow-hidden shadow-xl", embedded && "shadow-none")}>
       <CardHeader className="border-b border-border/70 bg-muted/10 p-4 sm:p-6">
         <CardTitle className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-2">
@@ -2995,7 +3157,7 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
         ) : (
           <>
           {highlight && (
-            <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/12 via-muted/20 to-background p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-950/10">
+            <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/12 via-muted/20 to-background p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-primary">{t("profile.topLogs.currentHighlight")}</p>
@@ -3007,7 +3169,7 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
                 <div className="flex flex-wrap gap-2">
                   {highlight.rank && <Badge variant="secondary">#{highlight.rank} {t("profile.topLogs.of")} {highlight.total}</Badge>}
                   {highlight.percentile && <Badge variant="outline">{highlight.percentile}% Percentile</Badge>}
-                  <Badge variant="outline" className="border-cyan-500/30">
+                  <Badge variant="outline" className="border-primary/30">
                     <ImageIcon className="h-3 w-3" />
                     {t("profile.topLogs.videoReady")}
                   </Badge>
@@ -3016,7 +3178,7 @@ function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undef
             </div>
           )}
           {logs.map((log) => (
-            <div key={log.submission._id} className="rounded-lg border border-border bg-muted/25 p-3 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/40">
+            <div key={log.submission._id} className="rounded-2xl border border-border bg-muted/25 p-3 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/40">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="font-medium">{log.exerciseName || LIFT_LABELS[log.submission.liftType]}</p>
@@ -3093,7 +3255,7 @@ function WorkoutTemplatesCard({
   const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
 
   return (
-    <Card className={cn("border-blue-500/10 bg-card/95 shadow-xl shadow-blue-950/5", embedded && "shadow-none")}>
+    <Card className={cn("shadow-xl", embedded && "shadow-none")}>
       <CardHeader className="border-b border-border/70 bg-muted/10">
         <CardTitle className="flex items-center gap-2">
           <Dumbbell className="h-5 w-5 text-primary" />
@@ -3125,7 +3287,25 @@ function WorkoutTemplatesCard({
             };
 
             return (
-            <div key={template._id} className="min-w-0 rounded-xl border border-border bg-muted/25 p-3 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/40 hover:shadow-lg sm:p-4">
+            <div key={template._id} className="premium-panel min-w-0 overflow-hidden rounded-3xl transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg">
+              <div className="gym-image-overlay relative min-h-32">
+                <Image
+                  src="/brand/playlist-hero.png"
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="(min-width: 640px) 42rem, 100vw"
+                />
+                <div className="relative z-10 flex min-h-32 items-end p-4">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase text-brand">
+                      {template.visibility}
+                    </p>
+                    <p className="mt-1 text-xl font-semibold">{template.name}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 sm:p-4">
               {isEditing && (
                 <div className="mb-4 grid gap-3 rounded-lg border border-border bg-background/70 p-3">
                   <div className="grid gap-1.5">
@@ -3267,6 +3447,7 @@ function WorkoutTemplatesCard({
                 </div>
               </div>
               )}
+              </div>
             </div>
           );
           })
@@ -3304,51 +3485,57 @@ function PostShareCard({ message, mine }: { message: ChatMessageView; mine: bool
     <Link
       href={href}
       className={cn(
-        "group block overflow-hidden rounded-3xl border text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group block overflow-hidden rounded-[1.25rem] border text-foreground shadow-[0_18px_48px_rgba(0,0,0,0.28)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         mine
-          ? "border-primary/40 bg-[#11160d] hover:bg-[#151d0f]"
-          : "border-white/10 bg-white/[0.055] hover:bg-white/[0.08]"
+          ? "border-primary/75 bg-[#0b1111] hover:bg-[#101717]"
+          : "border-primary/60 bg-[#0c1212] hover:bg-[#101717]"
       )}
     >
-      <div className="p-3">
-        <div className="mb-2 flex items-center justify-between gap-3">
+      <div className="bg-[radial-gradient(circle_at_20%_0%,rgba(255,143,0,0.12),transparent_9rem)] p-3">
+        <div className="mb-2.5 flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold", mine ? "border-primary text-primary" : "border-white/20 text-foreground")}>
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-primary text-xs font-bold text-primary">
               {authorName.slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold leading-4">{authorName}</p>
-              <p className="truncate text-xs text-muted-foreground">{authorLabel}</p>
+              <p className="truncate text-sm font-bold leading-4">{authorName}</p>
+              <p className="truncate text-xs leading-4 text-muted-foreground">{authorLabel}</p>
             </div>
           </div>
-          <span className={cn("shrink-0 rounded-full px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wide", mine ? "bg-primary/20 text-primary" : "bg-white/[0.08] text-muted-foreground")}>
+          <span className="shrink-0 rounded-full bg-primary/16 px-2 py-1 text-[0.68rem] font-extrabold uppercase tracking-wide text-primary shadow-[0_10px_28px_rgba(255,132,0,0.12)]">
             {t("profile.public.sharedPost")}
           </span>
         </div>
 
-        {message.postPreview?.mediaUrl ? (
-          <div className="mb-3 overflow-hidden rounded-2xl bg-black/40">
+        {message.postPreview?.mediaUrl && (
+          <div className="relative mb-3 overflow-hidden rounded-[1rem] bg-black/50">
             {message.postPreview.mediaType === "video" ? (
-              <video src={message.postPreview.mediaUrl} className="aspect-video w-full object-cover" muted />
+              <>
+                <video src={message.postPreview.mediaUrl} className="aspect-[1.9/1] w-full object-cover" muted />
+                <span className="absolute left-1/2 top-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/75 bg-black/20 text-white backdrop-blur-sm">
+                  <Play className="ml-0.5 h-5 w-5 fill-white" />
+                </span>
+              </>
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={message.postPreview.mediaUrl} alt="" className="aspect-video w-full object-cover" />
+              <img src={message.postPreview.mediaUrl} alt="" className="aspect-[1.9/1] w-full object-cover" />
             )}
-          </div>
-        ) : (
-          <div className="mb-3 flex aspect-[2.2/1] items-center justify-center rounded-2xl bg-black/35">
-            <MessageCircle className="h-6 w-6 text-muted-foreground" />
           </div>
         )}
 
-        <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm leading-5 text-foreground">
+        <p className={cn(
+          "whitespace-pre-wrap break-words text-foreground",
+          message.postPreview?.mediaUrl
+            ? "line-clamp-3 text-[1.05rem] font-semibold leading-6"
+            : "line-clamp-6 text-[1.05rem] font-medium leading-6"
+        )}>
           {excerpt}
         </p>
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
           <span className="text-xs text-muted-foreground">GymLogs</span>
-          <span className={cn("inline-flex items-center gap-1 text-xs font-semibold transition-colors", mine ? "text-primary" : "text-primary group-hover:text-primary/90")}>
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-primary transition-colors group-hover:text-primary/90">
             {t("profile.public.viewPost")}
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className="h-3.5 w-3.5" />
           </span>
         </div>
       </div>
@@ -3448,7 +3635,7 @@ function ProfileHeaderActions({
           <div
             role="menu"
             aria-label={t("profile.actions.socialMenu")}
-            className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-lg border border-white/10 bg-[#0d1115] p-1.5 text-sm text-white shadow-2xl shadow-black/45"
+            className="premium-panel absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-2xl p-1.5 text-sm text-white shadow-2xl shadow-black/45"
           >
             <button
               type="button"
@@ -3512,12 +3699,14 @@ function ProfileMetric({
   );
 }
 
-function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "sm" | "md" | "lg" | "hero" }) {
+function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "sm" | "md" | "chat" | "lg" | "hero" }) {
   const classes =
     size === "hero"
       ? "h-[4.5rem] w-[4.5rem] text-4xl sm:h-28 sm:w-28 sm:text-7xl"
       : size === "lg"
         ? "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl"
+        : size === "chat"
+          ? "h-14 w-14 text-xl"
         : size === "sm"
           ? "h-8 w-8 text-sm"
           : "h-11 w-11 text-base";

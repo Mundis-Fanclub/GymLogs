@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Minus, Plus, TrendingUp, Trash2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
-import { estimated1RM, formatWeight, type PRCheck } from "@/lib/pr-utils";
+import { formatWeight, type PRCheck } from "@/lib/pr-utils";
+import { cn } from "@/lib/utils";
 
 type PreviousSet = {
   weight: number;
@@ -29,10 +29,18 @@ interface SetRowProps {
   defaultRestSeconds: number;
   previousSet?: PreviousSet;
   prCheck: PRCheck | null;
+  weightUnit?: "kg" | "lb";
   autoFocus?: boolean;
-  onSaved?: (setId: Id<"sets">, data: { weight: number; reps: number; notes?: string; restSeconds: number }) => void;
+  onSaved?: (
+    setId: Id<"sets">,
+    data: { weight: number; reps: number; notes?: string; restSeconds: number }
+  ) => void;
   onDelete?: () => void;
-  onComplete?: (data: { completed: boolean; setId?: Id<"sets">; restSeconds: number }) => void;
+  onComplete?: (data: {
+    completed: boolean;
+    setId?: Id<"sets">;
+    restSeconds: number;
+  }) => void;
 }
 
 export function SetRow({
@@ -47,25 +55,24 @@ export function SetRow({
   initialRestSeconds,
   defaultRestSeconds,
   previousSet,
-  prCheck,
+  weightUnit = "kg",
   autoFocus,
   onSaved,
-  onDelete,
   onComplete,
 }: SetRowProps) {
   const { t } = useAppPreferences();
   const [weight, setWeight] = useState(initialWeight);
   const [reps, setReps] = useState(initialReps);
-  const [notes, setNotes] = useState(initialNotes ?? "");
-  const [restSeconds, setRestSeconds] = useState(initialRestSeconds ?? defaultRestSeconds);
+  const [notes] = useState(initialNotes ?? "");
+  const [restSeconds, setRestSeconds] = useState(
+    initialRestSeconds ?? defaultRestSeconds
+  );
   const [currentSetId, setCurrentSetId] = useState(setId);
-  const [saved, setSaved] = useState(!!setId);
-  const [completed, setCompleted] = useState(!!setId);
+  const [completed, setCompleted] = useState(Boolean(setId));
 
   const weightRef = useRef<HTMLInputElement>(null);
   const addSet = useMutation(api.sets.add);
   const updateSet = useMutation(api.sets.update);
-  const removeSet = useMutation(api.sets.remove);
 
   useEffect(() => {
     if (autoFocus) weightRef.current?.focus();
@@ -74,13 +81,11 @@ export function SetRow({
   useEffect(() => {
     if (!setId) return;
     setCurrentSetId(setId);
-    setSaved(true);
   }, [setId]);
 
   useEffect(() => {
-    if (saved || initialRestSeconds !== undefined) return;
-    setRestSeconds(defaultRestSeconds);
-  }, [defaultRestSeconds, initialRestSeconds, saved]);
+    setRestSeconds(initialRestSeconds ?? defaultRestSeconds);
+  }, [defaultRestSeconds, initialRestSeconds]);
 
   async function save(): Promise<Id<"sets"> | undefined> {
     if (weight <= 0 || reps <= 0) return currentSetId;
@@ -89,22 +94,21 @@ export function SetRow({
       await updateSet({ setId: currentSetId, weight, reps, notes, restSeconds });
       onSaved?.(currentSetId, { weight, reps, notes, restSeconds });
       return currentSetId;
-    } else {
-      const id = await addSet({
-        workoutId,
-        exerciseId,
-        userId,
-        weight,
-        reps,
-        notes,
-        restSeconds,
-        setOrder: setIndex,
-      });
-      setCurrentSetId(id);
-      setSaved(true);
-      onSaved?.(id, { weight, reps, notes, restSeconds });
-      return id;
     }
+
+    const id = await addSet({
+      workoutId,
+      exerciseId,
+      userId,
+      weight,
+      reps,
+      notes,
+      restSeconds,
+      setOrder: setIndex,
+    });
+    setCurrentSetId(id);
+    onSaved?.(id, { weight, reps, notes, restSeconds });
+    return id;
   }
 
   async function handleComplete() {
@@ -121,177 +125,84 @@ export function SetRow({
     onComplete?.({ completed: true, setId: id, restSeconds });
   }
 
-  async function handleDelete() {
-    if (currentSetId) await removeSet({ setId: currentSetId });
-    onDelete?.();
-  }
-
-  function adjust(field: "weight" | "reps", delta: number) {
-    if (field === "weight") {
-      setWeight((v) => Math.max(0, +(v + delta).toFixed(1)));
-      return;
-    }
-    setReps((v) => Math.max(0, v + delta));
-  }
-
-  const isPR = !previousSet || (prCheck && (prCheck.isHeaviest || prCheck.isBest1RM || prCheck.isMostReps));
-  const prType = prCheck?.isBest1RM ? "1rm" : "weight";
-  const hasProgress =
-    previousSet &&
-    weight > 0 &&
-    reps > 0 &&
-    (weight * reps > previousSet.weight * previousSet.reps ||
-      estimated1RM(weight, reps) > estimated1RM(previousSet.weight, previousSet.reps));
   const previousLabel = previousSet
-    ? `${formatWeight(previousSet.weight)} ${t("common.kg")} x ${previousSet.reps}`
+    ? `${formatDisplayWeight(previousSet.weight, weightUnit)} ${weightUnit} x ${previousSet.reps}`
     : "-";
+  const weightValue =
+    weight > 0 ? formatInputWeight(convertWeightFromKg(weight, weightUnit)) : "";
+  const isDropSet = notes.toLowerCase().includes("dropsatz");
 
   return (
-    <div className="rounded-md px-1 py-1.5 transition-colors hover:bg-muted/30">
-      <div className="grid grid-cols-[2.25rem_minmax(5.5rem,1fr)_4.75rem_3.75rem_2.25rem_2rem] items-center gap-1.5">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-xs font-medium text-muted-foreground">
-          {setIndex + 1}
-        </span>
+    <div className="grid min-h-11 grid-cols-[2.5rem_minmax(4.25rem,1fr)_4.5rem_4.5rem_2.25rem] items-center gap-1.5 px-1 py-1 text-sm">
+      <span className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted/40 font-semibold text-brand">
+        {isDropSet ? "D" : setIndex + 1}
+      </span>
 
-        <div className="flex min-w-0 items-center gap-1 text-xs">
-          <span className="min-w-0 truncate text-muted-foreground">
-            {previousLabel}
-          </span>
-          {hasProgress && (
-            <TrendingUp className="h-3.5 w-3.5 shrink-0 text-success" />
-          )}
-        </div>
+      <span className="min-w-0 truncate text-center text-muted-foreground">
+        {previousLabel}
+      </span>
 
-        <div className="grid min-w-0 grid-cols-[1fr] items-center">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden h-7 w-7"
-            onClick={() => adjust("weight", -2.5)}
-            tabIndex={-1}
-            aria-label={`${t("workout.weight")} reduzieren`}
-          >
-            <Minus className="w-3 h-3" />
-          </Button>
-          <Input
-            ref={weightRef}
-            type="number"
-            value={weight || ""}
-            onChange={(e) => setWeight(parseFloat(e.target.value) || 0)}
-            onBlur={save}
-            className="h-8 min-w-0 rounded-lg border-0 bg-muted text-center text-sm font-medium"
-            placeholder={t("common.kg")}
-            aria-label={`${t("workout.weight")} ${setIndex + 1}`}
-            step={2.5}
-            min={0}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden h-7 w-7"
-            onClick={() => adjust("weight", 2.5)}
-            tabIndex={-1}
-            aria-label={`${t("workout.weight")} erhöhen`}
-          >
-            <Plus className="w-3 h-3" />
-          </Button>
-        </div>
+      <Input
+        ref={weightRef}
+        type="number"
+        value={weightValue}
+        onChange={(event) =>
+          setWeight(convertWeightToKg(parseFloat(event.target.value) || 0, weightUnit))
+        }
+        onBlur={save}
+        className="h-9 rounded-lg border-border bg-input/30 text-center text-sm font-medium"
+        placeholder={weightUnit}
+        aria-label={`${t("workout.weight")} ${setIndex + 1}`}
+        step={weightUnit === "kg" ? 2.5 : 5}
+        min={0}
+      />
 
-        <div className="grid min-w-0 grid-cols-[1fr] items-center">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden h-7 w-7"
-            onClick={() => adjust("reps", -1)}
-            tabIndex={-1}
-            aria-label={`${t("common.reps")} reduzieren`}
-          >
-            <Minus className="w-3 h-3" />
-          </Button>
-          <Input
-            type="number"
-            value={reps || ""}
-            onChange={(e) => setReps(parseInt(e.target.value) || 0)}
-            onBlur={save}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleComplete();
-            }}
-            className="h-8 min-w-0 rounded-lg border-0 bg-muted text-center text-sm font-medium"
-            placeholder={t("common.reps")}
-            aria-label={`${t("common.reps")} ${setIndex + 1}`}
-            min={0}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden h-7 w-7"
-            onClick={() => adjust("reps", 1)}
-            tabIndex={-1}
-            aria-label={`${t("common.reps")} erhöhen`}
-          >
-            <Plus className="w-3 h-3" />
-          </Button>
-        </div>
+      <Input
+        type="number"
+        value={reps || ""}
+        onChange={(event) => setReps(parseInt(event.target.value) || 0)}
+        onBlur={save}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") void handleComplete();
+        }}
+        className="h-9 rounded-lg border-border bg-input/30 text-center text-sm font-medium"
+        placeholder={t("common.reps")}
+        aria-label={`${t("common.reps")} ${setIndex + 1}`}
+        min={0}
+      />
 
-        <Button
-          variant={completed ? "default" : "outline"}
-          size="icon"
-          className="h-8 w-8 rounded-lg"
-          onClick={handleComplete}
-          aria-label={`Set ${setIndex + 1} ${t("workout.completeSet")}`}
-        >
-          <Check className="h-4 w-4" />
-        </Button>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-          onClick={handleDelete}
-          tabIndex={-1}
-          aria-label={`Set ${setIndex + 1} entfernen`}
-        >
-          <Trash2 className="w-3 h-3" />
-        </Button>
-      </div>
-
-      <div className="mt-1 grid grid-cols-[2.25rem_1fr] gap-1.5">
-        <span />
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 rounded-lg bg-muted px-2 py-1 text-xs text-muted-foreground">
-              <span>Pause</span>
-              <Input
-                type="number"
-                value={Math.round(restSeconds / 60)}
-                min={1}
-                max={15}
-                onChange={(event) =>
-                  setRestSeconds(Math.max(30, Number(event.target.value || 1) * 60))
-                }
-                onBlur={save}
-                className="h-6 w-12 border-0 bg-background/70 text-center text-xs"
-                aria-label={`Pause nach Set ${setIndex + 1}`}
-              />
-              <span>min</span>
-            </div>
-            {isPR && saved && (
-              <span className="rounded-full bg-brand/15 px-2 py-1 text-xs font-semibold text-brand">
-                PR {previousSet ? (prType === "1rm" ? "1RM" : "") : "neu"}
-              </span>
-            )}
-          </div>
-          <Textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            onBlur={save}
-            rows={1}
-            className="min-h-8 resize-none border-0 bg-muted text-xs"
-            placeholder="Notiz zu diesem Satz..."
-            aria-label={`Notiz zu Set ${setIndex + 1}`}
-          />
-        </div>
-      </div>
+      <Button
+        type="button"
+        variant={completed ? "default" : "outline"}
+        size="icon-sm"
+        className={cn(
+          "size-8 justify-self-center rounded-lg",
+          completed
+            ? "bg-brand text-brand-foreground hover:bg-brand/90"
+            : "border-muted-foreground/50 bg-transparent text-muted-foreground"
+        )}
+        onClick={handleComplete}
+        aria-label={`Set ${setIndex + 1} ${t("workout.completeSet")}`}
+      >
+        <Check className="h-4 w-4" />
+      </Button>
     </div>
   );
+}
+
+function convertWeightFromKg(weight: number, unit: "kg" | "lb") {
+  return unit === "kg" ? weight : weight * 2.20462;
+}
+
+function convertWeightToKg(weight: number, unit: "kg" | "lb") {
+  return unit === "kg" ? weight : weight / 2.20462;
+}
+
+function formatDisplayWeight(weight: number, unit: "kg" | "lb") {
+  return formatWeight(convertWeightFromKg(weight, unit));
+}
+
+function formatInputWeight(weight: number) {
+  const rounded = Math.round(weight * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }

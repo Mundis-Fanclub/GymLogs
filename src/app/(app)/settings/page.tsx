@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ComponentType } from "react";
-import { Bell, Check, Languages, Moon, Shield, Sun, UserRound } from "lucide-react";
+import { Bell, Check, Languages, Palette, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
-  const { locale, setLocale, theme, toggleTheme, t } = useAppPreferences();
+  const { locale, setLocale, t } = useAppPreferences();
 
   return (
     <div className="mx-auto grid max-w-5xl gap-4">
@@ -53,17 +53,16 @@ export default function SettingsPage() {
             </PreferencePanel>
 
             <PreferencePanel
-              icon={theme === "dark" ? Moon : Sun}
+              icon={Palette}
               title={t("settings.appearanceTitle")}
-              copy={t("settings.appearanceCopy")}
+              copy="Waehle die Akzentfarbe ueber den schwebenden Theme-Button. Layout, Abstaende und Komponenten bleiben unveraendert."
             >
-              <Button variant="outline" className="w-full justify-between" onClick={toggleTheme}>
-                <span>{theme === "dark" ? t("settings.darkActive") : t("settings.lightActive")}</span>
-                {theme === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                {theme === "dark" ? t("common.switchToLight") : t("common.switchToDark")}
-              </p>
+              <div className="rounded-2xl border border-brand/25 bg-brand/10 p-3 text-sm">
+                <p className="font-medium text-brand">Accent Theme</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Der runde Palette-Button unten rechts oeffnet das Theme-Popup.
+                </p>
+              </div>
             </PreferencePanel>
           </div>
 
@@ -108,7 +107,7 @@ function PreferencePanel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-56 flex-col rounded-lg border border-border bg-muted/25 p-4">
+    <div className="premium-panel flex min-h-56 flex-col rounded-3xl p-4">
       <Icon className="h-5 w-5 text-primary" />
       <h2 className="mt-3 font-semibold">{title}</h2>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
@@ -131,7 +130,7 @@ function SettingsPanel({
   action: string;
 }) {
   return (
-    <div className="flex min-h-40 flex-col rounded-lg border border-border bg-muted/25 p-4">
+    <div className="premium-panel flex min-h-40 flex-col rounded-3xl p-4">
       <Icon className="h-5 w-5 text-primary" />
       <h2 className="mt-3 font-semibold">{title}</h2>
       <p className="mt-2 flex-1 text-sm leading-6 text-muted-foreground">{copy}</p>

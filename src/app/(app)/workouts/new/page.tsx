@@ -228,14 +228,11 @@ function NewWorkoutPageContent() {
     }
 
     return (
-      <div>
-        <h1 className="text-xl font-semibold mb-6">{t("workouts.newTitle")}</h1>
-        <ActiveWorkout
-          workoutId={selectedWorkout._id}
-          onFinished={setFinishedWorkoutId}
-          onCanceled={setCanceledWorkoutId}
-        />
-      </div>
+      <ActiveWorkout
+        workoutId={selectedWorkout._id}
+        onFinished={setFinishedWorkoutId}
+        onCanceled={setCanceledWorkoutId}
+      />
     );
   }
 
@@ -270,13 +267,10 @@ function NewWorkoutPageContent() {
   }
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold mb-6">{t("workouts.newTitle")}</h1>
-      <ActiveWorkout
-        workoutId={incompleteWorkout._id}
-        onFinished={setFinishedWorkoutId}
-        onCanceled={setCanceledWorkoutId}
-      />
-    </div>
+    <ActiveWorkout
+      workoutId={incompleteWorkout._id}
+      onFinished={setFinishedWorkoutId}
+      onCanceled={setCanceledWorkoutId}
+    />
   );
 }
