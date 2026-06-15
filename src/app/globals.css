@@ -87,6 +87,10 @@
   --radius: 0.75rem;
   --brand: oklch(0.76 0.2 55);
   --brand-foreground: oklch(0.14 0 0);
+  --brand-soft: color-mix(in oklch, var(--brand) 14%, transparent);
+  --brand-wash: color-mix(in oklch, var(--brand) 42%, transparent);
+  --brand-border: color-mix(in oklch, var(--brand) 58%, transparent);
+  --brand-glow: color-mix(in oklch, var(--brand) 32%, transparent);
   --success: oklch(0.78 0.2 145);
   --success-foreground: oklch(0.88 0.2 145);
   --warning: oklch(0.85 0.18 80);

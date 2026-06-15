@@ -65,10 +65,6 @@ export function TopBar() {
     };
   }, [profileMenuOpen]);
 
-  if (pathname.startsWith("/profile")) {
-    return null;
-  }
-
   function handleNewWorkout() {
     if (!userId) return;
     router.push("/workouts/new");
@@ -96,6 +92,83 @@ export function TopBar() {
       event.preventDefault();
       items.at(-1)?.focus();
     }
+  }
+
+  if (pathname === "/social" || pathname.startsWith("/social/")) {
+    return (
+      <header className="relative grid h-[5.2rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-white/[0.07] bg-[#05090a]/92 px-4 backdrop-blur-2xl">
+        <Link href="/dashboard" className="min-w-0 text-2xl font-black italic tracking-tight" aria-label={t("common.appName")}>
+          <span className="text-primary">GYM</span>
+          <span className="text-foreground">LOGS</span>
+        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <UserSearchButton compact triggerClassName="size-11 rounded-2xl border border-white/[0.08] bg-white/[0.06] text-foreground hover:bg-white/[0.1]" />
+          <Button
+            size="icon-sm"
+            variant="outline"
+            aria-label={t("common.proPrice")}
+            title={t("common.proPrice")}
+            className="size-11 rounded-2xl !border-white/[0.12] !bg-white/[0.045] !text-primary hover:!bg-white/[0.09]"
+          >
+            <Crown className="h-5 w-5" />
+          </Button>
+          <Button
+            size="icon-sm"
+            onClick={handleNewWorkout}
+            aria-label={t("common.newWorkout")}
+            className="size-11 rounded-2xl shadow-[0_18px_44px_var(--brand-glow)]"
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+          <div className="relative" ref={profileMenuRef}>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              aria-label={t("topbar.profileMenu")}
+              aria-haspopup="menu"
+              aria-expanded={profileMenuOpen}
+              title={t("topbar.profileMenu")}
+              className="relative size-12 overflow-hidden rounded-full border-primary/70 p-0 ring-1 ring-brand/40"
+              onClick={() => setProfileMenuOpen((open) => !open)}
+            >
+              {profileImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profileImageUrl} alt={t("topbar.profile")} className="h-full w-full rounded-full object-cover" />
+              ) : (
+                <User className="h-5 w-5" />
+              )}
+              {unreadCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full border border-background bg-destructive px-1 text-[0.62rem] font-semibold leading-5 text-destructive-foreground">
+                  {unreadLabel}
+                </span>
+              )}
+            </Button>
+            {profileMenuOpen && (
+              <div
+                ref={menuRef}
+                role="menu"
+                aria-label={t("topbar.profileMenu")}
+                onKeyDown={handleProfileMenuKeyDown}
+                className="premium-panel absolute right-0 top-[calc(100%+0.5rem)] z-50 w-60 rounded-2xl p-1.5 text-card-foreground shadow-xl shadow-black/20"
+              >
+                <ProfileMenuItem icon={User} label={t("topbar.profile")} onClick={() => goToProfileMenuItem("/profile")} />
+                <ProfileMenuItem icon={MessageCircle} label={t("topbar.messages")} badge={unreadCount > 0 ? unreadLabel : undefined} onClick={() => goToProfileMenuItem("/profile#messages")} />
+                <ProfileMenuItem icon={Settings} label={t("topbar.settings")} onClick={() => goToProfileMenuItem("/settings")} />
+                <ProfileMenuItem
+                  icon={LogOut}
+                  label={t("topbar.signOut")}
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    void signOut({ redirectUrl: "/sign-in" });
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+    );
   }
 
   return (

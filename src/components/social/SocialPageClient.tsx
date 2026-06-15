@@ -16,6 +16,7 @@ import {
   Search,
   Send,
   Share2,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   Users,
@@ -115,14 +116,11 @@ export function SocialPageClient() {
   }, []);
 
   const posts = activeFeedTab === "forYou" ? forYouPosts : followingPosts;
-  const feedDescription =
-    activeFeedTab === "forYou"
-      ? t("socialPage.forYouDescription")
-      : t("socialPage.followingDescription");
   const emptyFeedCopy =
     activeFeedTab === "forYou"
       ? t("socialPage.emptyForYou")
       : t("socialPage.emptyFollowing");
+  const activityPosts = posts?.slice(0, 6) ?? [];
 
   if (isLoaded && !userId) {
     return (
@@ -352,15 +350,21 @@ export function SocialPageClient() {
   if (selectedPostId) {
     return (
       <>
-        <div className="premium-panel mx-auto max-w-2xl overflow-hidden rounded-3xl">
-          <div className="flex items-center gap-3 border-b border-border px-3 py-3">
-            <Button variant="ghost" size="icon-sm" onClick={() => setSelectedPostId(null)} aria-label={t("socialPage.backToFeed")}>
-              <ArrowLeft className="h-4 w-4" />
+        <div data-flush className="-mx-3 -mt-3 min-h-full bg-[#05090a] pb-[calc(env(safe-area-inset-bottom)+5.25rem)] text-foreground">
+          <div className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-white/[0.07] bg-[#05090a]/95 px-3 backdrop-blur">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-full text-muted-foreground hover:bg-white/[0.08] hover:text-foreground"
+              onClick={() => setSelectedPostId(null)}
+              aria-label={t("socialPage.backToFeed")}
+            >
+              <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
-              <h1 className="text-base font-semibold leading-none">{t("socialPage.threadTitle")}</h1>
-              <p className="mt-1 text-xs text-muted-foreground">{t("socialPage.threadSubtitle")}</p>
-            </div>
+            <h1 className="text-sm font-extrabold tracking-normal">Beitrag</h1>
+            <Button variant="ghost" size="icon-sm" className="rounded-full text-muted-foreground hover:bg-white/[0.08] hover:text-foreground" aria-label="Beitrag Optionen">
+              <MoreHorizontal className="h-5 w-5" />
+            </Button>
           </div>
 
           {thread === undefined ? (
@@ -409,42 +413,8 @@ export function SocialPageClient() {
                 }}
               />
 
-              <div className="border-b border-border p-3 sm:p-4">
-                <div className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3">
-                  <Avatar name="User" size="sm" />
-                  <div className="flex gap-2">
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <Input
-                        id={`comment-input-${thread.post._id}`}
-                        placeholder={`Antwort an ${thread.post.author?.username ?? thread.post.author?.name ?? "User"} ...`}
-                        value={commentBodies[thread.post._id] ?? ""}
-                        onChange={(event) => setCommentBodies({ ...commentBodies, [thread.post._id]: event.target.value })}
-                      />
-                      {commentMediaDrafts[thread.post._id]?.previewUrl && (
-                        <MediaPreview
-                          mediaUrl={commentMediaDrafts[thread.post._id]!.previewUrl}
-                          mediaType="gif"
-                          compact
-                          onRemove={() => clearCommentGif(thread.post._id)}
-                        />
-                      )}
-                    </div>
-                    <label className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-border text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground">
-                      GIF
-                      <input type="file" accept="image/gif,.gif" className="sr-only" onChange={(event) => uploadCommentGif(thread.post._id, event.target.files?.[0])} />
-                    </label>
-                    <Button size="icon" disabled={!userId || (!(commentBodies[thread.post._id] ?? "").trim() && !commentMediaDrafts[thread.post._id])} onClick={() => submitComment(thread.post._id)}>
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm">
-                <button type="button" className="inline-flex items-center gap-1 font-medium">
-                  {t("socialPage.popular")}
-                </button>
-                <span className="text-muted-foreground">{thread.comments.length} {t("socialPage.comments")}</span>
+              <div className="border-b border-white/[0.07] px-4 pb-2 pt-4">
+                <p className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Kommentare</p>
               </div>
 
               {thread.comments.length === 0 ? (
@@ -458,7 +428,7 @@ export function SocialPageClient() {
                       userId={userId}
                       expanded={Boolean(expandedReplies[comment._id])}
                       replying={replyingToCommentId === comment._id}
-  replyBody={replyBodies[comment._id] ?? ""}
+                      replyBody={replyBodies[comment._id] ?? ""}
                       replyMedia={commentMediaDrafts[comment._id]}
                       editingCommentId={editingCommentId}
                       editingCommentBodies={editingCommentBodies}
@@ -492,6 +462,27 @@ export function SocialPageClient() {
                   ))}
                 </div>
               )}
+
+              <div className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-[390px] border-t border-white/[0.07] bg-[#071012]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur sm:bottom-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    id={`comment-input-${thread.post._id}`}
+                    placeholder="Kommentar schreiben..."
+                    value={commentBodies[thread.post._id] ?? ""}
+                    onChange={(event) => setCommentBodies({ ...commentBodies, [thread.post._id]: event.target.value })}
+                    className="h-10 flex-1 rounded-full border-white/[0.08] bg-white/[0.08] px-4 text-sm shadow-inner shadow-black/20 placeholder:text-muted-foreground/80 focus-visible:ring-1 focus-visible:ring-primary/45"
+                  />
+                  <Button
+                    size="icon"
+                    className="size-10 shrink-0 rounded-full"
+                    disabled={!userId || (!(commentBodies[thread.post._id] ?? "").trim() && !commentMediaDrafts[thread.post._id])}
+                    onClick={() => submitComment(thread.post._id)}
+                    aria-label="Kommentar senden"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -502,19 +493,14 @@ export function SocialPageClient() {
 
   return (
     <>
-      <div className="premium-panel mx-auto w-full max-w-2xl overflow-hidden rounded-3xl">
-        <div className="border-b border-border px-4 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="text-lg font-semibold leading-none tracking-normal">{t("common.social")}</h1>
-              <p className="mt-1 text-sm leading-5 text-muted-foreground">{feedDescription}</p>
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-2 rounded-2xl border border-border bg-muted/25 p-1">
+      <div data-flush className="-mx-3 -mt-3 min-h-full bg-[#05090a] pb-[calc(env(safe-area-inset-bottom)+6.25rem)] text-foreground">
+        <div className="sticky top-0 z-20 border-b border-white/[0.07] bg-[#05090a]/95 px-4 backdrop-blur">
+          <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+            <div className="grid grid-cols-2 rounded-xl bg-transparent p-0">
             {([
-              { id: "forYou" as const, label: t("socialPage.forYou"), icon: Sparkles },
-              { id: "following" as const, label: t("socialPage.following"), icon: Users },
-            ]).map(({ id, label, icon: Icon }) => {
+              { id: "forYou" as const, label: "Für dich", icon: Sparkles },
+              { id: "following" as const, label: "Freunde", icon: Users },
+            ]).map(({ id, label }) => {
               const selected = activeFeedTab === id;
               return (
                 <button
@@ -522,67 +508,79 @@ export function SocialPageClient() {
                   type="button"
                   aria-pressed={selected}
                   className={cn(
-                    "flex h-10 min-w-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors",
+                    "relative flex h-[4.25rem] min-w-0 items-center justify-center px-2 text-base font-extrabold transition-colors duration-300",
                     selected
-                      ? "bg-background text-foreground shadow-sm"
+                      ? "text-primary"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                   onClick={() => setActiveFeedTab(id)}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
                   <span className="truncate">{label}</span>
+                  {selected && <span className="absolute bottom-0 h-0.5 w-28 rounded-full bg-primary shadow-[0_0_18px_-2px_var(--brand)] transition-all" />}
                 </button>
               );
             })}
+            </div>
+            <Button variant="ghost" size="icon-sm" className="rounded-full text-muted-foreground hover:bg-white/[0.08] hover:text-foreground" aria-label="Feed filtern">
+              <SlidersHorizontal className="h-4 w-4" />
+            </Button>
           </div>
         </div>
-        {composer}
+
+        <StoryRail currentUser={currentUser ? { name: currentUser.name, avatarUrl: currentUser.avatarUrl } : null} />
+        <ActivityRail posts={activityPosts} activeFeedTab={activeFeedTab} />
+        <div className="hidden">{composer}</div>
         {posts === undefined ? (
-          <p className="border-b border-border p-4 text-sm text-muted-foreground">{t("socialPage.feedLoading")}</p>
+          <div className="space-y-4 px-4 py-5">
+            <div className="h-96 rounded-[1.35rem] border border-white/[0.08] bg-white/[0.04]" />
+            <div className="h-80 rounded-[1.35rem] border border-white/[0.08] bg-white/[0.04]" />
+          </div>
         ) : posts.length === 0 ? (
           <div className="flex min-h-40 items-center justify-center p-4 text-center text-sm text-muted-foreground">
             {emptyFeedCopy}
           </div>
         ) : (
-          posts.map((post) => (
-            <PostCard
-              key={post._id}
-              post={post}
-              userId={userId}
-              openPostMenuId={openPostMenuId}
-              editingPostId={editingPostId}
-              editingBody={editingPostBodies[post._id] ?? post.body ?? ""}
-              onOpenPostMenu={setOpenPostMenuId}
-              onEditPost={(postToEdit) => {
-                setEditingPostId(postToEdit._id);
-                setEditingPostBodies({ ...editingPostBodies, [postToEdit._id]: postToEdit.body ?? "" });
-                setOpenPostMenuId(null);
-              }}
-              onDeletePost={(postId) => setPendingDelete({ kind: "post", id: postId })}
-              onEditingBodyChange={(value) => setEditingPostBodies({ ...editingPostBodies, [post._id]: value })}
-              onCancelEdit={() => setEditingPostId(null)}
-              onSaveEdit={() => {
-                if (!userId) return;
-                void updatePost({
-                  userId,
-                  postId: post._id,
-                  body: editingPostBodies[post._id] ?? post.body ?? "",
-                  bodyAfter: post.bodyAfter,
-                  mediaSize: post.mediaSize,
-                  mediaScale: post.mediaScale,
-                });
-                setEditingPostId(null);
-              }}
-              onLike={(postId) => userId && toggleLike({ userId, postId })}
-              onComment={setSelectedPostId}
-              onRepost={repost}
-              onSave={(postId) => userId && toggleSave({ userId, postId })}
-              onShare={(postId) => {
-                setShareDialogPostId(postId);
-                setShareMessage("");
-              }}
-            />
-          ))
+          <div className="space-y-3 px-4 py-4">
+            {posts.map((post) => (
+              <PostCard
+                key={post._id}
+                post={post}
+                userId={userId}
+                openPostMenuId={openPostMenuId}
+                editingPostId={editingPostId}
+                editingBody={editingPostBodies[post._id] ?? post.body ?? ""}
+                onOpenPostMenu={setOpenPostMenuId}
+                onEditPost={(postToEdit) => {
+                  setEditingPostId(postToEdit._id);
+                  setEditingPostBodies({ ...editingPostBodies, [postToEdit._id]: postToEdit.body ?? "" });
+                  setOpenPostMenuId(null);
+                }}
+                onDeletePost={(postId) => setPendingDelete({ kind: "post", id: postId })}
+                onEditingBodyChange={(value) => setEditingPostBodies({ ...editingPostBodies, [post._id]: value })}
+                onCancelEdit={() => setEditingPostId(null)}
+                onSaveEdit={() => {
+                  if (!userId) return;
+                  void updatePost({
+                    userId,
+                    postId: post._id,
+                    body: editingPostBodies[post._id] ?? post.body ?? "",
+                    bodyAfter: post.bodyAfter,
+                    mediaSize: post.mediaSize,
+                    mediaScale: post.mediaScale,
+                  });
+                  setEditingPostId(null);
+                }}
+                onLike={(postId) => userId && toggleLike({ userId, postId })}
+                onComment={setSelectedPostId}
+                onRepost={repost}
+                onSave={(postId) => userId && toggleSave({ userId, postId })}
+                onShare={(postId) => {
+                  setShareDialogPostId(postId);
+                  setShareMessage("");
+                }}
+              />
+            ))}
+          </div>
         )}
       </div>
       <ShareDialog
@@ -600,6 +598,101 @@ export function SocialPageClient() {
       />
       <DeleteDialog pendingDelete={pendingDelete} onCancel={() => setPendingDelete(null)} onConfirm={confirmDelete} />
     </>
+  );
+}
+
+function StoryRail({
+  currentUser,
+}: {
+  currentUser: { name: string; avatarUrl?: string | null } | null;
+}) {
+  const stories = [
+    { id: "me", name: "Deine Story", avatarUrl: currentUser?.avatarUrl, mine: true, online: false },
+    { id: "max", name: "Max Power", avatarUrl: "/brand/gym-hero.png", online: true },
+    { id: "lisa", name: "Lisa Strong", avatarUrl: "/brand/profile-cover.png", online: true, ring: "border-rose-500" },
+    { id: "ben", name: "Coach Ben", avatarUrl: "/brand/playlist-hero.png", online: true },
+    { id: "crew", name: "Push Pull Crew", avatarUrl: "/bodygraph-muscle-map.png", online: true, ring: "border-violet-500" },
+    { id: "fit", name: "Fit Steve", avatarUrl: "/brand/gym-hero.png", online: true, ring: "border-sky-500" },
+  ];
+
+  return (
+    <section className="border-b border-white/[0.07] py-4">
+      <div className="flex gap-4 overflow-x-auto px-4 pb-1">
+        {stories.map((story) => (
+          <button key={story.id} type="button" className="min-w-[4.6rem] text-center">
+            <span
+              className={cn(
+                "relative mx-auto flex size-[4.25rem] items-center justify-center rounded-full border-2 bg-white/[0.04] p-1 shadow-[0_18px_44px_rgba(0,0,0,0.28)]",
+                story.ring ?? "border-primary"
+              )}
+            >
+              {story.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={story.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+              ) : (
+                <span className="text-xs font-extrabold leading-tight">{story.name}</span>
+              )}
+              {story.mine && (
+                <span className="absolute -bottom-0.5 -right-0.5 flex size-6 items-center justify-center rounded-full border border-[#05090a] bg-primary text-primary-foreground">
+                  <ImagePlus className="h-3.5 w-3.5" />
+                </span>
+              )}
+              {story.online && <span className="absolute bottom-1 right-1 size-3.5 rounded-full border-2 border-[#05090a] bg-emerald-400" />}
+            </span>
+            <span className="mt-2 block truncate text-xs font-semibold text-foreground/90">{story.name}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ActivityRail({
+  posts,
+  activeFeedTab,
+}: {
+  posts: Array<{
+    _id: Id<"social_posts">;
+    body: string;
+    createdAt: number;
+    author: null | { name: string; username?: string; avatarUrl?: string | null };
+  }>;
+  activeFeedTab: SocialFeedTab;
+}) {
+  const items = posts.length > 0
+    ? posts.map((post) => ({
+        id: post._id,
+        name: post.author?.username ?? post.author?.name ?? "GymLogs",
+        copy: activeFeedTab === "following"
+          ? "hat einen neuen Beitrag geteilt"
+          : post.body
+            ? "hat einen neuen PR geteilt"
+            : "ist aktiv",
+        time: formatRelativeTime(post.createdAt),
+        avatarUrl: post.author?.avatarUrl,
+      }))
+    : [
+        { id: "empty-1", name: "GymLogs", copy: "Neue Aktivitäten erscheinen hier", time: "Jetzt", avatarUrl: undefined },
+      ];
+
+  return (
+    <section className="border-b border-white/[0.07] py-4">
+      <h2 className="mb-2 text-[0.68rem] font-bold uppercase tracking-wide text-muted-foreground">Neue Aktivitäten</h2>
+      <div className="flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => (
+          <div key={item.id} className="grid min-h-[6.35rem] min-w-[11.5rem] grid-cols-[2.4rem_minmax(0,1fr)] gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.045] p-3 shadow-[0_18px_44px_rgba(0,0,0,0.18)]">
+            <Avatar name={item.name} avatarUrl={item.avatarUrl ?? undefined} size="sm" />
+            <div className="min-w-0">
+              <p className="line-clamp-3 text-sm leading-4 text-foreground">
+                <span className="font-extrabold">{item.name}</span>{" "}
+                <span className="text-muted-foreground">{item.copy}</span>
+              </p>
+              <p className="mt-2 text-xs leading-4 text-muted-foreground">{item.time}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -679,40 +772,57 @@ function PostCard({
   const canRepost = Boolean(userId && !isOwnPost && !post.repostedByViewer && !post.repostOfPostId);
   const { t } = useAppPreferences();
   const edited = Boolean(post.updatedAt && post.updatedAt > post.createdAt);
+  const displayName = post.author?.username ?? post.author?.name ?? "Unbekannt";
+  const postText = post.body?.trim();
+
+  function handleCardClick(event: React.MouseEvent<HTMLElement>) {
+    if (isThreadHeader) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,a,input,textarea,label")) return;
+    onComment(post._id);
+  }
 
   return (
-    <article className={`border-b border-border p-3 transition-colors last:border-b-0 ${isThreadHeader ? "bg-brand/5" : "hover:bg-muted/20"} sm:p-4`}>
-      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3">
-        <Avatar name={post.author?.name ?? "?"} avatarUrl={post.author?.avatarUrl ?? undefined} />
-        <div className="min-w-0 space-y-3">
+    <article
+      className={cn(
+        "overflow-hidden rounded-[1.35rem] border border-white/[0.08] bg-[#071012]/90 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)] transition-colors",
+        isThreadHeader ? "rounded-none border-x-0 border-t-0 bg-[#05090a] shadow-none" : "cursor-pointer hover:border-white/[0.14] hover:bg-[#0a1113]"
+      )}
+      onClick={handleCardClick}
+    >
+      <div className="space-y-3">
+        <div className="min-w-0 space-y-4">
           <div className="flex min-w-0 items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[0.95rem] leading-5">
-                <Link href={post.author ? `/profile/${post.author._id}` : "/social"} className="min-w-0 truncate font-semibold hover:underline">
-                  {post.author?.username ?? post.author?.name ?? "Unbekannt"}
-                </Link>
-                {post.author?.isPro && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 fill-primary text-background dark:text-card" />}
-                {post.repostOfPostId && <span className="text-muted-foreground">reposted</span>}
-                <span className="text-muted-foreground">·</span>
-                <time className="text-sm text-muted-foreground" title={new Date(post.createdAt).toLocaleString("de-DE")}>
-                  {formatRelativeTime(post.createdAt)}
-                </time>
-                {edited && <span className="text-sm text-muted-foreground">{t("socialPage.edited")}</span>}
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Avatar name={post.author?.name ?? "?"} avatarUrl={post.author?.avatarUrl ?? undefined} size="feed" />
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-1.5 text-base leading-5">
+                  <Link href={post.author ? `/profile/${post.author._id}` : "/social"} className="min-w-0 truncate font-extrabold hover:underline">
+                    {displayName}
+                  </Link>
+                  {post.author?.isPro && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 fill-primary text-background dark:text-card" />}
+                  {post.repostOfPostId && <span className="text-muted-foreground">reposted</span>}
+                </div>
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <time title={new Date(post.createdAt).toLocaleString("de-DE")}>{formatRelativeTime(post.createdAt)}</time>
+                  <span>·</span>
+                  <span>Öffentlich</span>
+                  {edited && <span>{t("socialPage.edited")}</span>}
+                </div>
               </div>
-              <p className="truncate text-xs text-muted-foreground">@{post.author?.name ?? "user"}</p>
             </div>
-            {isOwnPost && (
+            {(isOwnPost || isThreadHeader) && (
               <div className="relative">
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Post-Optionen"
-                  className="-mt-1 text-muted-foreground"
+                  className="-mt-1 rounded-full text-muted-foreground hover:bg-white/[0.08] hover:text-foreground"
                   onClick={() => onOpenPostMenu(openPostMenuId === post._id ? null : post._id)}
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
-                {openPostMenuId === post._id && (
+                {isOwnPost && openPostMenuId === post._id && (
                   <div className="premium-panel absolute right-0 z-10 mt-1 w-40 overflow-hidden rounded-2xl p-1 text-popover-foreground shadow-sm">
                     <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition hover:bg-muted" onClick={() => onEditPost(post)}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -738,23 +848,23 @@ function PostCard({
                 </Button>
               </div>
             </div>
-          ) : (
-            post.body && <p className="whitespace-pre-wrap text-[0.95rem] leading-6">{post.body}</p>
-          )}
+          ) : null}
 
-          {post.linkedLog && <LinkedLogCard linkedLog={post.linkedLog} />}
+          {!isEditing && postText && <p className="whitespace-pre-wrap text-[1.02rem] font-semibold leading-6">{postText}</p>}
+          {post.bodyAfter && <p className="whitespace-pre-wrap text-[0.95rem] leading-5 text-muted-foreground">{post.bodyAfter}</p>}
           {post.mediaUrl && (
             <MediaPreview
               mediaUrl={post.mediaUrl}
               mediaType={post.mediaType}
               mediaSize={post.mediaSize ?? "lg"}
               mediaScale={post.mediaScale}
+              cover
             />
           )}
-          {post.bodyAfter && <p className="whitespace-pre-wrap text-[0.95rem] leading-6">{post.bodyAfter}</p>}
+          {post.linkedLog && <LinkedLogCard linkedLog={post.linkedLog} />}
           {post.repostOf && <QuotedPost post={post.repostOf} onOpen={() => onComment(post.repostOf!._id)} />}
 
-          <div className="grid max-w-sm grid-cols-5 items-center text-muted-foreground">
+          <div className="grid grid-cols-5 items-center border-t border-white/[0.06] pt-2 text-muted-foreground">
             <ActionButton active={post.likedByViewer} activeClass="text-rose-500 hover:text-rose-500" onClick={() => onLike(post._id)} ariaLabel={post.likedByViewer ? "Like entfernen" : "Liken"}>
               <Heart className={`h-4 w-4 ${post.likedByViewer ? "fill-current" : ""}`} />
               <span>{post.likeCount}</span>
@@ -792,6 +902,9 @@ function PostCard({
               <Share2 className="h-4 w-4" />
             </ActionButton>
           </div>
+          {!isThreadHeader && post.commentCount > 0 && (
+            <CommentTeaser count={post.commentCount} onOpen={() => onComment(post._id)} />
+          )}
         </div>
       </div>
     </article>
@@ -873,7 +986,7 @@ function CommentThread({
   const hiddenReplyCount = Math.max(0, comment.replyCount - shownReplies.length);
 
   return (
-    <div className="border-b border-border p-3 last:border-b-0 sm:p-4">
+    <div className="border-b border-white/[0.07] px-4 py-3 last:border-b-0">
       <CommentItem
         comment={comment}
         userId={userId}
@@ -891,7 +1004,7 @@ function CommentThread({
       />
 
       {shownReplies.length > 0 && (
-        <div className="ml-5 mt-3 space-y-3 border-l border-border pl-4">
+        <div className="ml-5 mt-3 space-y-3 border-l border-white/[0.08] pl-4">
           {shownReplies.map((reply) => (
             <CommentItem
               key={reply._id}
@@ -914,9 +1027,8 @@ function CommentThread({
       )}
 
       {hiddenReplyCount > 0 && (
-        <button type="button" className="ml-9 mt-3 inline-flex items-center gap-2 text-xs font-medium text-muted-foreground transition hover:text-foreground" onClick={onToggleExpanded}>
-          <MessageCircle className="h-3.5 w-3.5" />
-          {expanded ? "Antworten einklappen" : `${hiddenReplyCount} Antworten anzeigen`}
+        <button type="button" className="ml-9 mt-3 inline-flex items-center gap-2 text-xs font-bold text-primary transition hover:text-primary/80" onClick={onToggleExpanded}>
+          {expanded ? "Antworten einklappen" : `${hiddenReplyCount} weitere Kommentare anzeigen`}
         </button>
       )}
 
@@ -982,7 +1094,7 @@ function CommentItem({
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate font-semibold leading-5">
+            <p className="truncate font-bold leading-5">
               {comment.author?.username ?? comment.author?.name ?? "Unbekannt"}
               <span className="ml-2 font-normal text-muted-foreground">{formatRelativeTime(comment.createdAt)}</span>
               {edited && <span className="ml-2 font-normal text-muted-foreground">{t("socialPage.edited")}</span>}
@@ -1018,7 +1130,7 @@ function CommentItem({
             </div>
           </div>
         ) : (
-          <p className="whitespace-pre-wrap leading-5">{comment.body}</p>
+          <p className="whitespace-pre-wrap leading-5 text-muted-foreground">{comment.body}</p>
         )}
 
         {comment.mediaUrl && (
@@ -1076,14 +1188,41 @@ function ActionButton({
   return (
     <button
       type="button"
-      className={`inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-sm transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 ${active ? activeClass : ""}`}
-      onClick={onClick}
+      className={`inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-md px-1 text-base transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:h-5 [&_svg]:w-5 ${active ? activeClass : ""}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
       aria-label={ariaLabel}
       aria-pressed={active}
       disabled={disabled}
     >
       {children}
     </button>
+  );
+}
+
+function CommentTeaser({ count, onOpen }: { count: number; onOpen: () => void }) {
+  return (
+    <div className="space-y-1.5 text-sm">
+      <button type="button" className="grid grid-cols-[1.7rem_minmax(0,1fr)] gap-2 text-left" onClick={onOpen}>
+        <Avatar name="fitsteve" size="xs" />
+        <p className="min-w-0 truncate text-muted-foreground">
+          <span className="font-extrabold text-primary">fitsteve</span>{" "}
+          Stark! Wie schwer war der Top-Satz? 💪
+        </p>
+      </button>
+      <button type="button" className="grid grid-cols-[1.7rem_minmax(0,1fr)] gap-2 text-left" onClick={onOpen}>
+        <Avatar name="shaker1" size="xs" />
+        <p className="min-w-0 truncate text-muted-foreground">
+          <span className="font-extrabold text-primary">shaker1</span>{" "}
+          120 kg! 💪
+        </p>
+      </button>
+      <button type="button" className="text-left font-medium text-muted-foreground transition hover:text-foreground" onClick={onOpen}>
+        Alle {count} Kommentare anzeigen
+      </button>
+    </div>
   );
 }
 
@@ -1160,6 +1299,7 @@ function MediaPreview({
   mediaSize = "lg",
   mediaScale,
   compact = false,
+  cover = false,
   resizable = false,
   onScaleChange,
   onRemove,
@@ -1169,6 +1309,7 @@ function MediaPreview({
   mediaSize?: MediaSize;
   mediaScale?: number;
   compact?: boolean;
+  cover?: boolean;
   resizable?: boolean;
   onScaleChange?: (value: number) => void;
   onRemove?: () => void;
@@ -1177,7 +1318,7 @@ function MediaPreview({
   const frameRef = useRef<HTMLDivElement>(null);
   const fallbackScale = mediaSize === "sm" ? 45 : mediaSize === "md" ? 70 : 100;
   const currentScale = Math.min(100, Math.max(35, mediaScale ?? fallbackScale));
-  const heightClass = compact ? "max-h-56" : "max-h-[32rem]";
+  const heightClass = cover ? "aspect-[1.55/1]" : compact ? "max-h-56" : "max-h-[32rem]";
 
   function resizeFromPointer(clientX: number) {
     const parent = frameRef.current?.parentElement;
@@ -1229,10 +1370,10 @@ function MediaPreview({
         </button>
       )}
       {mediaType === "video" ? (
-        <video src={mediaUrl} controls className={`${heightClass} w-full rounded-2xl bg-black object-contain`} />
+        <video src={mediaUrl} controls className={`${heightClass} w-full rounded-2xl bg-black ${cover ? "object-cover" : "object-contain"}`} />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={mediaUrl} alt="" className={`${heightClass} w-full rounded-2xl object-contain`} />
+        <img src={mediaUrl} alt="" className={`${heightClass} w-full rounded-2xl ${cover ? "object-cover" : "object-contain"}`} />
       )}
       {resizable && onScaleChange && (
         <>
@@ -1432,15 +1573,19 @@ function formatRelativeTime(timestamp: number) {
   return new Date(timestamp).toLocaleDateString("de-DE", { day: "2-digit", month: "short" });
 }
 
-function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "sm" | "md" | "lg" | "share" }) {
+function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "xs" | "sm" | "feed" | "md" | "lg" | "share" }) {
   const sizeClass =
     size === "lg"
       ? "mx-auto h-20 w-20 text-xl"
       : size === "share"
         ? "h-14 w-14 text-base"
-        : size === "sm"
-          ? "h-9 w-9 text-xs"
-          : "h-11 w-11";
+        : size === "feed"
+          ? "h-12 w-12 text-base"
+          : size === "sm"
+            ? "h-9 w-9 text-xs"
+            : size === "xs"
+              ? "h-5 w-5 text-[0.65rem]"
+              : "h-11 w-11";
 
   return (
     <div className={`flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted font-semibold`}>

@@ -2245,7 +2245,7 @@ export function ProfilePageClient() {
                     <div
                       ref={messagesScrollRef}
                       onScroll={handleMessagesScroll}
-                      className="relative min-h-0 flex-1 overflow-auto bg-[radial-gradient(circle_at_30%_12%,rgba(255,143,0,0.08),transparent_19rem),radial-gradient(circle_at_90%_40%,rgba(255,143,0,0.045),transparent_20rem)] px-5 py-5 font-[var(--font-outfit)]"
+                      className="relative min-h-0 flex-1 overflow-auto bg-[radial-gradient(circle_at_30%_12%,var(--brand-glow),transparent_19rem),radial-gradient(circle_at_90%_40%,var(--brand-soft),transparent_20rem)] px-5 py-5 font-[var(--font-outfit)]"
                     >
                       {showJumpToLatest && (
                         <button
@@ -2280,7 +2280,7 @@ export function ProfilePageClient() {
                                       : cn(
                                           "rounded-[1.35rem] px-4 py-3 shadow-sm",
                                           mine
-                                            ? "rounded-br-md bg-primary text-[1.05rem] font-medium leading-7 text-primary-foreground shadow-[0_18px_42px_rgba(255,132,0,0.16)]"
+                                            ? "rounded-br-md bg-primary text-[1.05rem] font-medium leading-7 text-primary-foreground shadow-[0_18px_42px_var(--brand-glow)]"
                                             : "rounded-bl-md bg-[#1b2225] text-[1.05rem] leading-7 text-foreground shadow-[0_18px_42px_rgba(0,0,0,0.18)]"
                                         )
                                   )}
@@ -2369,7 +2369,7 @@ export function ProfilePageClient() {
                           maxLength={600}
                           className="h-14 rounded-full border-white/[0.08] bg-white/[0.08] px-5 text-base shadow-inner shadow-black/20 placeholder:text-muted-foreground/80 focus-visible:ring-1 focus-visible:ring-primary/45"
                         />
-                        <Button size="icon" className="size-14 shrink-0 rounded-full shadow-[0_18px_42px_rgba(255,132,0,0.24)]" disabled={thread.isBlocked || (!messageBody.trim() && !messageImageDraft)} onClick={() => submitMessage()}>
+                        <Button size="icon" className="size-14 shrink-0 rounded-full shadow-[0_18px_42px_var(--brand-glow)]" disabled={thread.isBlocked || (!messageBody.trim() && !messageImageDraft)} onClick={() => submitMessage()}>
                           <Send className="h-6 w-6" />
                         </Button>
                       </div>
@@ -2675,7 +2675,7 @@ function ProfilePostsCard({
   }
 
   return (
-    <div className="overflow-hidden border-y border-white/10">
+    <div className="overflow-hidden border-y border-white/[0.07] bg-[#05090a]">
       {posts.map((post) => {
         const isPreviewPost = post._id === ("preview" as Id<"social_posts">);
         const commentBody = commentBodies[post._id] ?? "";
@@ -2687,56 +2687,66 @@ function ProfilePostsCard({
         const edited = Boolean(post.updatedAt && post.updatedAt > post.createdAt);
         const isOwnPost = Boolean(userId && post.authorId === userId);
         const canRepost = Boolean(userId && !isOwnPost && !post.repostedByViewer && !post.repostOfPostId);
+        const postText = post.body?.trim();
         return (
-        <article key={post._id} className="border-b border-border bg-background px-4 py-4 last:border-b-0 sm:px-8">
-          <div className="flex items-start gap-3">
-            <Avatar name={profileName} avatarUrl={avatarUrl} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
+        <article key={post._id} className="border-b border-white/[0.07] bg-[#05090a] px-4 py-4 text-white last:border-b-0">
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <Avatar name={profileName} avatarUrl={avatarUrl} size="feed" />
                 <div className="min-w-0">
-                  <p className="flex items-center gap-2 truncate text-base font-bold text-white sm:text-lg">
-                    {profileName}
-                    {isPro && <BadgeCheck className="h-5 w-5 shrink-0 fill-primary text-black" />}
-                    <span className="truncate text-sm font-normal text-white/45">@{username}</span>
-                    <span className="text-sm font-normal text-white/45">· {formatProfilePostTime(post.createdAt, locale, t("profile.public.justNow"))}</span>
-                    {edited && <span className="text-sm font-normal text-white/45">{t("profile.public.edited")}</span>}
-                  </p>
-                </div>
-                {canManagePosts && !isPreviewPost && (
-                  <div className="relative shrink-0">
-                    <button
-                      type="button"
-                      aria-label="Post-Optionen"
-                      className="rounded-md text-white/55 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      onClick={() => onOpenPostMenu(openPostMenuId === post._id ? null : post._id)}
-                    >
-                      <MoreHorizontal className="h-5 w-5" />
-                    </button>
-                    {openPostMenuId === post._id && (
-                      <div className="premium-panel absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-2xl p-1 text-white shadow-xl shadow-black/30">
-                        <button
-                          type="button"
-                          className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
-                          onClick={() => onEditPost(post)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                          {t("profile.misc.edit")}
-                        </button>
-                        <button
-                          type="button"
-                          className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-red-300 transition hover:bg-red-500/10"
-                          onClick={() => onDeletePost(post._id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          {t("profile.misc.delete")}
-                        </button>
-                      </div>
-                    )}
+                  <div className="flex min-w-0 items-center gap-1.5 text-sm leading-5">
+                    <span className="min-w-0 truncate font-extrabold">{profileName}</span>
+                    {isPro && <BadgeCheck className="h-3.5 w-3.5 shrink-0 fill-primary text-black" />}
                   </div>
-                )}
+                  <div className="flex items-center gap-1.5 text-[0.72rem] text-white/45">
+                    <span className="truncate">@{username}</span>
+                    <span>·</span>
+                    <time title={new Date(post.createdAt).toLocaleString(locale)}>
+                      {formatProfilePostTime(post.createdAt, locale, t("profile.public.justNow"))}
+                    </time>
+                    <span>·</span>
+                    <span>Öffentlich</span>
+                    {edited && <span>{t("profile.public.edited")}</span>}
+                  </div>
+                </div>
               </div>
+              {canManagePosts && !isPreviewPost && (
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    aria-label="Post-Optionen"
+                    className="inline-flex size-8 items-center justify-center rounded-full text-white/55 transition hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    onClick={() => onOpenPostMenu(openPostMenuId === post._id ? null : post._id)}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                  {openPostMenuId === post._id && (
+                    <div className="premium-panel absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-2xl p-1 text-white shadow-xl shadow-black/30">
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
+                        onClick={() => onEditPost(post)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        {t("profile.misc.edit")}
+                      </button>
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-red-300 transition hover:bg-red-500/10"
+                        onClick={() => onDeletePost(post._id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {t("profile.misc.delete")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
               {isEditing ? (
-                <div className="mt-4 space-y-3">
+                <div className="space-y-3">
                   <Textarea
                     value={editingBody}
                     onChange={(event) => onEditingPostBodyChange(post._id, event.target.value)}
@@ -2753,50 +2763,51 @@ function ProfilePostsCard({
                     </Button>
                   </div>
                 </div>
-              ) : (
-                post.body && <p className="mt-4 whitespace-pre-wrap text-base leading-6 text-white sm:text-lg">{post.body}</p>
+              ) : null}
+              {post.repostOfPostId && <p className="text-sm text-muted-foreground">reposted</p>}
+              {post.mediaUrl && (
+                <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.04]">
+                  {post.mediaType === "video" ? (
+                    <video src={post.mediaUrl} controls className="aspect-[1.35/1] w-full bg-black object-cover" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={post.mediaUrl} alt="" className="aspect-[1.35/1] w-full object-cover" />
+                  )}
+                </div>
               )}
-              {post.repostOfPostId && <p className="mt-2 text-sm text-muted-foreground">reposted</p>}
+              {!isEditing && postText && <p className="whitespace-pre-wrap text-[0.98rem] font-extrabold leading-6 text-white">{postText}</p>}
+              {post.bodyAfter && <p className="whitespace-pre-wrap text-[0.9rem] leading-5 text-white/58">{post.bodyAfter}</p>}
               {post.linkedLog && (
-                <div className="mt-4 rounded-lg border border-white/10 bg-black/25 p-3 text-sm">
+                <div className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm">
                   <p className="font-medium">{post.linkedLog.exerciseName ?? "Top Log"}</p>
                   <p className="text-white/55">
                     {post.linkedLog.weightKg} kg x {post.linkedLog.reps} · Score {post.linkedLog.score ?? "-"}
                   </p>
                 </div>
               )}
-              {post.mediaUrl && (
-                <div className="mt-4 overflow-hidden rounded-lg bg-white/5">
-                  {post.mediaType === "video" ? (
-                    <video src={post.mediaUrl} controls className="max-h-[28rem] w-full bg-black object-contain" />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={post.mediaUrl} alt="" className="max-h-[28rem] w-full object-cover" />
-                  )}
-                </div>
-              )}
-              <div className="mt-4 grid grid-cols-5 items-center text-sm text-white/58">
+              <div className="grid max-w-sm grid-cols-5 items-center border-t border-white/[0.06] pt-1 text-sm text-white/58">
                 <ProfilePostActionButton active={post.likedByViewer} activeClass="text-rose-500 hover:text-rose-500" disabled={!userId || isPreviewPost} onClick={() => onLike(post._id)} ariaLabel={post.likedByViewer ? "Like entfernen" : "Liken"}>
-                  <Heart className={`h-5 w-5 ${post.likedByViewer ? "fill-current" : ""}`} />
+                  <Heart className={`h-4 w-4 ${post.likedByViewer ? "fill-current" : ""}`} />
                   <span>{post.likeCount}</span>
                 </ProfilePostActionButton>
                 <ProfilePostActionButton disabled={!userId || isPreviewPost} onClick={() => onToggleComment(post._id)} ariaLabel="Kommentare öffnen">
-                  <MessageSquare className="h-5 w-5" />
+                  <MessageSquare className="h-4 w-4" />
                   <span>{post.commentCount}</span>
                 </ProfilePostActionButton>
                 <ProfilePostActionButton active={post.repostedByViewer} activeClass="text-primary hover:text-primary" disabled={!canRepost || isPreviewPost} onClick={() => onRepost(post._id)} ariaLabel={isOwnPost ? "Eigene Posts können nicht repostet werden" : post.repostedByViewer ? "Bereits repostet" : "Reposten"}>
-                  <Repeat2 className="h-5 w-5" />
+                  <Repeat2 className="h-4 w-4" />
                   <span>{post.repostCount}</span>
                 </ProfilePostActionButton>
                 <ProfilePostActionButton active={post.savedByViewer} activeClass="text-primary hover:text-primary" disabled={!userId || isPreviewPost} onClick={() => onSave(post._id)} ariaLabel={post.savedByViewer ? t("profile.public.removeSavedPost") : t("profile.public.savePostAria")}>
-                  <Bookmark className={`h-5 w-5 ${post.savedByViewer ? "fill-current" : ""}`} />
+                  <Bookmark className={`h-4 w-4 ${post.savedByViewer ? "fill-current" : ""}`} />
                 </ProfilePostActionButton>
                 <ProfilePostActionButton disabled={isPreviewPost} onClick={() => sharePost(post._id)} ariaLabel={t("profile.public.sharePost")}>
-                  <Share2 className="h-5 w-5" />
+                  <Share2 className="h-4 w-4" />
                 </ProfilePostActionButton>
               </div>
               {!isPreviewPost && showCommentInput && (
-                <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="border-t border-white/[0.07] pt-4">
+                  <p className="mb-3 text-xs font-extrabold uppercase tracking-wide text-white/45">Kommentare</p>
                   <div className="flex gap-2">
                     <input
                       id={`profile-comment-${post._id}`}
@@ -2825,12 +2836,11 @@ function ProfilePostsCard({
                   </div>
                 </div>
               )}
-            </div>
           </div>
         </article>
       );
       })}
-      <Link href="/social" className="flex h-16 w-full items-center justify-center gap-2 border-t border-border bg-background text-base font-medium text-muted-foreground transition hover:bg-muted/40 hover:text-foreground">
+      <Link href="/social" className="flex h-16 w-full items-center justify-center gap-2 border-t border-white/[0.07] bg-[#05090a] text-base font-medium text-muted-foreground transition hover:bg-white/[0.04] hover:text-foreground">
         {t("socialPage.discoverMore")}
       </Link>
     </div>
@@ -2860,7 +2870,7 @@ function ProfilePostActionButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60",
         active && activeClass
       )}
     >
@@ -3491,7 +3501,7 @@ function PostShareCard({ message, mine }: { message: ChatMessageView; mine: bool
           : "border-primary/60 bg-[#0c1212] hover:bg-[#101717]"
       )}
     >
-      <div className="bg-[radial-gradient(circle_at_20%_0%,rgba(255,143,0,0.12),transparent_9rem)] p-3">
+      <div className="bg-[radial-gradient(circle_at_20%_0%,var(--brand-soft),transparent_9rem)] p-3">
         <div className="mb-2.5 flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-primary text-xs font-bold text-primary">
@@ -3502,7 +3512,7 @@ function PostShareCard({ message, mine }: { message: ChatMessageView; mine: bool
               <p className="truncate text-xs leading-4 text-muted-foreground">{authorLabel}</p>
             </div>
           </div>
-          <span className="shrink-0 rounded-full bg-primary/16 px-2 py-1 text-[0.68rem] font-extrabold uppercase tracking-wide text-primary shadow-[0_10px_28px_rgba(255,132,0,0.12)]">
+          <span className="shrink-0 rounded-full bg-primary/16 px-2 py-1 text-[0.68rem] font-extrabold uppercase tracking-wide text-primary shadow-[0_10px_28px_var(--brand-glow)]">
             {t("profile.public.sharedPost")}
           </span>
         </div>
@@ -3699,7 +3709,7 @@ function ProfileMetric({
   );
 }
 
-function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "sm" | "md" | "chat" | "lg" | "hero" }) {
+function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "sm" | "feed" | "md" | "chat" | "lg" | "hero" }) {
   const classes =
     size === "hero"
       ? "h-[4.5rem] w-[4.5rem] text-4xl sm:h-28 sm:w-28 sm:text-7xl"
@@ -3707,6 +3717,8 @@ function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: st
         ? "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl"
         : size === "chat"
           ? "h-14 w-14 text-xl"
+        : size === "feed"
+          ? "h-11 w-11 text-base"
         : size === "sm"
           ? "h-8 w-8 text-sm"
           : "h-11 w-11 text-base";

@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Ban,
+  BadgeCheck,
   Calendar,
   ChevronDown,
   Crown,
@@ -443,6 +444,10 @@ function PublicProfileContent({
           </div>
           <ProfilePostsPanel
             posts={activePublicTab === "media" ? mediaPosts : posts}
+            profileName={profile.name}
+            username={profile.username ?? "user"}
+            avatarUrl={profile.avatarUrl}
+            isPro={profile.isPro}
             userId={userId}
             commentBodies={commentBodies}
             activeCommentPostId={activeCommentPostId}
@@ -625,6 +630,10 @@ function WorkoutTemplatesPanel({
 
 function ProfilePostsPanel({
   posts,
+  profileName,
+  username,
+  avatarUrl,
+  isPro,
   userId,
   commentBodies,
   activeCommentPostId,
@@ -636,6 +645,10 @@ function ProfilePostsPanel({
   onSubmitComment,
 }: {
   posts: ProfilePost[] | undefined;
+  profileName: string;
+  username: string;
+  avatarUrl?: string | null;
+  isPro: boolean;
   userId: Id<"users"> | null | undefined;
   commentBodies: Record<string, string>;
   activeCommentPostId: string | null;
@@ -682,77 +695,85 @@ function ProfilePostsPanel({
           </div>
         </div>
       ) : (
-        <div className="divide-y divide-border rounded-lg border border-border bg-card">
+        <div className="overflow-hidden border-y border-white/[0.07] bg-[#05090a]">
           {posts.map((post) => {
             const commentBody = commentBodies[post._id] ?? "";
             const showCommentInput = activeCommentPostId === post._id;
             const visibleComments = post.comments ?? [];
             const edited = Boolean(post.updatedAt && post.updatedAt > post.createdAt);
+            const postText = post.body?.trim();
             return (
-            <article key={post._id} className="space-y-3 p-4">
-              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <time title={new Date(post.createdAt).toLocaleString(locale)}>
-                    {new Date(post.createdAt).toLocaleDateString(locale)}
-                  </time>
-                  {edited && <span>{t("profile.public.edited")}</span>}
-                </div>
-                <div className="flex items-center gap-4">
-                  <span>{post.likeCount} Likes</span>
-                  <span>{post.commentCount} Kommentare</span>
+            <article key={post._id} className="space-y-3 border-b border-white/[0.07] bg-[#05090a] px-4 py-4 text-white last:border-b-0">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <Avatar name={profileName} avatarUrl={avatarUrl ?? undefined} size="feed" />
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-1.5 text-sm leading-5">
+                    <span className="min-w-0 truncate font-extrabold">{profileName}</span>
+                    {isPro && <BadgeCheck className="h-3.5 w-3.5 shrink-0 fill-primary text-black" />}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[0.72rem] text-white/45">
+                    <span className="truncate">@{username}</span>
+                    <span>·</span>
+                    <time title={new Date(post.createdAt).toLocaleString(locale)}>
+                      {formatProfilePostTime(post.createdAt, locale, t("profile.public.justNow"))}
+                    </time>
+                    <span>·</span>
+                    <span>Öffentlich</span>
+                    {edited && <span>{t("profile.public.edited")}</span>}
+                  </div>
                 </div>
               </div>
-              {post.body && <p className="whitespace-pre-wrap text-sm leading-6">{post.body}</p>}
+              {post.mediaUrl && (
+                <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.04]">
+                  {post.mediaType === "video" ? (
+                    <video src={post.mediaUrl} controls className="aspect-[1.35/1] w-full bg-black object-cover" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={post.mediaUrl} alt="" className="aspect-[1.35/1] w-full object-cover" />
+                  )}
+                </div>
+              )}
+              {postText && <p className="whitespace-pre-wrap text-[0.98rem] font-extrabold leading-6 text-white">{postText}</p>}
               {post.linkedLog && (
-                <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                <div className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm">
                   <p className="font-medium">{post.linkedLog.exerciseName ?? "Top Log"}</p>
-                  <p className="text-muted-foreground">
+                  <p className="text-white/55">
                     {post.linkedLog.weightKg} kg x {post.linkedLog.reps} · Score {post.linkedLog.score ?? "-"}
                   </p>
                 </div>
               )}
-              {post.mediaUrl && (
-                <div className="overflow-hidden rounded-lg border border-border">
-                  {post.mediaType === "video" ? (
-                    <video src={post.mediaUrl} controls className="max-h-[32rem] w-full bg-black object-contain" />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={post.mediaUrl} alt="" className="max-h-[32rem] w-full object-cover" />
-                  )}
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground sm:flex sm:items-center sm:gap-5">
-                <button type="button" disabled={!userId} onClick={() => onLike(post._id)} className={`inline-flex items-center gap-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 ${post.likedByViewer ? "text-rose-500 hover:text-rose-500" : ""}`}>
+              <div className="grid max-w-sm grid-cols-4 items-center border-t border-white/[0.06] pt-1 text-sm text-white/58">
+                <button type="button" disabled={!userId} onClick={() => onLike(post._id)} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-1 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60 ${post.likedByViewer ? "text-rose-500 hover:text-rose-500" : ""}`}>
                   <Heart className={`h-4 w-4 ${post.likedByViewer ? "fill-current" : ""}`} />
                   {post.likeCount}
                 </button>
-                <button type="button" disabled={!userId} onClick={() => onToggleComment(post._id)} className="inline-flex items-center gap-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60">
+                <button type="button" disabled={!userId} onClick={() => onToggleComment(post._id)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-1 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
                   <MessageCircle className="h-4 w-4" />
                   {post.commentCount}
                 </button>
-                <button type="button" disabled={!userId} onClick={() => onSave(post._id)} className={`inline-flex items-center gap-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 ${post.savedByViewer ? "text-primary hover:text-primary" : ""}`}>
+                <button type="button" disabled={!userId} onClick={() => onSave(post._id)} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-1 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60 ${post.savedByViewer ? "text-primary hover:text-primary" : ""}`}>
                   <Bookmark className={`h-4 w-4 ${post.savedByViewer ? "fill-current" : ""}`} />
-                  {t("profile.public.savePost")}
                 </button>
-                <button type="button" onClick={() => sharePost(post._id)} className="inline-flex items-center gap-1 transition hover:text-foreground">
+                <button type="button" onClick={() => sharePost(post._id)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-1 transition hover:text-white">
                   <Share2 className="h-4 w-4" />
-                  {t("profile.public.sharePost")}
                 </button>
               </div>
               {visibleComments.length > 0 && (
-                <div className="space-y-3 border-t border-border pt-3">
+                <div className="space-y-3 border-t border-white/[0.07] pt-3">
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-white/45">Kommentare</p>
                   {visibleComments.map((comment) => (
                     <ProfileCommentPreview key={comment._id} comment={comment} postId={post._id} userId={userId} />
                   ))}
                 </div>
               )}
               {showCommentInput && (
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="flex gap-2 border-t border-white/[0.07] pt-3">
                   <Input
                     value={commentBody}
                     onChange={(event) => onCommentBodyChange(post._id, event.target.value)}
                     placeholder={t("profile.public.commentPlaceholder")}
                     maxLength={500}
+                    className="min-h-9 rounded-xl border-white/10 bg-white/[0.04] text-sm text-white placeholder:text-white/35 focus:border-primary"
                   />
                   <Button size="sm" disabled={!commentBody.trim()} onClick={() => onSubmitComment(post._id)}>
                     {t("profile.networkPanel.send")}
@@ -879,8 +900,13 @@ function formatProfilePostTime(timestamp: number, locale: string, justNow: strin
   return new Date(timestamp).toLocaleDateString(locale);
 }
 
-function Avatar({ name, avatarUrl, size = "lg" }: { name: string; avatarUrl?: string; size?: "sm" | "lg" }) {
-  const classes = size === "sm" ? "h-8 w-8 text-sm border-2" : "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl border-4";
+function Avatar({ name, avatarUrl, size = "lg" }: { name: string; avatarUrl?: string; size?: "sm" | "feed" | "lg" }) {
+  const classes =
+    size === "sm"
+      ? "h-8 w-8 text-sm border-2"
+      : size === "feed"
+        ? "h-11 w-11 text-base border-[3px]"
+        : "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl border-4";
 
   return (
     <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border-background bg-muted font-semibold ${classes}`}>

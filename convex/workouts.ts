@@ -427,6 +427,90 @@ export const listProfileTemplates = query({
   },
 });
 
+export const listFollowedTemplates = query({
+  args: {
+    viewerId: v.id("users"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const followedRows = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.viewerId))
+      .order("desc")
+      .take(16);
+
+    const templates = (
+      await Promise.all(
+        followedRows.map(async (follow) => {
+          const [author, isFriend, rows] = await Promise.all([
+            ctx.db.get(follow.followingId),
+            areFriends(ctx, follow.followingId, args.viewerId),
+            ctx.db
+              .query("workout_templates")
+              .withIndex("by_user_created", (q) => q.eq("userId", follow.followingId))
+              .order("desc")
+              .take(4),
+          ]);
+
+          return rows
+            .filter((template) => {
+              const visibility = template.visibility ?? "private";
+              if (visibility === "public") return true;
+              if (visibility === "friends") return isFriend;
+              return false;
+            })
+            .map((template) => {
+              const showWeights = template.showWeights === true;
+              return {
+                ...template,
+                visibility: template.visibility ?? "private",
+                showWeights: template.showWeights ?? false,
+                executionCount: template.executionCount ?? 0,
+                author: author
+                  ? {
+                      _id: author._id,
+                      name: author.name,
+                      username: author.username,
+                      avatarUrl: author.avatarUrl,
+                      isPro: author.isPro,
+                    }
+                  : null,
+                exercises: template.exercises.map((exercise) => ({
+                  ...exercise,
+                  sets: exercise.sets.map((set) => ({
+                    reps: set.reps,
+                    weight: showWeights ? set.weight : null,
+                  })),
+                })),
+                totalExercises: template.exercises.length,
+                totalSets: template.exercises.reduce(
+                  (sum, exercise) => sum + exercise.sets.length,
+                  0
+                ),
+                totalVolume: showWeights
+                  ? template.exercises.reduce(
+                      (sum, exercise) =>
+                        sum +
+                        exercise.sets.reduce(
+                          (exerciseSum, set) => exerciseSum + set.weight * set.reps,
+                          0
+                        ),
+                      0
+                    )
+                  : null,
+              };
+            });
+        })
+      )
+    )
+      .flat()
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, args.limit ?? 12);
+
+    return templates;
+  },
+});
+
 export const getTemplateForStart = query({
   args: {
     templateId: v.id("workout_templates"),
