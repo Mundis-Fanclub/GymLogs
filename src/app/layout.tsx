@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Audiowide, Mozilla_Text } from "next/font/google";
+import { Audiowide, Outfit } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ConvexClientProvider } from "@/components/providers/ConvexClientProvider";
 import { AppPreferencesProvider } from "@/components/providers/AppPreferencesProvider";
@@ -13,8 +13,8 @@ const audiowide = Audiowide({
   subsets: ["latin"],
 });
 
-const mozillaText = Mozilla_Text({
-  variable: "--font-mozilla-text",
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
 });
 
@@ -32,7 +32,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" className="dark" suppressHydrationWarning>
         <body
-          className={`${audiowide.variable} ${mozillaText.variable} antialiased`}
+          className={`${audiowide.variable} ${outfit.variable} antialiased`}
         >
           <AppPreferencesProvider>
             <ConvexClientProvider>

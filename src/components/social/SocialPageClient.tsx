@@ -16,9 +16,9 @@ import {
   Search,
   Send,
   Share2,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
-  Users,
   Video,
   X,
 } from "lucide-react";
@@ -56,10 +56,18 @@ export function SocialPageClient() {
   const [loadFeed, setLoadFeed] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<Id<"social_posts"> | null>(null);
   const [activeFeedTab, setActiveFeedTab] = useState<SocialFeedTab>("forYou");
-  const forYouPosts = useQuery(api.social.listFeed, loadFeed ? { viewerId: userId, limit: 18 } : "skip");
+  const [shareDialogPostId, setShareDialogPostId] = useState<Id<"social_posts"> | null>(null);
+  const forYouPosts = useQuery(
+    api.social.listFeed,
+    loadFeed && activeFeedTab === "forYou" ? { viewerId: userId, limit: 18 } : "skip"
+  );
   const followingPosts = useQuery(
     api.social.listFollowingFeed,
-    loadFeed && userId ? { viewerId: userId, limit: 18 } : "skip"
+    loadFeed && activeFeedTab === "following" && userId ? { viewerId: userId, limit: 18 } : "skip"
+  );
+  const stories = useQuery(
+    api.social.listStories,
+    loadFeed ? { viewerId: userId, limit: 40 } : "skip"
   );
   const currentUser = useQuery(api.users.get, userId ? { userId } : "skip");
   const thread = useQuery(
@@ -70,6 +78,7 @@ export function SocialPageClient() {
   const createPost = useMutation(api.social.createPost);
   const updatePost = useMutation(api.social.updatePost);
   const deletePost = useMutation(api.social.deletePost);
+  const createStory = useMutation(api.social.createStory);
   const generateUploadUrl = useMutation(api.social.generateUploadUrl);
   const toggleLike = useMutation(api.social.toggleLike);
   const toggleSave = useMutation(api.social.toggleSave);
@@ -78,7 +87,7 @@ export function SocialPageClient() {
   const updateComment = useMutation(api.social.updateComment);
   const deleteComment = useMutation(api.social.deleteComment);
   const shareToUsername = useMutation(api.social.shareToUsername);
-  const friends = useQuery(api.friends.list, userId ? { userId } : "skip");
+  const friends = useQuery(api.friends.list, userId && shareDialogPostId ? { userId } : "skip");
 
   const [body, setBody] = useState("");
   const [bodyAfter, setBodyAfter] = useState("");
@@ -92,9 +101,16 @@ export function SocialPageClient() {
   const [error, setError] = useState("");
   const [commentBodies, setCommentBodies] = useState<Record<string, string>>({});
   const [replyBodies, setReplyBodies] = useState<Record<string, string>>({});
-  const [shareDialogPostId, setShareDialogPostId] = useState<Id<"social_posts"> | null>(null);
   const [shareQuery, setShareQuery] = useState("");
   const [shareMessage, setShareMessage] = useState("");
+  const [storyDialogOpen, setStoryDialogOpen] = useState(false);
+  const [storyBody, setStoryBody] = useState("");
+  const [storyMediaStorageId, setStoryMediaStorageId] = useState<Id<"_storage"> | undefined>();
+  const [storyMediaType, setStoryMediaType] = useState<MediaKind | undefined>();
+  const [storyPreviewUrl, setStoryPreviewUrl] = useState("");
+  const [storyUploading, setStoryUploading] = useState(false);
+  const [storyError, setStoryError] = useState("");
+  const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [openPostMenuId, setOpenPostMenuId] = useState<string | null>(null);
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(null);
@@ -110,11 +126,12 @@ export function SocialPageClient() {
   >(null);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => setLoadFeed(true), 0);
+    const timeoutId = window.setTimeout(() => setLoadFeed(true), 100);
     return () => window.clearTimeout(timeoutId);
   }, []);
 
   const posts = activeFeedTab === "forYou" ? forYouPosts : followingPosts;
+  const selectedStory = stories?.find((story) => story._id === selectedStoryId) ?? null;
   const feedDescription =
     activeFeedTab === "forYou"
       ? t("socialPage.forYouDescription")
@@ -218,8 +235,54 @@ export function SocialPageClient() {
     setMediaScale(100);
   }
 
+  function clearStoryDraft() {
+    setStoryBody("");
+    setStoryMediaStorageId(undefined);
+    setStoryMediaType(undefined);
+    setStoryPreviewUrl("");
+    setStoryError("");
+  }
+
   function clearCommentGif(key: string) {
     setCommentMediaDrafts({ ...commentMediaDrafts, [key]: undefined });
+  }
+
+  async function uploadStoryMedia(file: File | undefined) {
+    if (!userId || !file) return;
+    setStoryError("");
+    const kind: MediaKind | null = file.type === "image/gif"
+      ? "gif"
+      : file.type.startsWith("video/")
+        ? "video"
+        : file.type.startsWith("image/")
+          ? "image"
+          : null;
+    if (!kind) {
+      setStoryError("Bitte Bild oder Video auswählen.");
+      return;
+    }
+    if (file.size > 30 * 1024 * 1024) {
+      setStoryError("Story-Medien dürfen maximal 30 MB groß sein.");
+      return;
+    }
+    setStoryUploading(true);
+    try {
+      const postUrl = await generateUploadUrl({ userId, mediaType: kind });
+      const response = await fetch(postUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!response.ok) throw new Error("Upload fehlgeschlagen.");
+      const result = (await response.json()) as { storageId: Id<"_storage"> };
+      setStoryMediaStorageId(result.storageId);
+      setStoryMediaType(kind);
+      setStoryPreviewUrl(URL.createObjectURL(file));
+    } catch (uploadError) {
+      setStoryError(uploadError instanceof Error ? uploadError.message : "Upload fehlgeschlagen.");
+    } finally {
+      setStoryUploading(false);
+    }
   }
 
   async function submitPost() {
@@ -240,6 +303,18 @@ export function SocialPageClient() {
     setMediaPreviewUrl("");
     setMediaSize("lg");
     setMediaScale(100);
+  }
+
+  async function submitStory() {
+    if (!userId || (!storyBody.trim() && !storyMediaStorageId)) return;
+    await createStory({
+      authorId: userId,
+      body: storyBody,
+      mediaStorageId: storyMediaStorageId,
+      mediaType: storyMediaType,
+    });
+    clearStoryDraft();
+    setStoryDialogOpen(false);
   }
 
   async function submitComment(postId: Id<"social_posts">) {
@@ -302,8 +377,8 @@ export function SocialPageClient() {
   }
 
   const composer = (
-    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3 border-b border-border p-3 sm:p-4">
-      <Avatar name={currentUser?.name ?? "User"} avatarUrl={currentUser?.avatarUrl ?? undefined} />
+    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3 p-3 sm:p-4">
+      <Avatar name={currentUser?.name ?? "User"} avatarUrl={currentUser?.avatarUrl ?? undefined} size="feed" />
       <div className="min-w-0 space-y-3">
         <Textarea
           value={body}
@@ -311,7 +386,7 @@ export function SocialPageClient() {
           placeholder={mediaPreviewUrl ? "" : t("socialPage.composerPlaceholder")}
           rows={body || mediaPreviewUrl ? 2 : 1}
           maxLength={1200}
-          className="min-h-10 resize-none border-0 bg-transparent px-0 py-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
+          className="min-h-10 resize-none border-0 bg-transparent px-0 py-1 text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
         />
         {mediaPreviewUrl && (
           <>
@@ -341,7 +416,7 @@ export function SocialPageClient() {
             <span className="sr-only">{uploading ? t("socialPage.uploadRunning") : t("socialPage.attachMedia")}</span>
             <input type="file" accept="image/*,video/*,.gif" className="sr-only" onChange={(event) => uploadMedia(event.target.files?.[0])} />
           </label>
-          <Button onClick={submitPost} disabled={!userId || uploading || (!body.trim() && !bodyAfter.trim() && !mediaStorageId)}>
+          <Button className="rounded-xl" onClick={submitPost} disabled={!userId || uploading || (!body.trim() && !bodyAfter.trim() && !mediaStorageId)}>
             {t("socialPage.post")}
           </Button>
         </div>
@@ -352,13 +427,13 @@ export function SocialPageClient() {
   if (selectedPostId) {
     return (
       <>
-        <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-border bg-card">
-          <div className="flex items-center gap-3 border-b border-border px-3 py-3">
-            <Button variant="ghost" size="icon-sm" onClick={() => setSelectedPostId(null)} aria-label={t("socialPage.backToFeed")}>
-              <ArrowLeft className="h-4 w-4" />
+        <div data-flush className="-mx-3 -mt-3 min-h-full bg-background pb-[calc(env(safe-area-inset-bottom)+6.25rem)] text-foreground sm:-mx-5 md:-mx-6 lg:-mx-8">
+          <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-border/70 bg-background/94 px-4 py-4 backdrop-blur-xl">
+            <Button variant="ghost" size="icon-sm" className="rounded-full" onClick={() => setSelectedPostId(null)} aria-label={t("socialPage.backToFeed")}>
+              <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-base font-semibold leading-none">{t("socialPage.threadTitle")}</h1>
+              <h1 className="text-base font-extrabold leading-none">{t("socialPage.threadTitle")}</h1>
               <p className="mt-1 text-xs text-muted-foreground">{t("socialPage.threadSubtitle")}</p>
             </div>
           </div>
@@ -369,47 +444,49 @@ export function SocialPageClient() {
             <p className="p-4 text-sm text-muted-foreground">{t("socialPage.threadNotFound")}</p>
           ) : (
             <>
-              <PostCard
-                post={thread.post}
-                userId={userId}
-                isThreadHeader
-                openPostMenuId={openPostMenuId}
-                editingPostId={editingPostId}
-                editingBody={editingPostBodies[thread.post._id] ?? thread.post.body ?? ""}
-                onOpenPostMenu={setOpenPostMenuId}
-                onEditPost={(post) => {
-                  setEditingPostId(post._id);
-                  setEditingPostBodies({ ...editingPostBodies, [post._id]: post.body ?? "" });
-                  setOpenPostMenuId(null);
-                }}
-                onDeletePost={(postId) => setPendingDelete({ kind: "post", id: postId })}
-                onEditingBodyChange={(value) => setEditingPostBodies({ ...editingPostBodies, [thread.post._id]: value })}
-                onCancelEdit={() => setEditingPostId(null)}
-                onSaveEdit={() => {
-                  if (!userId) return;
-                  void updatePost({
-                    userId,
-                    postId: thread.post._id,
-                    body: editingPostBodies[thread.post._id] ?? thread.post.body ?? "",
-                    bodyAfter: thread.post.bodyAfter,
-                    mediaSize: thread.post.mediaSize,
-                    mediaScale: thread.post.mediaScale,
-                  });
-                  setEditingPostId(null);
-                }}
-                onLike={(postId) => userId && toggleLike({ userId, postId })}
-                onComment={(postId) => {
-                  document.getElementById(`comment-input-${postId}`)?.focus();
-                }}
-                onRepost={repost}
-                onSave={(postId) => userId && toggleSave({ userId, postId })}
-                onShare={(postId) => {
-                  setShareDialogPostId(postId);
-                  setShareMessage("");
-                }}
-              />
+              <div className="px-4 py-4">
+                <SocialPostCard
+                  post={thread.post}
+                  userId={userId}
+                  isThreadHeader
+                  openPostMenuId={openPostMenuId}
+                  editingPostId={editingPostId}
+                  editingBody={editingPostBodies[thread.post._id] ?? thread.post.body ?? ""}
+                  onOpenPostMenu={setOpenPostMenuId}
+                  onEditPost={(post) => {
+                    setEditingPostId(post._id);
+                    setEditingPostBodies({ ...editingPostBodies, [post._id]: post.body ?? "" });
+                    setOpenPostMenuId(null);
+                  }}
+                  onDeletePost={(postId) => setPendingDelete({ kind: "post", id: postId })}
+                  onEditingBodyChange={(value) => setEditingPostBodies({ ...editingPostBodies, [thread.post._id]: value })}
+                  onCancelEdit={() => setEditingPostId(null)}
+                  onSaveEdit={() => {
+                    if (!userId) return;
+                    void updatePost({
+                      userId,
+                      postId: thread.post._id,
+                      body: editingPostBodies[thread.post._id] ?? thread.post.body ?? "",
+                      bodyAfter: thread.post.bodyAfter,
+                      mediaSize: thread.post.mediaSize,
+                      mediaScale: thread.post.mediaScale,
+                    });
+                    setEditingPostId(null);
+                  }}
+                  onLike={(postId) => userId && toggleLike({ userId, postId })}
+                  onComment={(postId) => {
+                    document.getElementById(`comment-input-${postId}`)?.focus();
+                  }}
+                  onRepost={repost}
+                  onSave={(postId) => userId && toggleSave({ userId, postId })}
+                  onShare={(postId) => {
+                    setShareDialogPostId(postId);
+                    setShareMessage("");
+                  }}
+                />
+              </div>
 
-              <div className="border-b border-border p-3 sm:p-4">
+              <div className="mx-4 overflow-hidden rounded-[1.35rem] border border-border/80 bg-card/75 p-3 sm:p-4">
                 <div className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3">
                   <Avatar name="User" size="sm" />
                   <div className="flex gap-2">
@@ -502,19 +579,13 @@ export function SocialPageClient() {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-        <div className="border-b border-border px-4 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="text-lg font-semibold leading-none tracking-normal">{t("common.social")}</h1>
-              <p className="mt-1 text-sm leading-5 text-muted-foreground">{feedDescription}</p>
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-2 rounded-lg border border-border bg-muted/25 p-1">
+      <div data-flush className="-mx-3 -mt-3 min-h-full bg-background pb-[calc(env(safe-area-inset-bottom)+6.25rem)] text-foreground sm:-mx-5 md:-mx-6 lg:-mx-8">
+        <div className="sticky top-0 z-20 border-b border-border/70 bg-background/92 backdrop-blur-xl">
+          <div className="grid grid-cols-[1fr_1fr_auto] items-center gap-2 px-4">
             {([
-              { id: "forYou" as const, label: t("socialPage.forYou"), icon: Sparkles },
-              { id: "following" as const, label: t("socialPage.following"), icon: Users },
-            ]).map(({ id, label, icon: Icon }) => {
+              { id: "forYou" as const, label: t("socialPage.forYou") },
+              { id: "following" as const, label: t("socialPage.following") },
+            ]).map(({ id, label }) => {
               const selected = activeFeedTab === id;
               return (
                 <button
@@ -522,67 +593,99 @@ export function SocialPageClient() {
                   type="button"
                   aria-pressed={selected}
                   className={cn(
-                    "flex h-10 min-w-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition-colors",
-                    selected
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                    "relative flex h-[4.5rem] min-w-0 items-center justify-center px-3 text-base font-extrabold transition-colors",
+                    selected ? "text-primary" : "text-muted-foreground hover:text-foreground"
                   )}
                   onClick={() => setActiveFeedTab(id)}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
                   <span className="truncate">{label}</span>
+                  <span
+                    className={cn(
+                      "absolute bottom-0 h-0.5 rounded-full transition-all duration-300",
+                      selected ? "w-28 bg-primary" : "w-0 bg-transparent"
+                    )}
+                  />
                 </button>
               );
             })}
+            <button
+              type="button"
+              className="flex h-[4.5rem] w-14 items-center justify-center text-muted-foreground transition hover:text-foreground"
+              aria-label="Feed filtern"
+            >
+              <SlidersHorizontal className="h-6 w-6" />
+            </button>
           </div>
         </div>
-        {composer}
+
+        <StoryRail
+          stories={stories}
+          currentUser={currentUser ? { name: currentUser.name, avatarUrl: currentUser.avatarUrl ?? undefined } : null}
+          onCreate={() => setStoryDialogOpen(true)}
+          onOpenStory={setSelectedStoryId}
+        />
+        <ActivityRail loading={posts === undefined} />
+
+        <div className="px-4 pb-2">
+          <div className="overflow-hidden rounded-[1.35rem] border border-border/80 bg-card/75 shadow-xl shadow-background/25 backdrop-blur-xl">
+            {composer}
+          </div>
+        </div>
+
         {posts === undefined ? (
-          <p className="border-b border-border p-4 text-sm text-muted-foreground">{t("socialPage.feedLoading")}</p>
+          <div className="space-y-3 px-4 py-5">
+            <div className="h-72 animate-pulse rounded-[1.35rem] border border-border/70 bg-muted/35" />
+            <div className="h-64 animate-pulse rounded-[1.35rem] border border-border/70 bg-muted/30" />
+          </div>
         ) : posts.length === 0 ? (
-          <div className="flex min-h-40 items-center justify-center p-4 text-center text-sm text-muted-foreground">
-            {emptyFeedCopy}
+          <div className="mx-4 flex min-h-52 items-center justify-center rounded-[1.35rem] border border-border/80 bg-card/70 p-6 text-center text-sm text-muted-foreground">
+            <div>
+              <p className="text-base font-semibold text-foreground">{emptyFeedCopy}</p>
+              <p className="mt-2 text-sm">{feedDescription}</p>
+            </div>
           </div>
         ) : (
-          posts.map((post) => (
-            <PostCard
-              key={post._id}
-              post={post}
-              userId={userId}
-              openPostMenuId={openPostMenuId}
-              editingPostId={editingPostId}
-              editingBody={editingPostBodies[post._id] ?? post.body ?? ""}
-              onOpenPostMenu={setOpenPostMenuId}
-              onEditPost={(postToEdit) => {
-                setEditingPostId(postToEdit._id);
-                setEditingPostBodies({ ...editingPostBodies, [postToEdit._id]: postToEdit.body ?? "" });
-                setOpenPostMenuId(null);
-              }}
-              onDeletePost={(postId) => setPendingDelete({ kind: "post", id: postId })}
-              onEditingBodyChange={(value) => setEditingPostBodies({ ...editingPostBodies, [post._id]: value })}
-              onCancelEdit={() => setEditingPostId(null)}
-              onSaveEdit={() => {
-                if (!userId) return;
-                void updatePost({
-                  userId,
-                  postId: post._id,
-                  body: editingPostBodies[post._id] ?? post.body ?? "",
-                  bodyAfter: post.bodyAfter,
-                  mediaSize: post.mediaSize,
-                  mediaScale: post.mediaScale,
-                });
-                setEditingPostId(null);
-              }}
-              onLike={(postId) => userId && toggleLike({ userId, postId })}
-              onComment={setSelectedPostId}
-              onRepost={repost}
-              onSave={(postId) => userId && toggleSave({ userId, postId })}
-              onShare={(postId) => {
-                setShareDialogPostId(postId);
-                setShareMessage("");
-              }}
-            />
-          ))
+          <div className="space-y-3 px-4 py-4">
+            {posts.map((post) => (
+              <SocialPostCard
+                key={post._id}
+                post={post}
+                userId={userId}
+                openPostMenuId={openPostMenuId}
+                editingPostId={editingPostId}
+                editingBody={editingPostBodies[post._id] ?? post.body ?? ""}
+                onOpenPostMenu={setOpenPostMenuId}
+                onEditPost={(postToEdit) => {
+                  setEditingPostId(postToEdit._id);
+                  setEditingPostBodies({ ...editingPostBodies, [postToEdit._id]: postToEdit.body ?? "" });
+                  setOpenPostMenuId(null);
+                }}
+                onDeletePost={(postId) => setPendingDelete({ kind: "post", id: postId })}
+                onEditingBodyChange={(value) => setEditingPostBodies({ ...editingPostBodies, [post._id]: value })}
+                onCancelEdit={() => setEditingPostId(null)}
+                onSaveEdit={() => {
+                  if (!userId) return;
+                  void updatePost({
+                    userId,
+                    postId: post._id,
+                    body: editingPostBodies[post._id] ?? post.body ?? "",
+                    bodyAfter: post.bodyAfter,
+                    mediaSize: post.mediaSize,
+                    mediaScale: post.mediaScale,
+                  });
+                  setEditingPostId(null);
+                }}
+                onLike={(postId) => userId && toggleLike({ userId, postId })}
+                onComment={setSelectedPostId}
+                onRepost={repost}
+                onSave={(postId) => userId && toggleSave({ userId, postId })}
+                onShare={(postId) => {
+                  setShareDialogPostId(postId);
+                  setShareMessage("");
+                }}
+              />
+            ))}
+          </div>
         )}
       </div>
       <ShareDialog
@@ -598,12 +701,247 @@ export function SocialPageClient() {
         }}
         onSend={(friend) => void sendPostToFriend(friend)}
       />
+      <StoryComposerDialog
+        open={storyDialogOpen}
+        body={storyBody}
+        previewUrl={storyPreviewUrl}
+        mediaType={storyMediaType}
+        uploading={storyUploading}
+        error={storyError}
+        onOpenChange={(open) => {
+          setStoryDialogOpen(open);
+          if (!open) clearStoryDraft();
+        }}
+        onBodyChange={setStoryBody}
+        onFile={uploadStoryMedia}
+        onClearMedia={() => {
+          setStoryMediaStorageId(undefined);
+          setStoryMediaType(undefined);
+          setStoryPreviewUrl("");
+        }}
+        onSubmit={submitStory}
+        disabled={!userId || storyUploading || (!storyBody.trim() && !storyMediaStorageId)}
+      />
+      <StoryViewerDialog story={selectedStory} onClose={() => setSelectedStoryId(null)} />
       <DeleteDialog pendingDelete={pendingDelete} onCancel={() => setPendingDelete(null)} onConfirm={confirmDelete} />
     </>
   );
 }
 
-function PostCard({
+type SocialStory = {
+  _id: Id<"social_stories">;
+  authorId: Id<"users">;
+  body?: string;
+  mediaUrl?: string | null;
+  mediaType?: MediaKind;
+  createdAt: number;
+  expiresAt: number;
+  author: null | { _id: Id<"users">; name: string; username?: string; avatarUrl?: string | null; isPro: boolean };
+  isOwnStory: boolean;
+};
+
+function StoryRail({
+  stories,
+  currentUser,
+  onCreate,
+  onOpenStory,
+}: {
+  stories: SocialStory[] | undefined;
+  currentUser: { name: string; avatarUrl?: string } | null;
+  onCreate: () => void;
+  onOpenStory: (storyId: string) => void;
+}) {
+  return (
+    <section className="border-b border-border/60 py-5" aria-label="Storys">
+      <div className="flex gap-5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button type="button" className="min-w-[5.25rem] text-center" onClick={onCreate}>
+          <span className="relative mx-auto flex h-[4.45rem] w-[4.45rem] items-center justify-center rounded-full border border-primary/45 bg-primary/10 text-primary">
+            <ImagePlus className="h-6 w-6" />
+          </span>
+          <span className="mt-2 block truncate text-sm font-semibold text-muted-foreground">Story erstellen</span>
+        </button>
+
+        {stories === undefined ? (
+          <div className="flex min-w-[12rem] items-center text-sm text-muted-foreground">Storys werden geladen...</div>
+        ) : stories.length === 0 ? (
+          <div className="flex min-w-[12rem] items-center text-sm text-muted-foreground">Noch keine Storys</div>
+        ) : (
+          stories.map((story) => {
+            const authorName = story.author?.username ?? story.author?.name ?? "User";
+            return (
+              <button key={story._id} type="button" className="min-w-[5.25rem] text-center" onClick={() => onOpenStory(story._id)}>
+                <span
+                  className="relative mx-auto flex h-[4.45rem] w-[4.45rem] items-center justify-center rounded-full p-[2px]"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, var(--primary), color-mix(in oklch, var(--primary) 72%, white), color-mix(in oklch, var(--primary) 45%, transparent))",
+                  }}
+                >
+                  <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-card text-sm font-extrabold text-foreground">
+                    {story.mediaUrl && story.mediaType !== "video" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={story.mediaUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <Avatar name={story.author?.name ?? currentUser?.name ?? "?"} avatarUrl={story.author?.avatarUrl ?? undefined} size="story" />
+                    )}
+                  </span>
+                  {story.isOwnStory && (
+                    <span className="absolute -bottom-1 -right-1 rounded-full border-2 border-background bg-primary px-1.5 text-[0.62rem] font-bold text-primary-foreground">
+                      Du
+                    </span>
+                  )}
+                </span>
+                <span className="mt-2 block truncate text-sm font-semibold text-muted-foreground">{authorName}</span>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function StoryComposerDialog({
+  open,
+  body,
+  previewUrl,
+  mediaType,
+  uploading,
+  error,
+  disabled,
+  onOpenChange,
+  onBodyChange,
+  onFile,
+  onClearMedia,
+  onSubmit,
+}: {
+  open: boolean;
+  body: string;
+  previewUrl: string;
+  mediaType?: MediaKind;
+  uploading: boolean;
+  error: string;
+  disabled: boolean;
+  onOpenChange: (open: boolean) => void;
+  onBodyChange: (value: string) => void;
+  onFile: (file: File | undefined) => void;
+  onClearMedia: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md overflow-hidden rounded-[1.35rem] border-border bg-popover p-0" showCloseButton={false}>
+        <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+          <DialogTitle className="text-base font-extrabold">Story erstellen</DialogTitle>
+          <Button size="icon-sm" variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)} aria-label="Schließen">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="space-y-4 p-4">
+          <Textarea
+            value={body}
+            onChange={(event) => onBodyChange(event.target.value)}
+            placeholder="Was passiert gerade?"
+            maxLength={280}
+            rows={3}
+            className="border-border/80 bg-card/55 text-base"
+          />
+          {previewUrl && (
+            <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-background/40">
+              <button type="button" className="absolute right-2 top-2 z-10 rounded-full bg-black/70 p-2 text-white" onClick={onClearMedia} aria-label="Medium entfernen">
+                <X className="h-4 w-4" />
+              </button>
+              {mediaType === "video" ? (
+                <video src={previewUrl} controls className="max-h-96 w-full bg-black object-contain" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={previewUrl} alt="" className="max-h-96 w-full object-cover" />
+              )}
+            </div>
+          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex items-center justify-between gap-3">
+            <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-border/80 bg-card/55 px-3 text-sm font-semibold text-muted-foreground transition hover:text-foreground">
+              <ImagePlus className="h-4 w-4" />
+              {uploading ? "Upload..." : "Medium"}
+              <input type="file" accept="image/*,video/*,.gif" className="sr-only" onChange={(event) => onFile(event.target.files?.[0])} />
+            </label>
+            <Button className="rounded-xl" disabled={disabled} onClick={onSubmit}>
+              Posten
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StoryViewerDialog({ story, onClose }: { story: SocialStory | null; onClose: () => void }) {
+  return (
+    <Dialog open={Boolean(story)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md overflow-hidden rounded-[1.35rem] border-border bg-popover p-0" showCloseButton={false}>
+        {story && (
+          <>
+            <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar name={story.author?.name ?? "?"} avatarUrl={story.author?.avatarUrl ?? undefined} size="sm" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-extrabold">{story.author?.username ?? story.author?.name ?? "Unbekannt"}</p>
+                  <p className="text-xs text-muted-foreground">{formatRelativeTime(story.createdAt)}</p>
+                </div>
+              </div>
+              <Button size="icon-sm" variant="ghost" className="rounded-full" onClick={onClose} aria-label="Schließen">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="bg-black">
+              {story.mediaUrl ? (
+                story.mediaType === "video" ? (
+                  <video src={story.mediaUrl} controls autoPlay className="max-h-[70vh] w-full object-contain" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={story.mediaUrl} alt="" className="max-h-[70vh] w-full object-contain" />
+                )
+              ) : (
+                <div className="flex min-h-80 items-center justify-center p-8 text-center text-2xl font-extrabold">{story.body}</div>
+              )}
+            </div>
+            {story.mediaUrl && story.body && <p className="p-4 text-base font-semibold">{story.body}</p>}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ActivityRail({
+  loading = false,
+}: {
+  loading?: boolean;
+}) {
+  return (
+    <section className="border-b border-border/60 py-4" aria-label="Neue Aktivitäten">
+      <h2 className="mb-3 flex items-center gap-2 px-4 text-lg font-extrabold">
+        <Sparkles className="h-4 w-4 fill-primary text-primary" />
+        Neue Aktivitäten
+      </h2>
+      <div className="flex gap-3 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {loading ? (
+          <>
+            <div className="h-[6.35rem] min-w-[11.5rem] animate-pulse rounded-2xl border border-border/70 bg-muted/35" />
+            <div className="h-[6.35rem] min-w-[11.5rem] animate-pulse rounded-2xl border border-border/70 bg-muted/30" />
+          </>
+        ) : (
+          <div className="flex min-h-[6.35rem] min-w-[15rem] items-center rounded-2xl border border-border/70 bg-card/55 px-4 text-sm text-muted-foreground">
+            Noch keine Aktivitäten
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export function SocialPostCard({
   post,
   userId,
   isThreadHeader = false,
@@ -681,17 +1019,28 @@ function PostCard({
   const edited = Boolean(post.updatedAt && post.updatedAt > post.createdAt);
 
   return (
-    <article className={`border-b border-border p-3 transition-colors last:border-b-0 ${isThreadHeader ? "" : "hover:bg-muted/20"} sm:p-4`}>
-      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3">
-        <Avatar name={post.author?.name ?? "?"} avatarUrl={post.author?.avatarUrl ?? undefined} />
-        <div className="min-w-0 space-y-3">
-          <div className="flex min-w-0 items-start justify-between gap-3">
+    <article
+      className={cn(
+        "overflow-hidden rounded-[1.35rem] border border-border/80 bg-card/75 p-4 shadow-xl shadow-background/25 transition-colors",
+        isThreadHeader ? "rounded-none border-x-0 border-t-0 bg-background shadow-none" : "cursor-pointer hover:border-primary/35 hover:bg-card/90"
+      )}
+      onClick={(event) => {
+        if (isThreadHeader) return;
+        const target = event.target as HTMLElement;
+        if (target.closest("button,a,input,textarea,label,video")) return;
+        onComment(post._id);
+      }}
+    >
+      <div className="space-y-4">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <Avatar name={post.author?.name ?? "?"} avatarUrl={post.author?.avatarUrl ?? undefined} size="feed" />
             <div className="min-w-0">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[0.95rem] leading-5">
-                <Link href={post.author ? `/profile/${post.author._id}` : "/social"} className="min-w-0 truncate font-semibold hover:underline">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-base leading-5">
+                <Link href={post.author ? `/profile/${post.author._id}` : "/social"} className="min-w-0 truncate font-extrabold hover:underline">
                   {post.author?.username ?? post.author?.name ?? "Unbekannt"}
                 </Link>
-                {post.author?.isPro && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 fill-sky-500 text-background dark:text-card" />}
+                {post.author?.isPro && <CheckCircle2 className="h-4 w-4 shrink-0 fill-primary text-background" />}
                 {post.repostOfPostId && <span className="text-muted-foreground">reposted</span>}
                 <span className="text-muted-foreground">·</span>
                 <time className="text-sm text-muted-foreground" title={new Date(post.createdAt).toLocaleString("de-DE")}>
@@ -699,21 +1048,22 @@ function PostCard({
                 </time>
                 {edited && <span className="text-sm text-muted-foreground">{t("socialPage.edited")}</span>}
               </div>
-              <p className="truncate text-xs text-muted-foreground">@{post.author?.name ?? "user"}</p>
+              <p className="mt-1 truncate text-sm text-muted-foreground">Öffentlich</p>
             </div>
+          </div>
             {isOwnPost && (
               <div className="relative">
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Post-Optionen"
-                  className="-mt-1 text-muted-foreground"
+                  className="-mt-1 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
                   onClick={() => onOpenPostMenu(openPostMenuId === post._id ? null : post._id)}
                 >
-                  <MoreHorizontal className="h-4 w-4" />
+                  <MoreHorizontal className="h-5 w-5" />
                 </Button>
                 {openPostMenuId === post._id && (
-                  <div className="absolute right-0 z-10 mt-1 w-36 overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-sm">
+                  <div className="absolute right-0 z-10 mt-1 w-40 overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl shadow-background/30">
                     <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition hover:bg-muted" onClick={() => onEditPost(post)}>
                       <Pencil className="h-3.5 w-3.5" />
                       Bearbeiten
@@ -739,33 +1089,34 @@ function PostCard({
               </div>
             </div>
           ) : (
-            post.body && <p className="whitespace-pre-wrap text-[0.95rem] leading-6">{post.body}</p>
+            post.body && <p className="whitespace-pre-wrap text-[1.02rem] font-semibold leading-6 text-foreground">{post.body}</p>
           )}
 
-          {post.linkedLog && <LinkedLogCard linkedLog={post.linkedLog} />}
           {post.mediaUrl && (
             <MediaPreview
               mediaUrl={post.mediaUrl}
               mediaType={post.mediaType}
               mediaSize={post.mediaSize ?? "lg"}
               mediaScale={post.mediaScale}
+              cover
             />
           )}
-          {post.bodyAfter && <p className="whitespace-pre-wrap text-[0.95rem] leading-6">{post.bodyAfter}</p>}
+          {post.linkedLog && <LinkedLogCard linkedLog={post.linkedLog} />}
+          {post.bodyAfter && <p className="whitespace-pre-wrap text-[0.95rem] leading-6 text-muted-foreground">{post.bodyAfter}</p>}
           {post.repostOf && <QuotedPost post={post.repostOf} onOpen={() => onComment(post.repostOf!._id)} />}
 
-          <div className="grid max-w-sm grid-cols-5 items-center text-muted-foreground">
+          <div className="grid grid-cols-5 items-center pt-1 text-muted-foreground">
             <ActionButton active={post.likedByViewer} activeClass="text-rose-500 hover:text-rose-500" onClick={() => onLike(post._id)} ariaLabel={post.likedByViewer ? "Like entfernen" : "Liken"}>
-              <Heart className={`h-4 w-4 ${post.likedByViewer ? "fill-current" : ""}`} />
+              <Heart className={cn("h-5 w-5", post.likedByViewer && "fill-current")} />
               <span>{post.likeCount}</span>
             </ActionButton>
             <ActionButton onClick={() => onComment(post._id)} ariaLabel="Kommentare öffnen">
-              <MessageCircle className="h-4 w-4" />
+              <MessageCircle className="h-5 w-5" />
               <span>{post.commentCount}</span>
             </ActionButton>
             <ActionButton
               active={post.repostedByViewer}
-              activeClass="text-sky-500 hover:text-sky-500"
+              activeClass="text-primary hover:text-primary"
               disabled={!canRepost}
               onClick={() => onRepost(post._id)}
               ariaLabel={
@@ -776,24 +1127,28 @@ function PostCard({
                     : "Reposten"
               }
             >
-              <Repeat2 className="h-4 w-4" />
+              <Repeat2 className="h-5 w-5" />
               <span>{post.repostCount}</span>
             </ActionButton>
             <ActionButton
               active={post.savedByViewer}
-              activeClass="text-cyan-500 hover:text-cyan-500"
+              activeClass="text-primary hover:text-primary"
               disabled={!userId}
               onClick={() => onSave(post._id)}
               ariaLabel={post.savedByViewer ? "Gespeicherten Beitrag entfernen" : "Post speichern"}
             >
-              <Bookmark className={`h-4 w-4 ${post.savedByViewer ? "fill-current" : ""}`} />
+              <Bookmark className={cn("h-5 w-5", post.savedByViewer && "fill-current")} />
             </ActionButton>
             <ActionButton onClick={() => onShare(post._id)} ariaLabel="Teilen">
-              <Share2 className="h-4 w-4" />
+              <Share2 className="h-5 w-5" />
             </ActionButton>
           </div>
+          {!isThreadHeader && post.commentCount > 0 && (
+            <button type="button" className="text-left text-sm text-muted-foreground transition hover:text-foreground" onClick={() => onComment(post._id)}>
+              Alle {post.commentCount} Kommentare anzeigen
+            </button>
+          )}
         </div>
-      </div>
     </article>
   );
 }
@@ -1076,7 +1431,7 @@ function ActionButton({
   return (
     <button
       type="button"
-      className={`inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-sm transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 ${active ? activeClass : ""}`}
+      className={`inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl px-1 text-base transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 ${active ? activeClass : ""}`}
       onClick={onClick}
       aria-label={ariaLabel}
       aria-pressed={active}
@@ -1141,8 +1496,8 @@ function LinkedLogCard({
   compact?: boolean;
 }) {
   return (
-    <div className={`rounded-lg border border-border bg-muted/30 ${compact ? "mt-2 p-2 text-xs" : "p-3 text-sm"}`}>
-      <Badge className="mb-2 gap-1">
+    <div className={`rounded-2xl border border-primary/35 bg-primary/[0.06] ${compact ? "mt-2 p-2 text-xs" : "p-4 text-sm"}`}>
+      <Badge className="mb-2 gap-1 border-primary/40 bg-primary/15 text-primary">
         <Video className="h-3 w-3" />
         Top Log
       </Badge>
@@ -1160,6 +1515,7 @@ function MediaPreview({
   mediaSize = "lg",
   mediaScale,
   compact = false,
+  cover = false,
   resizable = false,
   onScaleChange,
   onRemove,
@@ -1169,6 +1525,7 @@ function MediaPreview({
   mediaSize?: MediaSize;
   mediaScale?: number;
   compact?: boolean;
+  cover?: boolean;
   resizable?: boolean;
   onScaleChange?: (value: number) => void;
   onRemove?: () => void;
@@ -1177,7 +1534,8 @@ function MediaPreview({
   const frameRef = useRef<HTMLDivElement>(null);
   const fallbackScale = mediaSize === "sm" ? 45 : mediaSize === "md" ? 70 : 100;
   const currentScale = Math.min(100, Math.max(35, mediaScale ?? fallbackScale));
-  const heightClass = compact ? "max-h-56" : "max-h-[32rem]";
+  const heightClass = compact ? "max-h-56" : cover ? "aspect-[1.55/1] max-h-[34rem]" : "max-h-[32rem]";
+  const mediaFitClass = cover ? "object-cover" : "object-contain";
 
   function resizeFromPointer(clientX: number) {
     const parent = frameRef.current?.parentElement;
@@ -1213,8 +1571,8 @@ function MediaPreview({
   return (
     <div
       ref={frameRef}
-      className={`relative select-none overflow-visible rounded-lg border bg-black/5 ${
-        resizable ? "border-dashed border-foreground/70" : "border-border"
+      className={`relative select-none rounded-2xl border bg-black/30 ${resizable ? "overflow-visible" : "overflow-hidden"} ${
+        resizable ? "border-dashed border-foreground/70" : "border-border/80"
       }`}
       style={{ width: compact ? "100%" : `${currentScale}%` }}
     >
@@ -1229,10 +1587,10 @@ function MediaPreview({
         </button>
       )}
       {mediaType === "video" ? (
-        <video src={mediaUrl} controls className={`${heightClass} w-full rounded-lg bg-black object-contain`} />
+        <video src={mediaUrl} controls className={`${heightClass} w-full rounded-2xl bg-black ${mediaFitClass}`} />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={mediaUrl} alt="" className={`${heightClass} w-full rounded-lg object-contain`} />
+        <img src={mediaUrl} alt="" className={`${heightClass} w-full rounded-2xl ${mediaFitClass}`} />
       )}
       {resizable && onScaleChange && (
         <>
@@ -1432,18 +1790,24 @@ function formatRelativeTime(timestamp: number) {
   return new Date(timestamp).toLocaleDateString("de-DE", { day: "2-digit", month: "short" });
 }
 
-function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "sm" | "md" | "lg" | "share" }) {
+function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "xs" | "sm" | "story" | "feed" | "md" | "lg" | "share" }) {
   const sizeClass =
     size === "lg"
       ? "mx-auto h-20 w-20 text-xl"
       : size === "share"
         ? "h-14 w-14 text-base"
-        : size === "sm"
-          ? "h-9 w-9 text-xs"
-          : "h-11 w-11";
+        : size === "story"
+          ? "h-full w-full text-base"
+          : size === "feed"
+            ? "h-12 w-12 text-sm"
+            : size === "sm"
+              ? "h-9 w-9 text-xs"
+              : size === "xs"
+                ? "h-5 w-5 text-[0.62rem]"
+                : "h-11 w-11";
 
   return (
-    <div className={`flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted font-semibold`}>
+    <div className={`flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-card/65 font-semibold`}>
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={avatarUrl} alt="" className="h-full w-full object-cover" />

@@ -5,3 +5,7 @@ When working on Convex code, **always read `convex/_generated/ai/guidelines.md` 
 
 Convex agent skills for common tasks can be installed by running `npx convex ai-files install`.
 <!-- convex-ai-end -->
+
+## Product data rule
+
+Niemals Fake-, Demo-, Placeholder- oder "Geister"-Inhalte in produktiven App-Screens anzeigen oder neu einbauen, außer der Nutzer fordert das ausdrücklich. Wenn echte Daten fehlen, stattdessen einen Empty State, Skeleton oder eine neutrale leere Fläche anzeigen. Beispiele: keine erfundenen Posts, Storys, Kommentare, Aktivitäten, Nutzer, Likes, Bilder oder Social-Events.

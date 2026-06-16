@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Ban,
@@ -97,6 +97,8 @@ type ProfilePost = {
   body: string;
   createdAt: number;
   updatedAt?: number;
+  repostOfPostId?: Id<"social_posts">;
+  repostOf?: unknown | null;
   mediaUrl?: string | null;
   mediaType?: "image" | "video" | "gif";
   likedByViewer: boolean;
@@ -112,6 +114,8 @@ type ProfilePost = {
   };
   comments?: ProfilePostComment[];
 };
+
+type PublicProfileTab = "posts" | "reposts" | "media" | "logs" | "training";
 
 const LIFT_LABELS = {
   bench_press: "Bench Press",
@@ -136,6 +140,7 @@ function PublicProfileContent({
   viewedUserId: Id<"users">;
   userId: Id<"users"> | null | undefined;
 }) {
+  const router = useRouter();
   const { locale, t } = useAppPreferences();
   const profile = useQuery(api.users.getPublicProfile, {
     userId: viewedUserId,
@@ -175,10 +180,20 @@ function PublicProfileContent({
   const [showReport, setShowReport] = useState(false);
   const [showMessageComposer, setShowMessageComposer] = useState(false);
   const [followDialogOpen, setFollowDialogOpen] = useState(false);
-  const [activePublicTab, setActivePublicTab] = useState<"posts" | "media">("posts");
+  const [activePublicTab, setActivePublicTab] = useState<PublicProfileTab>("posts");
   const [commentBodies, setCommentBodies] = useState<Record<string, string>>({});
   const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
   const mediaPosts = useMemo(() => posts?.filter((post) => Boolean(post.mediaUrl)), [posts]);
+  const repostPosts = useMemo(
+    () => posts?.filter((post) => Boolean(post.repostOfPostId || post.repostOf)),
+    [posts]
+  );
+
+  function openDirectMessage() {
+    if (!userId) return;
+    window.sessionStorage.setItem("gymlogs:pending-message-user", viewedUserId);
+    router.push("/profile#messages");
+  }
 
   async function submit() {
     if (!userId || !body.trim()) return;
@@ -186,6 +201,7 @@ function PublicProfileContent({
     setBody("");
     setSent(true);
     setShowMessageComposer(false);
+    router.push("/profile#messages");
     window.setTimeout(() => setSent(false), 2200);
   }
 
@@ -263,7 +279,28 @@ function PublicProfileContent({
           value: new Date(profile.birthDate).toLocaleDateString(locale),
         }
       : null,
-  ].filter(Boolean) as Array<{ icon: typeof Ruler; label: string; value: string }>;
+  ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; label: string; value: string }>;
+  const trainingMetricItems = [
+    showTrainingStreak && profile.trainingSummary
+      ? { icon: Sparkles, label: t("profile.metrics.streak"), value: `${profile.trainingSummary.currentStreakDays} ${t("profile.public.days")}` }
+      : null,
+    showTrainingBestSet && profile.trainingSummary?.bestSet
+      ? { icon: Dumbbell, label: t("profile.metrics.topLift"), value: `${profile.trainingSummary.bestSet.weight} kg x ${profile.trainingSummary.bestSet.reps}` }
+      : null,
+    showTrainingActivity && profile.trainingSummary
+      ? { icon: Calendar, label: t("profile.metrics.activity"), value: `${profile.trainingSummary.averageWorkoutsPerWeek}/${t("profile.metrics.week")}` }
+      : null,
+    showTrainingVolume && profile.trainingSummary
+      ? { icon: Trophy, label: t("profile.metrics.volume30"), value: `${Math.round(profile.trainingSummary.totalVolume).toLocaleString(locale)} kg` }
+      : null,
+  ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; label: string; value: string }>;
+  const publicProfileTabs: Array<{ id: PublicProfileTab; label: string }> = [
+    { id: "posts", label: t("profile.tabs.posts") },
+    { id: "reposts", label: t("profile.tabs.reposts") },
+    { id: "media", label: t("profile.tabs.media") },
+    { id: "logs", label: t("profile.tabs.logs") },
+    { id: "training", label: t("profile.tabs.training") },
+  ];
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 overflow-x-hidden">
@@ -293,7 +330,7 @@ function PublicProfileContent({
             </div>
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:min-w-[22rem] sm:flex-wrap sm:justify-end">
               {canMessage && (
-                <Button className="h-10 w-full rounded-full sm:w-auto sm:min-w-40" onClick={() => setShowMessageComposer((value) => !value)}>
+                <Button className="h-10 w-full rounded-full sm:w-auto sm:min-w-40" onClick={openDirectMessage}>
                   <MessageCircle className="h-4 w-4" />
                   {t("profile.public.sendMessage")}
                 </Button>
@@ -349,12 +386,9 @@ function PublicProfileContent({
 
               {profile.trainingSummary && hasVisibleTrainingMetric ? (
                 <div className="grid gap-3 min-[380px]:grid-cols-2 lg:grid-cols-4">
-                  {showTrainingStreak && <Metric icon={Sparkles} label={t("profile.metrics.streak")} value={`${profile.trainingSummary.currentStreakDays} ${t("profile.public.days")}`} />}
-                  {showTrainingBestSet && profile.trainingSummary.bestSet && (
-                    <Metric icon={Dumbbell} label={t("profile.metrics.topLift")} value={`${profile.trainingSummary.bestSet.weight} kg x ${profile.trainingSummary.bestSet.reps}`} />
-                  )}
-                  {showTrainingActivity && <Metric icon={Calendar} label={t("profile.metrics.activity")} value={`${profile.trainingSummary.averageWorkoutsPerWeek}/${t("profile.metrics.week")}`} />}
-                  {showTrainingVolume && <Metric icon={Trophy} label={t("profile.metrics.volume30")} value={`${Math.round(profile.trainingSummary.totalVolume).toLocaleString(locale)} kg`} />}
+                  {trainingMetricItems.map((metric) => (
+                    <Metric key={metric.label} icon={metric.icon} label={metric.label} value={metric.value} />
+                  ))}
                 </div>
               ) : null}
 
@@ -366,10 +400,6 @@ function PublicProfileContent({
                   </p>
                 </div>
               )}
-
-              <TopLogsPanel logs={topLogs} />
-
-              <WorkoutTemplatesPanel templates={workoutTemplates} />
             </>
           </CardContent>
         )}
@@ -425,38 +455,69 @@ function PublicProfileContent({
       {profile.isPublic !== false && (
         <>
           <div className="border-b border-border">
-            <div className="flex gap-4 sm:gap-5">
-              {(["posts", "media"] as const).map((tab) => (
+            <div className="flex gap-4 overflow-x-auto sm:gap-5">
+              {publicProfileTabs.map((tab) => (
                 <button
-                  key={tab}
+                  key={tab.id}
                   type="button"
+                  aria-pressed={activePublicTab === tab.id}
                   className={`relative min-h-11 px-1 text-base font-semibold transition-colors sm:min-h-12 sm:text-lg ${
-                    activePublicTab === tab ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                    activePublicTab === tab.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                   }`}
-                  onClick={() => setActivePublicTab(tab)}
+                  onClick={() => setActivePublicTab(tab.id)}
                 >
-                  {tab === "posts" ? t("profile.tabs.posts") : t("profile.tabs.media")}
-                  {activePublicTab === tab && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />}
+                  {tab.label}
+                  {activePublicTab === tab.id && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />}
                 </button>
               ))}
             </div>
           </div>
-          <ProfilePostsPanel
-            posts={activePublicTab === "media" ? mediaPosts : posts}
-            userId={userId}
-            commentBodies={commentBodies}
-            activeCommentPostId={activeCommentPostId}
-            onLike={(postId) => userId && togglePostLike({ userId, postId })}
-            onSave={(postId) => userId && togglePostSave({ userId, postId })}
-            onToggleComment={(postId) =>
-              setActiveCommentPostId((current) => current === postId ? null : postId)
-            }
-            onCommentBodyChange={(postId, body) =>
-              setCommentBodies((current) => ({ ...current, [postId]: body }))
-            }
-            onSubmitComment={submitProfilePostComment}
-            emptyTitle={activePublicTab === "media" ? t("profile.public.mediaEmptyTitle") : undefined}
-          />
+          {activePublicTab === "logs" ? (
+            <TopLogsPanel logs={topLogs} />
+          ) : activePublicTab === "training" ? (
+            <PublicTrainingPanel
+              trainingGoal={profile.trainingGoal}
+              visibleMetrics={visibleMetrics}
+              trainingMetrics={trainingMetricItems}
+              templates={workoutTemplates}
+            />
+          ) : (
+            <ProfilePostsPanel
+              title={
+                activePublicTab === "media"
+                  ? t("profile.tabs.media")
+                  : activePublicTab === "reposts"
+                    ? t("profile.tabs.reposts")
+                    : t("profile.public.postsTitle")
+              }
+              posts={
+                activePublicTab === "media"
+                  ? mediaPosts
+                  : activePublicTab === "reposts"
+                    ? repostPosts
+                    : posts
+              }
+              userId={userId}
+              commentBodies={commentBodies}
+              activeCommentPostId={activeCommentPostId}
+              onLike={(postId) => userId && togglePostLike({ userId, postId })}
+              onSave={(postId) => userId && togglePostSave({ userId, postId })}
+              onToggleComment={(postId) =>
+                setActiveCommentPostId((current) => current === postId ? null : postId)
+              }
+              onCommentBodyChange={(postId, body) =>
+                setCommentBodies((current) => ({ ...current, [postId]: body }))
+              }
+              onSubmitComment={submitProfilePostComment}
+              emptyTitle={
+                activePublicTab === "media"
+                  ? t("profile.public.mediaEmptyTitle")
+                  : activePublicTab === "reposts"
+                    ? t("profile.public.repostsEmptyTitle")
+                    : undefined
+              }
+            />
+          )}
         </>
       )}
       <FollowDialog
@@ -468,6 +529,58 @@ function PublicProfileContent({
         onFollowToggle={toggleFollowInDialog}
       />
     </div>
+  );
+}
+
+function PublicTrainingPanel({
+  trainingGoal,
+  visibleMetrics,
+  trainingMetrics,
+  templates,
+}: {
+  trainingGoal?: string;
+  visibleMetrics: Array<{ icon: ComponentType<{ className?: string }>; label: string; value: string }>;
+  trainingMetrics: Array<{ icon: ComponentType<{ className?: string }>; label: string; value: string }>;
+  templates: ProfileWorkoutTemplate[] | undefined;
+}) {
+  const { t } = useAppPreferences();
+  const hasTrainingInfo = Boolean(trainingGoal) || visibleMetrics.length > 0 || trainingMetrics.length > 0;
+
+  return (
+    <section className="space-y-4">
+      {hasTrainingInfo ? (
+        <>
+          {trainingGoal && (
+            <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+              <p className="mb-1 flex items-center gap-2 font-medium">
+                <Target className="h-4 w-4" />
+                {t("profile.fields.trainingGoal")}
+              </p>
+              <p className="text-muted-foreground">{trainingGoal}</p>
+            </div>
+          )}
+          {visibleMetrics.length > 0 && (
+            <div className="grid gap-3 min-[380px]:grid-cols-2 lg:grid-cols-3">
+              {visibleMetrics.map((metric) => (
+                <Metric key={metric.label} icon={metric.icon} label={metric.label} value={metric.value} />
+              ))}
+            </div>
+          )}
+          {trainingMetrics.length > 0 && (
+            <div className="grid gap-3 min-[380px]:grid-cols-2 lg:grid-cols-4">
+              {trainingMetrics.map((metric) => (
+                <Metric key={metric.label} icon={metric.icon} label={metric.label} value={metric.value} />
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="rounded-lg border border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+          {t("profile.training.emptyPublic")}
+        </div>
+      )}
+      <WorkoutTemplatesPanel templates={templates} />
+    </section>
   );
 }
 
@@ -624,6 +737,7 @@ function WorkoutTemplatesPanel({
 }
 
 function ProfilePostsPanel({
+  title,
   posts,
   userId,
   commentBodies,
@@ -635,6 +749,7 @@ function ProfilePostsPanel({
   onCommentBodyChange,
   onSubmitComment,
 }: {
+  title?: string;
   posts: ProfilePost[] | undefined;
   userId: Id<"users"> | null | undefined;
   commentBodies: Record<string, string>;
@@ -666,7 +781,7 @@ function ProfilePostsPanel({
   return (
     <section className="space-y-3">
       <div className="border-b border-border pb-3">
-        <p className="text-sm font-medium">{t("profile.public.postsTitle")}</p>
+        <p className="text-sm font-medium">{title ?? t("profile.public.postsTitle")}</p>
         <p className="text-xs text-muted-foreground">{t("profile.public.newestFirst")}</p>
       </div>
       {posts === undefined ? (
@@ -899,7 +1014,7 @@ function Metric({
   label,
   value,
 }: {
-  icon: typeof Ruler;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   value: string;
 }) {

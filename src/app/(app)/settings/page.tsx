@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ComponentType } from "react";
 import { Bell, Check, Languages, Moon, Shield, Sun, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppPage, AppPanel } from "@/components/ui/app-surface";
 import {
   LOCALE_FLAGS,
   LOCALE_LABELS,
@@ -17,12 +17,14 @@ export default function SettingsPage() {
   const { locale, setLocale, theme, toggleTheme, t } = useAppPreferences();
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.title")}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+    <AppPage className="max-w-5xl">
+      <AppPanel className="p-4 sm:p-5">
+        <div className="mb-4">
+          <h1 className="text-xl font-bold leading-tight sm:text-2xl">
+            {t("settings.title")}
+          </h1>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <div className="grid gap-3 sm:grid-cols-2">
             <PreferencePanel
               icon={Languages}
@@ -36,7 +38,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={() => setLocale(item)}
                     className={cn(
-                      "flex min-h-11 items-center justify-between rounded-lg border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "flex min-h-11 items-center justify-between rounded-2xl border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       locale === item
                         ? "border-primary bg-primary/10 text-foreground"
                         : "border-border bg-background hover:bg-muted"
@@ -90,9 +92,9 @@ export default function SettingsPage() {
               action={t("settings.privacyAction")}
             />
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </AppPanel>
+    </AppPage>
   );
 }
 
@@ -108,7 +110,7 @@ function PreferencePanel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-56 flex-col rounded-lg border border-border bg-muted/25 p-4">
+    <div className="flex min-h-56 flex-col rounded-2xl border border-border bg-muted/25 p-4">
       <Icon className="h-5 w-5 text-primary" />
       <h2 className="mt-3 font-semibold">{title}</h2>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
@@ -131,7 +133,7 @@ function SettingsPanel({
   action: string;
 }) {
   return (
-    <div className="flex min-h-40 flex-col rounded-lg border border-border bg-muted/25 p-4">
+    <div className="flex min-h-40 flex-col rounded-2xl border border-border bg-muted/25 p-4">
       <Icon className="h-5 w-5 text-primary" />
       <h2 className="mt-3 font-semibold">{title}</h2>
       <p className="mt-2 flex-1 text-sm leading-6 text-muted-foreground">{copy}</p>

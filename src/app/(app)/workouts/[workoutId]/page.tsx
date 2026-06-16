@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
@@ -21,8 +22,6 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { formatVolume } from "@/lib/pr-utils";
-import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
-import { ActiveWorkout } from "@/components/workout/ActiveWorkout";
 import {
   BODY_PARTS,
   exerciseBodygraphParts,
@@ -31,6 +30,24 @@ import {
   type BodyPart,
 } from "@/lib/muscle-groups";
 import { BookmarkPlus, Pencil, Trash2 } from "lucide-react";
+
+const WorkoutMuscleMap = dynamic(
+  () => import("@/components/workout/WorkoutMuscleMap").then((module) => module.WorkoutMuscleMap),
+  { ssr: false, loading: () => <Skeleton className="h-[360px] w-full" /> }
+);
+
+const ActiveWorkout = dynamic(
+  () => import("@/components/workout/ActiveWorkout").then((module) => module.ActiveWorkout),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    ),
+  }
+);
 
 export default function WorkoutDetailPage() {
   const { workoutId } = useParams();

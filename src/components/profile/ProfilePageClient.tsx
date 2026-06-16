@@ -17,12 +17,10 @@ import {
   Eye,
   Flag,
   Flame,
-  Heart,
   ImageIcon,
   ImagePlus,
   Lock,
   MapPin,
-  MessageSquare,
   MoreHorizontal,
   MessageCircle,
   MoveRight,
@@ -30,7 +28,6 @@ import {
   Pencil,
   PlusCircle,
   Play,
-  Repeat2,
   Ruler,
   Search,
   Send,
@@ -38,10 +35,8 @@ import {
   Share2,
   ShieldCheck,
   Sparkles,
-  Bookmark,
   Target,
   Trash2,
-  Trophy,
   Upload,
   User,
   UserPlus,
@@ -74,6 +69,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_EXERCISES } from "@/lib/default-exercises";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { FollowDialog } from "@/components/profile/FollowDialog";
+import { SocialPostCard } from "@/components/social/SocialPageClient";
 import { cn } from "@/lib/utils";
 
 type ProfileForm = {
@@ -244,6 +240,13 @@ type ProfilePost = {
   mediaScale?: number;
   repostOfPostId?: Id<"social_posts">;
   repostedByViewer?: boolean;
+  author?: null | {
+    _id: Id<"users">;
+    name: string;
+    username?: string;
+    avatarUrl?: string | null;
+    isPro: boolean;
+  };
   likedByViewer: boolean;
   savedByViewer: boolean;
   likeCount: number;
@@ -471,17 +474,39 @@ export function ProfilePageClient() {
   }, []);
 
   useEffect(() => {
+    function openMessages() {
+      setMessagesDialogOpen(true);
+    }
+
     function selectTabFromHash() {
       const hash = window.location.hash;
-      if (hash === "#messages") setMessagesDialogOpen(true);
+      if (hash === "#messages") openMessages();
       if (hash === "#network" || hash === "#friends") setNetworkDialogOpen(true);
       if (hash === "#training" || hash === "#workouts" || hash === "#playlists") setActiveProfileTab("training");
     }
 
     selectTabFromHash();
+    const pendingMessageUserId = window.sessionStorage.getItem("gymlogs:pending-message-user");
+    if (pendingMessageUserId) {
+      window.sessionStorage.removeItem("gymlogs:pending-message-user");
+      setMessagesDialogOpen(true);
+      setNetworkDialogOpen(true);
+      setMessageTarget(pendingMessageUserId as Id<"users">);
+    }
     window.addEventListener("hashchange", selectTabFromHash);
-    return () => window.removeEventListener("hashchange", selectTabFromHash);
+    window.addEventListener("gymlogs:open-messages", openMessages);
+    return () => {
+      window.removeEventListener("hashchange", selectTabFromHash);
+      window.removeEventListener("gymlogs:open-messages", openMessages);
+    };
   }, []);
+
+  function setMessagesOpen(open: boolean) {
+    setMessagesDialogOpen(open);
+    if (!open && typeof window !== "undefined" && window.location.hash === "#messages") {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -647,7 +672,7 @@ export function ProfilePageClient() {
       ? {
           key: "streak",
           icon: Flame,
-          iconClassName: "text-orange-400",
+          iconClassName: "text-primary",
           value: streakDays,
           label: t("profile.metrics.streak"),
         }
@@ -692,7 +717,7 @@ export function ProfilePageClient() {
       ? {
           key: "streak",
           icon: Flame,
-          iconClassName: "text-orange-400",
+          iconClassName: "text-primary",
           value: String(previewTrainingSummary.currentStreakDays),
           label: t("profile.metrics.streak"),
         }
@@ -1130,6 +1155,10 @@ export function ProfilePageClient() {
     setMessageBody("");
     clearMessageImageDraft();
     setMessageTarget(null);
+    if (targetId) {
+      setNetworkDialogOpen(false);
+      setMessagesDialogOpen(true);
+    }
   }
 
   async function submitReport() {
@@ -1166,7 +1195,7 @@ export function ProfilePageClient() {
   const profileCoverStyle = {
     backgroundImage: displayCoverUrl
       ? `url(${displayCoverUrl})`
-      : "url(https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80)",
+      : "radial-gradient(circle at 18% 12%, var(--brand-wash), transparent 34%), linear-gradient(135deg, var(--card), var(--background))",
   };
 
   return (
@@ -1203,7 +1232,7 @@ export function ProfilePageClient() {
                     <span className="truncate">{form.name || "Steffen"}</span>
                     <BadgeCheck className="h-7 w-7 shrink-0 fill-sky-400 text-black sm:h-10 sm:w-10" />
                   </h1>
-                  <p className="mt-2 text-[1.12rem] leading-tight text-muted-foreground min-[390px]:text-[1.25rem] sm:text-2xl">@{form.username || "shaker1"}</p>
+                  <p className="mt-2 text-[1.12rem] leading-tight text-muted-foreground min-[390px]:text-[1.25rem] sm:text-2xl">@{form.username || "username"}</p>
                   <button
                     type="button"
                     className="mt-2 text-left text-sm font-medium text-muted-foreground transition hover:text-foreground sm:text-base"
@@ -1253,8 +1282,8 @@ export function ProfilePageClient() {
                 ))}
               </div>
             )}
-            <div className="-mx-5 overflow-x-auto border-b border-border px-5 sm:mx-0 sm:px-0">
-              <div className="flex w-max min-w-full gap-3 sm:gap-5">
+            <div className="-mx-5 overflow-x-auto border-y border-white/[0.08] bg-[#05090a]/92 px-5 sm:mx-0 sm:rounded-[1.25rem] sm:border sm:px-3">
+              <div className="flex w-max min-w-full gap-4 sm:gap-6">
                 {profileTabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -1264,13 +1293,13 @@ export function ProfilePageClient() {
                     type="button"
                     onClick={() => setActiveProfileTab(tab.id)}
                     className={cn(
-                      "relative min-h-11 shrink-0 whitespace-nowrap px-1.5 text-base font-semibold text-muted-foreground transition-colors hover:text-foreground sm:min-h-12 sm:px-1 sm:text-lg",
-                      activeProfileTab === tab.id && "text-foreground"
+                      "relative min-h-[4rem] shrink-0 whitespace-nowrap px-2 text-base font-extrabold text-muted-foreground transition-colors hover:text-foreground sm:min-h-[4.5rem] sm:text-lg",
+                      activeProfileTab === tab.id && "text-primary"
                     )}
                   >
                     {tab.label}
                     {activeProfileTab === tab.id && (
-                      <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />
+                      <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" style={{ boxShadow: "0 0 18px var(--brand-glow)" }} />
                     )}
                   </button>
                 ))}
@@ -1391,12 +1420,13 @@ export function ProfilePageClient() {
               />
             )}
             {activeProfileTab === "media" && (
-              <ProfilePostsCard
+              <ProfileMediaGrid
                 posts={mediaPosts}
                 profileName={form.name || "GymLogs User"}
                 username={form.username || "username"}
                 avatarUrl={displayAvatarUrl}
                 isPro={Boolean(user?.isPro)}
+                selectedPostId={activeProfileCommentPostId}
                 userId={userId}
                 canManagePosts={isOwnProfile}
                 commentBodies={profilePostCommentBodies}
@@ -1806,8 +1836,8 @@ export function ProfilePageClient() {
                     )}
                     {form.isPublic && (
                       <>
-                        <div className="-mx-5 overflow-x-auto border-b border-border px-5 sm:mx-0 sm:px-0">
-                          <div className="flex w-max min-w-full gap-3 sm:gap-7">
+                        <div className="-mx-5 overflow-x-auto border-y border-white/[0.08] bg-[#05090a]/92 px-5 sm:mx-0 sm:rounded-[1.25rem] sm:border sm:px-3">
+                          <div className="flex w-max min-w-full gap-4 sm:gap-6">
                             {previewTabs.map((tab) => (
                               <button
                                 key={tab.id}
@@ -1817,13 +1847,13 @@ export function ProfilePageClient() {
                                 type="button"
                                 onClick={() => setPreviewProfileTab(tab.id)}
                                 className={cn(
-                                  "relative min-h-12 shrink-0 whitespace-nowrap px-1.5 text-base font-semibold text-muted-foreground transition-colors hover:text-foreground sm:min-h-14 sm:px-1 sm:text-xl",
-                                  previewProfileTab === tab.id && "text-foreground"
+                                  "relative min-h-[4rem] shrink-0 whitespace-nowrap px-2 text-base font-extrabold text-muted-foreground transition-colors hover:text-foreground sm:min-h-[4.5rem] sm:text-lg",
+                                  previewProfileTab === tab.id && "text-primary"
                                 )}
                               >
                                 {tab.label}
                                 {previewProfileTab === tab.id && (
-                                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />
+                                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" style={{ boxShadow: "0 0 18px var(--brand-glow)" }} />
                                 )}
                               </button>
                             ))}
@@ -1859,12 +1889,13 @@ export function ProfilePageClient() {
                           />
                         )}
                         {previewProfileTab === "media" && (
-                          <ProfilePostsCard
+                          <ProfileMediaGrid
                             posts={mediaPosts}
                             profileName={form.name || "GymLogs User"}
                             username={form.username || "username"}
                             avatarUrl={displayAvatarUrl}
                             isPro={Boolean(user?.isPro)}
+                            selectedPostId={null}
                             userId={null}
                             canManagePosts={false}
                             commentBodies={{}}
@@ -2042,7 +2073,7 @@ export function ProfilePageClient() {
         </Dialog>
 
 
-        <Dialog open={messagesDialogOpen} onOpenChange={setMessagesDialogOpen}>
+        <Dialog open={messagesDialogOpen} onOpenChange={setMessagesOpen}>
           <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden rounded-none border-border bg-[#090b0d] p-0 text-foreground sm:h-[86dvh] sm:max-w-6xl sm:rounded-xl">
             <div id="messages" className="grid h-full min-h-0 bg-[#090b0d] md:grid-cols-[22rem_minmax(0,1fr)]">
               <aside className={cn("min-h-0 border-r border-white/10 bg-[#0d1013]", thread && "hidden md:flex", "flex flex-col")}>
@@ -2169,7 +2200,7 @@ export function ProfilePageClient() {
                     <div
                       ref={messagesScrollRef}
                       onScroll={handleMessagesScroll}
-                      className="relative min-h-0 flex-1 overflow-auto px-4 py-5 font-[var(--font-mozilla-text)] sm:px-8"
+                      className="relative min-h-0 flex-1 overflow-auto px-4 py-5 font-[var(--font-outfit)] sm:px-8"
                     >
                       {showJumpToLatest && (
                         <button
@@ -2570,7 +2601,7 @@ function ProfilePostsCard({
   onSubmitComment: (postId: Id<"social_posts">) => void;
   emptyTitle?: string;
 }) {
-  const { locale, t } = useAppPreferences();
+  const { t } = useAppPreferences();
   const resolvedEmptyTitle = emptyTitle ?? t("profile.public.postsEmptyTitle");
   async function sharePost(postId: Id<"social_posts">) {
     const postUrl = `${window.location.origin}/social?post=${postId}`;
@@ -2601,128 +2632,46 @@ function ProfilePostsCard({
   }
 
   return (
-    <div className="overflow-hidden border-y border-white/10">
+    <div className="space-y-3">
       {posts.map((post) => {
-        const isPreviewPost = post._id === ("preview" as Id<"social_posts">);
         const commentBody = commentBodies[post._id] ?? "";
         const showCommentInput = activeCommentPostId === post._id;
         const threadForPost = showCommentInput ? activeThread : undefined;
-        const isEditing = editingPostId === post._id;
-        const editingBody = editingPostBodies[post._id] ?? post.body ?? "";
-        const canSaveEdit = Boolean(editingBody.trim() || post.mediaUrl || post.linkedLog);
-        const edited = Boolean(post.updatedAt && post.updatedAt > post.createdAt);
-        const isOwnPost = Boolean(userId && post.authorId === userId);
-        const canRepost = Boolean(userId && !isOwnPost && !post.repostedByViewer && !post.repostOfPostId);
+        const postForCard = {
+          ...post,
+          mediaStorageId: undefined,
+          linkedSubmissionId: undefined,
+          repostedByViewer: Boolean(post.repostedByViewer),
+          author: post.author ?? {
+            _id: post.authorId,
+            name: profileName,
+            username,
+            avatarUrl,
+            isPro,
+          },
+        };
         return (
-        <article key={post._id} className="border-b border-border bg-background px-4 py-4 last:border-b-0 sm:px-8">
-          <div className="flex items-start gap-3">
-            <Avatar name={profileName} avatarUrl={avatarUrl} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-2 truncate text-base font-bold text-white sm:text-lg">
-                    {profileName}
-                    {isPro && <BadgeCheck className="h-5 w-5 shrink-0 fill-sky-400 text-black" />}
-                    <span className="truncate text-sm font-normal text-white/45">@{username}</span>
-                    <span className="text-sm font-normal text-white/45">· {formatProfilePostTime(post.createdAt, locale, t("profile.public.justNow"))}</span>
-                    {edited && <span className="text-sm font-normal text-white/45">{t("profile.public.edited")}</span>}
-                  </p>
-                </div>
-                {canManagePosts && !isPreviewPost && (
-                  <div className="relative shrink-0">
-                    <button
-                      type="button"
-                      aria-label="Post-Optionen"
-                      className="rounded-md text-white/55 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-                      onClick={() => onOpenPostMenu(openPostMenuId === post._id ? null : post._id)}
-                    >
-                      <MoreHorizontal className="h-5 w-5" />
-                    </button>
-                    {openPostMenuId === post._id && (
-                      <div className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-lg border border-white/10 bg-[#101416] p-1 text-white shadow-xl shadow-black/30">
-                        <button
-                          type="button"
-                          className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition hover:bg-white/10"
-                          onClick={() => onEditPost(post)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                          {t("profile.misc.edit")}
-                        </button>
-                        <button
-                          type="button"
-                          className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-red-300 transition hover:bg-red-500/10"
-                          onClick={() => onDeletePost(post._id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          {t("profile.misc.delete")}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              {isEditing ? (
-                <div className="mt-4 space-y-3">
-                  <Textarea
-                    value={editingBody}
-                    onChange={(event) => onEditingPostBodyChange(post._id, event.target.value)}
-                    rows={3}
-                    maxLength={1200}
-                    className="min-h-28 border-white/10 bg-white/[0.04] text-base text-white placeholder:text-white/35 focus:border-cyan-300/60 sm:text-lg"
-                  />
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="ghost" className="text-white/70 hover:bg-white/10 hover:text-white" onClick={() => onCancelPostEdit(post._id)}>
-                      {t("profile.misc.cancel")}
-                    </Button>
-                    <Button type="button" disabled={!canSaveEdit} onClick={() => onSavePostEdit(post)}>
-                      {t("profile.misc.save")}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                post.body && <p className="mt-4 whitespace-pre-wrap text-base leading-6 text-white sm:text-lg">{post.body}</p>
-              )}
-              {post.repostOfPostId && <p className="mt-2 text-sm text-muted-foreground">reposted</p>}
-              {post.linkedLog && (
-                <div className="mt-4 rounded-lg border border-white/10 bg-black/25 p-3 text-sm">
-                  <p className="font-medium">{post.linkedLog.exerciseName ?? "Top Log"}</p>
-                  <p className="text-white/55">
-                    {post.linkedLog.weightKg} kg x {post.linkedLog.reps} · Score {post.linkedLog.score ?? "-"}
-                  </p>
-                </div>
-              )}
-              {post.mediaUrl && (
-                <div className="mt-4 overflow-hidden rounded-lg bg-white/5">
-                  {post.mediaType === "video" ? (
-                    <video src={post.mediaUrl} controls className="max-h-[28rem] w-full bg-black object-contain" />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={post.mediaUrl} alt="" className="max-h-[28rem] w-full object-cover" />
-                  )}
-                </div>
-              )}
-              <div className="mt-4 grid grid-cols-5 items-center text-sm text-white/58">
-                <ProfilePostActionButton active={post.likedByViewer} activeClass="text-rose-500 hover:text-rose-500" disabled={!userId || isPreviewPost} onClick={() => onLike(post._id)} ariaLabel={post.likedByViewer ? "Like entfernen" : "Liken"}>
-                  <Heart className={`h-5 w-5 ${post.likedByViewer ? "fill-current" : ""}`} />
-                  <span>{post.likeCount}</span>
-                </ProfilePostActionButton>
-                <ProfilePostActionButton disabled={!userId || isPreviewPost} onClick={() => onToggleComment(post._id)} ariaLabel="Kommentare öffnen">
-                  <MessageSquare className="h-5 w-5" />
-                  <span>{post.commentCount}</span>
-                </ProfilePostActionButton>
-                <ProfilePostActionButton active={post.repostedByViewer} activeClass="text-sky-500 hover:text-sky-500" disabled={!canRepost || isPreviewPost} onClick={() => onRepost(post._id)} ariaLabel={isOwnPost ? "Eigene Posts können nicht repostet werden" : post.repostedByViewer ? "Bereits repostet" : "Reposten"}>
-                  <Repeat2 className="h-5 w-5" />
-                  <span>{post.repostCount}</span>
-                </ProfilePostActionButton>
-                <ProfilePostActionButton active={post.savedByViewer} activeClass="text-primary hover:text-primary" disabled={!userId || isPreviewPost} onClick={() => onSave(post._id)} ariaLabel={post.savedByViewer ? t("profile.public.removeSavedPost") : t("profile.public.savePostAria")}>
-                  <Bookmark className={`h-5 w-5 ${post.savedByViewer ? "fill-current" : ""}`} />
-                </ProfilePostActionButton>
-                <ProfilePostActionButton disabled={isPreviewPost} onClick={() => sharePost(post._id)} ariaLabel={t("profile.public.sharePost")}>
-                  <Share2 className="h-5 w-5" />
-                </ProfilePostActionButton>
-              </div>
-              {!isPreviewPost && showCommentInput && (
-                <div className="mt-4 border-t border-white/10 pt-4">
+          <article key={post._id}>
+            <SocialPostCard
+              post={postForCard}
+              userId={userId ?? undefined}
+              openPostMenuId={canManagePosts ? openPostMenuId : null}
+              editingPostId={editingPostId}
+              editingBody={editingPostBodies[post._id] ?? post.body ?? ""}
+              onOpenPostMenu={canManagePosts ? onOpenPostMenu : () => undefined}
+              onEditPost={() => onEditPost(post)}
+              onDeletePost={onDeletePost}
+              onEditingBodyChange={(body) => onEditingPostBodyChange(post._id, body)}
+              onCancelEdit={() => onCancelPostEdit(post._id)}
+              onSaveEdit={() => onSavePostEdit(post)}
+              onLike={onLike}
+              onComment={onToggleComment}
+              onRepost={onRepost}
+              onSave={onSave}
+              onShare={sharePost}
+            />
+              {showCommentInput && (
+                <div className="mt-4 rounded-[1.25rem] border border-white/[0.08] bg-[#071012]/90 p-4">
                   <div className="flex gap-2">
                     <input
                       id={`profile-comment-${post._id}`}
@@ -2751,47 +2700,101 @@ function ProfilePostsCard({
                   </div>
                 </div>
               )}
-            </div>
-          </div>
         </article>
       );
       })}
-      <Link href="/social" className="flex h-16 w-full items-center justify-center gap-2 border-t border-border bg-background text-base font-medium text-muted-foreground transition hover:bg-muted/40 hover:text-foreground">
-        {t("socialPage.discoverMore")}
-      </Link>
     </div>
   );
 }
 
-function ProfilePostActionButton({
-  children,
-  active = false,
-  activeClass = "text-white",
-  disabled = false,
-  ariaLabel,
-  onClick,
+function ProfileMediaGrid({
+  posts,
+  selectedPostId,
+  emptyTitle,
+  onToggleComment,
+  ...postCardProps
 }: {
-  children: React.ReactNode;
-  active?: boolean;
-  activeClass?: string;
-  disabled?: boolean;
-  ariaLabel: string;
-  onClick: () => void;
+  posts: ProfilePost[] | undefined;
+  selectedPostId: string | null;
+  profileName: string;
+  username: string;
+  avatarUrl?: string;
+  isPro: boolean;
+  userId: Id<"users"> | null | undefined;
+  canManagePosts: boolean;
+  commentBodies: Record<string, string>;
+  activeCommentPostId: string | null;
+  activeThread: ProfilePostThread;
+  openPostMenuId: string | null;
+  editingPostId: string | null;
+  editingPostBodies: Record<string, string>;
+  onLike: (postId: Id<"social_posts">) => void;
+  onSave: (postId: Id<"social_posts">) => void;
+  onRepost: (postId: Id<"social_posts">) => void;
+  onOpenPostMenu: (postId: string | null) => void;
+  onEditPost: (post: ProfilePost) => void;
+  onDeletePost: (postId: Id<"social_posts">) => void;
+  onEditingPostBodyChange: (postId: Id<"social_posts">, body: string) => void;
+  onCancelPostEdit: (postId: Id<"social_posts">) => void;
+  onSavePostEdit: (post: ProfilePost) => void;
+  onToggleComment: (postId: Id<"social_posts">) => void;
+  onCommentBodyChange: (postId: Id<"social_posts">, body: string) => void;
+  onSubmitComment: (postId: Id<"social_posts">) => void;
+  emptyTitle?: string;
 }) {
+  const { t } = useAppPreferences();
+  const selectedPost = posts?.find((post) => post._id === selectedPostId);
+
+  if (posts === undefined) {
+    return <p className="px-4 py-6 text-sm text-muted-foreground">{t("profile.public.postsLoading")}</p>;
+  }
+
+  if (posts.length === 0) {
+    return (
+      <div className="flex min-h-44 items-center justify-center rounded-[1.35rem] border border-white/[0.08] bg-[#071012]/90 px-6 py-8 text-center text-sm text-muted-foreground">
+        {emptyTitle ?? t("profile.public.mediaEmptyTitle")}
+      </div>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      aria-label={ariaLabel}
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60",
-        active && activeClass
+    <section className="space-y-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {posts.map((post) => (
+          <button
+            key={post._id}
+            type="button"
+            className={cn(
+              "group relative aspect-square overflow-hidden rounded-[1.15rem] border border-white/[0.08] bg-[#071012] text-left transition hover:-translate-y-0.5 hover:border-primary/45",
+              selectedPostId === post._id && "border-primary/70"
+            )}
+            style={selectedPostId === post._id ? { boxShadow: "0 0 28px color-mix(in oklch, var(--primary) 16%, transparent)" } : undefined}
+            onClick={() => onToggleComment(post._id)}
+          >
+            {post.mediaType === "video" ? (
+              <video src={post.mediaUrl ?? ""} className="h-full w-full object-cover opacity-90 transition group-hover:scale-105" muted playsInline />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={post.mediaUrl ?? ""} alt="" className="h-full w-full object-cover opacity-90 transition group-hover:scale-105" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/5 to-transparent opacity-90" />
+            <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-xs font-semibold text-white">
+              <span className="truncate">{post.body || post.bodyAfter || t("profile.tabs.media")}</span>
+              {post.mediaType === "video" && <Play className="h-4 w-4 shrink-0 fill-white" />}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {selectedPost && (
+        <ProfilePostsCard
+          {...postCardProps}
+          posts={[selectedPost]}
+          onToggleComment={onToggleComment}
+          emptyTitle={emptyTitle}
+        />
       )}
-    >
-      {children}
-    </button>
+    </section>
   );
 }
 
@@ -3039,86 +3042,68 @@ function WorkoutHistoryCard({
 
 function TopLogsCard({ logs, embedded = false }: { logs: ProfileTopLog[] | undefined; embedded?: boolean }) {
   const { locale, t } = useAppPreferences();
-  const highlight = logs?.[0];
 
   return (
-    <Card className={cn("overflow-hidden border-cyan-500/15 bg-card/95 shadow-xl shadow-cyan-950/5", embedded && "shadow-none")}>
-      <CardHeader className="border-b border-border/70 bg-muted/10 p-4 sm:p-6">
-        <CardTitle className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-primary" />
-          {t("profile.tabs.logs")}
-          </span>
-          {logs?.some((log) => log.isTopFivePercent) && (
-            <Badge className="gap-1 bg-primary text-primary-foreground">
-              <Sparkles className="h-3 w-3" />
-              Top 5%
-            </Badge>
-          )}
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">Verified Lifts mit Leaderboard-Gefühl und Platz für künftige Video-Highlights.</p>
-      </CardHeader>
-      <CardContent className="space-y-3 p-3 sm:p-6">
+    <Card className={cn("overflow-hidden border-white/[0.08] bg-[#05090a] shadow-none", embedded && "shadow-none")}>
+      <CardContent className="space-y-3 p-0">
         {logs === undefined ? (
-          <p className="text-sm text-muted-foreground">{t("profile.topLogs.loading")}</p>
+          <div className="space-y-3 p-4">
+            <div className="h-44 animate-pulse rounded-[1.35rem] border border-white/[0.08] bg-white/[0.04]" />
+            <div className="h-32 animate-pulse rounded-[1.35rem] border border-white/[0.08] bg-white/[0.035]" />
+          </div>
         ) : logs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="rounded-[1.35rem] border border-white/[0.08] bg-[#071012]/90 p-6 text-center text-sm text-muted-foreground">
             {t("profile.topLogs.empty")}
           </p>
         ) : (
-          <>
-          {highlight && (
-            <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/12 via-muted/20 to-background p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-950/10">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-primary">{t("profile.topLogs.currentHighlight")}</p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight">{highlight.exerciseName || LIFT_LABELS[highlight.submission.liftType]}</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {highlight.submission.weightKg} kg x {highlight.submission.reps} · Score {highlight.submission.score ?? "-"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {highlight.rank && <Badge variant="secondary">#{highlight.rank} {t("profile.topLogs.of")} {highlight.total}</Badge>}
-                  {highlight.percentile && <Badge variant="outline">{highlight.percentile}% Percentile</Badge>}
-                  <Badge variant="outline" className="border-cyan-500/30">
-                    <ImageIcon className="h-3 w-3" />
-                    {t("profile.topLogs.videoReady")}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          )}
-          {logs.map((log) => (
-            <div key={log.submission._id} className="rounded-lg border border-border bg-muted/25 p-3 transition-all hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-muted/40">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="font-medium">{log.exerciseName || LIFT_LABELS[log.submission.liftType]}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {log.submission.weightKg} kg x {log.submission.reps} · Score {log.submission.score ?? "-"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {log.rank && (
-                    <Badge variant="secondary">
-                      #{log.rank} {t("profile.topLogs.of")} {log.total}
-                    </Badge>
+          <div className="space-y-3">
+            {logs.map((log, index) => {
+              const exerciseName = log.exerciseName || LIFT_LABELS[log.submission.liftType];
+              return (
+                <article
+                  key={log.submission._id}
+                  className={cn(
+                    "rounded-[1.35rem] border border-white/[0.08] bg-[#071012]/92 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:border-primary/35",
+                    index === 0 && "border-primary/35"
                   )}
-                  {log.percentile && <Badge variant="outline">{log.percentile}% Percentile</Badge>}
-                  {log.isTopFivePercent && (
-                    <Badge className="gap-1">
-                      <Sparkles className="h-3 w-3" />
-                      Top 5%
-                    </Badge>
-                  )}
-                </div>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {LIFT_LABELS[log.submission.liftType]} · {log.submission.bodyweightClass} ·{" "}
-                {new Date(log.submission.submittedAt).toLocaleDateString(locale)}
-              </p>
-            </div>
-          ))}
-          </>
+                  style={index === 0 ? { background: "radial-gradient(circle at top right, var(--brand-soft), rgba(7,16,18,0.92) 42%)" } : undefined}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-primary">
+                        <Dumbbell className="h-4 w-4" />
+                        {index === 0 ? t("profile.topLogs.currentHighlight") : "Top Set"}
+                      </div>
+                      <h3 className="mt-3 truncate text-lg font-extrabold text-foreground">{exerciseName}</h3>
+                      <p className="mt-2 text-4xl font-black leading-none tracking-normal text-primary">
+                        {log.submission.weightKg} kg <span className="text-foreground">x</span> {log.submission.reps}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      {log.isTopFivePercent && (
+                        <Badge className="gap-1 rounded-full bg-primary text-primary-foreground">
+                          <Sparkles className="h-3 w-3" />
+                          Top 5%
+                        </Badge>
+                      )}
+                      {log.rank && (
+                        <Badge variant="outline" className="rounded-full border-white/[0.14] bg-white/[0.04]">
+                          #{log.rank} {t("profile.topLogs.of")} {log.total}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/[0.08] pt-3 text-sm text-muted-foreground">
+                    <span>{LIFT_LABELS[log.submission.liftType]}</span>
+                    <span>{log.submission.bodyweightClass}</span>
+                    <span>Score {log.submission.score ?? "-"}</span>
+                    <span>{new Date(log.submission.submittedAt).toLocaleDateString(locale)}</span>
+                    {log.percentile && <span>{log.percentile}% Percentile</span>}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
       </CardContent>
     </Card>

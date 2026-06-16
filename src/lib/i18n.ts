@@ -88,6 +88,7 @@ export const dictionaries = {
       },
       tabs: {
         posts: "Posts",
+        reposts: "Reposts",
         saved: "Saved",
         media: "Media",
         logs: "Top Logs",
@@ -195,6 +196,7 @@ export const dictionaries = {
         postsLoading: "Loading posts...",
         postsEmptyTitle: "No posts yet",
         postsEmptyCopy: "Shared posts will appear here.",
+        repostsEmptyTitle: "No reposts yet",
         mediaEmptyTitle: "No media posts yet",
         savePost: "Save",
         sharePost: "Share",
@@ -627,6 +629,7 @@ export const dictionaries = {
       },
       tabs: {
         posts: "Beitraege",
+        reposts: "Erneute Veroeffentlichungen",
         saved: "Gespeichert",
         media: "Medien",
         logs: "Top Logs",
@@ -734,6 +737,7 @@ export const dictionaries = {
         postsLoading: "Beitraege werden geladen...",
         postsEmptyTitle: "Noch keine Beitraege",
         postsEmptyCopy: "Wenn Beitraege geteilt werden, erscheinen sie hier.",
+        repostsEmptyTitle: "Noch keine erneuten Veroeffentlichungen",
         mediaEmptyTitle: "Noch keine Medienbeitraege",
         savePost: "Speichern",
         sharePost: "Teilen",

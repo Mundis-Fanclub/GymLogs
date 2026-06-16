@@ -140,12 +140,13 @@ function MaskOverlay({ part, setCounts, displayGroupActive }: MaskOverlayProps) 
  * CSS mask-image render does not block pointer events outside the painted
  * region.
  */
-function useMaskAlphaSampler() {
+function useMaskAlphaSampler(enabled: boolean) {
   const [alphaMaps, setAlphaMaps] = useState<Map<BodyPart, Uint8ClampedArray>>(
     new Map()
   );
 
   useEffect(() => {
+    if (!enabled) return;
     if (typeof window === "undefined") return;
     let cancelled = false;
     const next = new Map<BodyPart, Uint8ClampedArray>();
@@ -189,7 +190,7 @@ function useMaskAlphaSampler() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   return useCallback(
     (relX: number, relY: number): BodyPart[] => {
@@ -257,7 +258,8 @@ export function WorkoutMuscleMap({
     .join(", ");
 
   const interactive = !compact && Boolean(exercisesByZone);
-  const sampleAt = useMaskAlphaSampler();
+  const [samplerEnabled, setSamplerEnabled] = useState(false);
+  const sampleAt = useMaskAlphaSampler(interactive && samplerEnabled);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedZone, setSelectedZone] = useState<BodyPart | null>(null);
 
@@ -273,6 +275,8 @@ export function WorkoutMuscleMap({
 
   const handleMapClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!interactive || !containerRef.current) return;
+    setSamplerEnabled(true);
+    if (!samplerEnabled) return;
     const rect = containerRef.current.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
     const relX = (event.clientX - rect.left) / rect.width;
@@ -308,6 +312,8 @@ export function WorkoutMuscleMap({
       <div
         ref={containerRef}
         onClick={handleMapClick}
+        onPointerEnter={() => setSamplerEnabled(true)}
+        onFocus={() => setSamplerEnabled(true)}
         className={cn(
           "relative mx-auto aspect-[1448/1086] overflow-hidden rounded-[1.65rem] border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950",
           compact ? "max-w-24" : "max-w-[440px]",

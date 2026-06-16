@@ -1,5 +1,4 @@
 import { BottomNav } from "@/components/layout/BottomNav";
-import { FabStartWorkout } from "@/components/layout/FabStartWorkout";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 
@@ -13,7 +12,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-      <FabStartWorkout />
       <BottomNav />
     </div>
   );

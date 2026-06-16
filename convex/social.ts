@@ -24,6 +24,11 @@ async function mediaUrl(ctx: QueryCtx, post: Doc<"social_posts">) {
   return post.mediaUrl;
 }
 
+async function storyMediaUrl(ctx: QueryCtx, story: Doc<"social_stories">) {
+  if (story.mediaStorageId) return await ctx.storage.getUrl(story.mediaStorageId);
+  return story.mediaUrl;
+}
+
 async function commentMediaUrl(ctx: QueryCtx, comment: Doc<"social_comments">) {
   if (comment.mediaStorageId) return await ctx.storage.getUrl(comment.mediaStorageId);
   return comment.mediaUrl;
@@ -261,6 +266,61 @@ export const createPost = mutation({
       repostOfPostId: args.repostOfPostId,
       createdAt: Date.now(),
     });
+  },
+});
+
+export const createStory = mutation({
+  args: {
+    authorId: v.id("users"),
+    body: v.optional(v.string()),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(mediaType),
+  },
+  handler: async (ctx, args) => {
+    const author = await ctx.db.get(args.authorId);
+    if (!author) throw new Error("User not found.");
+    const body = args.body?.trim();
+    if (!body && !args.mediaStorageId && !args.mediaUrl) {
+      throw new Error("Story needs text or media.");
+    }
+    if (body && body.length > 280) throw new Error("Story text is too long.");
+    const now = Date.now();
+    return await ctx.db.insert("social_stories", {
+      authorId: args.authorId,
+      body,
+      mediaStorageId: args.mediaStorageId,
+      mediaUrl: args.mediaUrl?.trim().slice(0, 500),
+      mediaType: args.mediaType,
+      createdAt: now,
+      expiresAt: now + 24 * 60 * 60 * 1000,
+    });
+  },
+});
+
+export const listStories = query({
+  args: {
+    viewerId: v.optional(v.id("users")),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("social_stories")
+      .withIndex("by_expires_at", (q) => q.gt("expiresAt", now))
+      .order("asc")
+      .take(args.limit ?? 40);
+
+    const rendered = await Promise.all(
+      rows.map(async (story) => ({
+        ...story,
+        mediaUrl: await storyMediaUrl(ctx, story),
+        author: await userPreview(ctx, await ctx.db.get(story.authorId)),
+        isOwnStory: args.viewerId ? story.authorId === args.viewerId : false,
+      }))
+    );
+
+    return rendered.sort((a, b) => b.createdAt - a.createdAt);
   },
 });
 

@@ -7,6 +7,7 @@ import { Search, Trophy } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { AppEmptyPanel, AppSection } from "@/components/ui/app-surface";
 import {
   filterDefaultExercises,
   type DefaultExercise,
@@ -41,7 +42,7 @@ export function ExercisesList() {
 
   return (
     <div className="space-y-5">
-      <div className="sticky top-3 z-10 rounded-lg bg-background/95 pb-2 backdrop-blur md:static md:bg-transparent md:pb-0">
+      <div className="sticky top-3 z-10 rounded-2xl bg-background/95 pb-2 backdrop-blur md:static md:bg-transparent md:pb-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -61,16 +62,11 @@ export function ExercisesList() {
       )}
 
       {displayExercises.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">
-          {t("exercises.noExercises")}
-        </p>
+        <AppEmptyPanel title={t("exercises.noExercises")} className="py-10" />
       ) : (
         <div className="space-y-6">
           {DISPLAY_BODY_PARTS.filter((mg) => grouped[mg]?.length).map((mg) => (
-            <div key={mg}>
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {t(`muscleGroups.${mg}`)}
-              </h2>
+            <AppSection key={mg} title={t(`muscleGroups.${mg}`)}>
               <div className="grid gap-2 sm:grid-cols-2">
                 {grouped[mg]?.map((ex) => {
                   const content = (
@@ -96,7 +92,7 @@ export function ExercisesList() {
                     return (
                       <div
                         key={ex._id}
-                        className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2.5 text-sm"
+                        className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/55 px-3 py-2.5 text-sm"
                       >
                         {content}
                       </div>
@@ -107,14 +103,14 @@ export function ExercisesList() {
                     <Link
                       key={ex._id}
                       href={`/exercises/${ex._id}`}
-                      className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2.5 text-sm transition-colors hover:bg-accent/50"
+                      className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/55 px-3 py-2.5 text-sm transition-colors hover:bg-accent/50"
                     >
                       {content}
                     </Link>
                   );
                 })}
               </div>
-            </div>
+            </AppSection>
           ))}
         </div>
       )}

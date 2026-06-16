@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
@@ -7,13 +8,17 @@ import { de, enUS } from "date-fns/locale";
 import { Trophy } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { WeightProgressChart } from "@/components/charts/WeightProgressChart";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { estimated1RM, formatWeight } from "@/lib/pr-utils";
+
+const WeightProgressChart = dynamic(
+  () => import("@/components/charts/WeightProgressChart").then((module) => module.WeightProgressChart),
+  { ssr: false, loading: () => <Skeleton className="h-[220px] w-full" /> }
+);
 
 export default function ExerciseDetailPage() {
   const { exerciseId } = useParams();

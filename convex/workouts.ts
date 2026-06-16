@@ -594,6 +594,58 @@ async function canUseTemplate(
   return await areFriends(ctx, templateUserId, viewerId);
 }
 
+async function templateAuthorPreview(ctx: QueryCtx, userId: Id<"users">) {
+  const user = await ctx.db.get(userId);
+  if (!user) return null;
+  const avatarUrl = user.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) : null;
+  return {
+    _id: user._id,
+    name: user.name,
+    username: user.username,
+    avatarUrl: avatarUrl ?? user.avatarUrl,
+    isPro: user.isPro ?? false,
+  };
+}
+
+function summarizeTemplate(template: Doc<"workout_templates">, showWeights: boolean) {
+  return {
+    _id: template._id,
+    userId: template.userId,
+    name: template.name,
+    description: template.description,
+    visibility: template.visibility ?? "private",
+    showWeights: template.showWeights ?? false,
+    executionCount: template.executionCount ?? 0,
+    createdAt: template.createdAt,
+    totalExercises: template.exercises.length,
+    totalSets: template.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0),
+    totalVolume: showWeights
+      ? template.exercises.reduce(
+          (sum, exercise) =>
+            sum +
+            exercise.sets.reduce(
+              (exerciseSum, set) => exerciseSum + set.weight * set.reps,
+              0
+            ),
+          0
+        )
+      : null,
+  };
+}
+
+async function renderTemplateStartCard(
+  ctx: QueryCtx,
+  template: Doc<"workout_templates">,
+  viewerId: Id<"users">
+) {
+  const isSelf = template.userId === viewerId;
+  const showWeights = isSelf || template.showWeights === true;
+  return {
+    ...summarizeTemplate(template, showWeights),
+    author: await templateAuthorPreview(ctx, template.userId),
+  };
+}
+
 export const listProfileTemplates = query({
   args: {
     userId: v.id("users"),
@@ -654,6 +706,95 @@ export const listProfileTemplates = query({
             : null,
         };
       });
+  },
+});
+
+export const listStartOptions = query({
+  args: {
+    userId: v.id("users"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit ?? 8, 12);
+    const ownTemplates = await ctx.db
+      .query("workout_templates")
+      .withIndex("by_user_created", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(limit);
+
+    const followingRows = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
+      .order("desc")
+      .take(20);
+
+    const followedCandidates = (
+      await Promise.all(
+        followingRows.slice(0, 8).map(async (row) => {
+          const canSeeFriends = await areFriends(ctx, row.followingId, args.userId);
+          const templates = await ctx.db
+            .query("workout_templates")
+            .withIndex("by_user_created", (q) => q.eq("userId", row.followingId))
+            .order("desc")
+            .take(4);
+          return templates.filter((template) => {
+            const visibility = template.visibility ?? "private";
+            return visibility === "public" || (visibility === "friends" && canSeeFriends);
+          });
+        })
+      )
+    ).flat();
+
+    const publicTemplates = await ctx.db
+      .query("workout_templates")
+      .withIndex("by_visibility_and_created", (q) => q.eq("visibility", "public"))
+      .order("desc")
+      .take(60);
+
+    const gymLogsUser = await ctx.db
+      .query("users")
+      .withIndex("by_username", (q) => q.eq("username", "gymlogs"))
+      .unique();
+    const gymLogsTemplates = gymLogsUser
+      ? publicTemplates.filter((template) => template.userId === gymLogsUser._id)
+      : [];
+
+    const ownActivitySuggestions = ownTemplates
+      .filter((template) => (template.executionCount ?? 0) > 0)
+      .sort((a, b) => (b.executionCount ?? 0) - (a.executionCount ?? 0))
+      .slice(0, limit);
+
+    const publicSuggestions = publicTemplates
+      .filter((template) => template.userId !== args.userId)
+      .sort((a, b) => {
+        const executionDiff = (b.executionCount ?? 0) - (a.executionCount ?? 0);
+        return executionDiff !== 0 ? executionDiff : b.createdAt - a.createdAt;
+      })
+      .slice(0, limit);
+
+    return {
+      ownTemplates: await Promise.all(
+        ownTemplates.map((template) => renderTemplateStartCard(ctx, template, args.userId))
+      ),
+      followedTemplates: await Promise.all(
+        followedCandidates
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, limit)
+          .map((template) => renderTemplateStartCard(ctx, template, args.userId))
+      ),
+      activitySuggestions: await Promise.all(
+        ownActivitySuggestions.map((template) => renderTemplateStartCard(ctx, template, args.userId))
+      ),
+      publicSuggestions: await Promise.all(
+        publicSuggestions.map((template) => renderTemplateStartCard(ctx, template, args.userId))
+      ),
+      gymLogsSuggestions: await Promise.all(
+        gymLogsTemplates
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, limit)
+          .map((template) => renderTemplateStartCard(ctx, template, args.userId))
+      ),
+    };
   },
 });
 

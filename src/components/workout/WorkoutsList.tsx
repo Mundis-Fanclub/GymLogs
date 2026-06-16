@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -7,13 +8,17 @@ import { de, enUS } from "date-fns/locale";
 import { ChevronRight, Dumbbell } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { AppPanel } from "@/components/ui/app-surface";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { formatVolume } from "@/lib/pr-utils";
-import { WorkoutMuscleMap } from "@/components/workout/WorkoutMuscleMap";
+
+const WorkoutMuscleMap = dynamic(
+  () => import("@/components/workout/WorkoutMuscleMap").then((module) => module.WorkoutMuscleMap),
+  { ssr: false, loading: () => <div className="h-12 w-16 rounded-xl bg-muted/30" /> }
+);
 
 export function WorkoutsList({
   userId,
@@ -33,7 +38,7 @@ export function WorkoutsList({
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">{t("workouts.loadingCopy")}</p>
         {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 w-full" />
+          <Skeleton key={i} className="h-20 w-full rounded-2xl" />
         ))}
       </div>
     );
@@ -58,11 +63,11 @@ export function WorkoutsList({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {workouts.map((workout) => (
-        <Link key={workout._id} href={`/workouts/${workout._id}`}>
-          <Card className="cursor-pointer transition-colors hover:bg-accent/30">
-            <CardContent className="flex items-center justify-between gap-4 px-4 py-4">
+        <Link key={workout._id} href={`/workouts/${workout._id}`} className="block">
+          <AppPanel interactive className="p-4">
+            <div className="flex items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
                 <WorkoutMuscleMap
                   muscleGroups={workout.muscleGroups}
@@ -82,8 +87,8 @@ export function WorkoutsList({
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </CardContent>
-          </Card>
+            </div>
+          </AppPanel>
         </Link>
       ))}
     </div>

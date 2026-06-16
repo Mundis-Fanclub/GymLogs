@@ -231,6 +231,7 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_created", ["userId", "createdAt"])
+    .index("by_visibility_and_created", ["visibility", "createdAt"])
     .index("by_source_template", ["sourceTemplateId"]),
 
   sets: defineTable({
@@ -330,6 +331,18 @@ export default defineSchema({
     .index("by_created", ["createdAt"])
     .index("by_author", ["authorId", "createdAt"])
     .index("by_repost", ["repostOfPostId", "createdAt"]),
+
+  social_stories: defineTable({
+    authorId: v.id("users"),
+    body: v.optional(v.string()),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("gif"))),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_expires_at", ["expiresAt"])
+    .index("by_author_and_created", ["authorId", "createdAt"]),
 
   social_comments: defineTable({
     postId: v.id("social_posts"),

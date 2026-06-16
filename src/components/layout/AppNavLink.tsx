@@ -54,7 +54,7 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
       <Link
         ref={ref}
         href={href}
-        prefetch={false}
+        prefetch
         onClick={handleClick}
         onMouseEnter={(event) => {
           prefetchRoute();

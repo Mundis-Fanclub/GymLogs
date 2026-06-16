@@ -4,30 +4,19 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageTitle } from "@/components/ui/page-title";
-import { Dumbbell, User } from "lucide-react";
+import { User } from "lucide-react";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { WorkoutsList } from "@/components/workout/WorkoutsList";
+import { AppPage } from "@/components/ui/app-surface";
 
 export default function WorkoutsPage() {
   const { userId, isLoaded } = useConvexUser();
   const { t } = useAppPreferences();
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <PageTitle
-        title={t("workouts.title")}
-        action={
-          userId ? (
-            <Link href="/workouts/new">
-              <Button className="gap-2">
-                <Dumbbell className="h-4 w-4" />
-                {t("common.startWorkout")}
-              </Button>
-            </Link>
-          ) : null
-        }
-      />
+    <AppPage className="max-w-3xl">
+      <PageTitle title={t("workouts.title")} />
 
       {isLoaded && !userId ? (
         <EmptyState
@@ -43,6 +32,6 @@ export default function WorkoutsPage() {
       ) : (
         <WorkoutsList userId={userId} />
       )}
-    </div>
+    </AppPage>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -10,8 +11,12 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { Logo } from "@/components/brand/Logo";
-import { UserSearchButton } from "@/components/social/UserSearchButton";
 import { AppNavLink } from "./AppNavLink";
+
+const UserSearchButton = dynamic(
+  () => import("@/components/social/UserSearchButton").then((module) => module.UserSearchButton),
+  { ssr: false }
+);
 
 const NAV_ITEMS = [
   { href: "/dashboard", labelKey: "common.dashboard", icon: LayoutDashboard },
