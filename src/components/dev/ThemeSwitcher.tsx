@@ -1,20 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Palette, X } from "lucide-react";
+import { Check, Palette, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-/**
- * Dev-only floating theme picker. Sets data-theme on <html> and persists
- * the choice in localStorage. The actual color tokens live in globals.css
- * under [data-theme="..."] selectors — this component only flips the
- * attribute.
- */
 
 type ThemeOption = {
   value: string;
   label: string;
-  /** Swatch color, dark-mode value of --brand (matches what the user sees). */
   swatch: string;
 };
 
@@ -45,6 +37,11 @@ export function ThemeSwitcher() {
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) || "orange";
     setTheme(stored);
+    if (stored === "orange") {
+      document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.setAttribute("data-theme", stored);
+    }
   }, []);
 
   function applyTheme(value: string) {
@@ -58,56 +55,61 @@ export function ThemeSwitcher() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-2">
+    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] right-4 z-[60] flex flex-col items-end gap-2 md:bottom-5">
       {open && (
-        <div className="w-[280px] rounded-2xl border border-border bg-card p-3 shadow-2xl">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="premium-panel w-[min(22rem,calc(100vw-2rem))] rounded-3xl p-3 shadow-2xl">
+          <div className="mb-3 flex items-center justify-between px-1">
+            <span className="text-xs font-semibold uppercase text-muted-foreground">
               Theme · {theme}
             </span>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Schließen"
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Close theme picker"
+              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {THEMES.map((t) => {
-              const isActive = theme === t.value;
+          <div className="grid grid-cols-5 gap-2">
+            {THEMES.map((option) => {
+              const isActive = theme === option.value;
               return (
                 <button
-                  key={t.value}
+                  key={option.value}
                   type="button"
-                  onClick={() => applyTheme(t.value)}
+                  onClick={() => applyTheme(option.value)}
                   className={cn(
-                    "flex flex-col items-center gap-1.5 rounded-lg border p-2 text-[10px] font-medium transition-colors",
+                    "relative flex min-h-16 flex-col items-center gap-1.5 rounded-2xl border p-2 text-[10px] font-medium transition-colors",
                     isActive
-                      ? "border-foreground bg-accent"
-                      : "border-border bg-background/40 hover:bg-accent/60"
+                      ? "border-brand bg-brand/12 text-foreground"
+                      : "border-border bg-input/25 text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                   )}
                 >
                   <span
-                    className="h-7 w-7 rounded-full border border-white/10 shadow-inner"
-                    style={{ backgroundColor: t.swatch }}
+                    className="h-7 w-7 rounded-full border border-white/15 shadow-inner"
+                    style={{ backgroundColor: option.swatch }}
                   />
-                  <span className="truncate">{t.label}</span>
+                  {isActive && (
+                    <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-brand-foreground">
+                      <Check className="h-2.5 w-2.5" />
+                    </span>
+                  )}
+                  <span className="truncate">{option.label}</span>
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 px-1 text-[10px] leading-relaxed text-muted-foreground">
-            Wahl bleibt in localStorage gespeichert. Nur im dev-Build sichtbar.
+          <p className="mt-3 px-1 text-[10px] leading-relaxed text-muted-foreground">
+            Accent only. Layout, spacing and components stay unchanged.
           </p>
         </div>
       )}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Theme switcher"
-        className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-xl transition-transform hover:scale-105"
+        onClick={() => setOpen((value) => !value)}
+        aria-label="Theme picker"
+        className="premium-glow flex h-12 w-12 items-center justify-center rounded-full border border-brand/35 bg-card text-brand shadow-xl transition-transform hover:scale-105"
       >
         <Palette className="h-5 w-5" />
       </button>

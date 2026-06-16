@@ -1,15 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  Clock,
+  MoreHorizontal,
+  Plus,
+  Trophy,
+  X,
+} from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ExerciseBlock } from "./ExerciseBlock";
 import { AddExerciseModal } from "./AddExerciseModal";
-import { Plus, CheckCircle, Clock, Trophy, XCircle, AlertTriangle } from "lucide-react";
 import { useConvexUser } from "@/hooks/useConvexUser";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,15 +105,14 @@ export function ActiveWorkout({
     if (isFinished) setFinishedWorkoutId(workoutId);
   }, [isFinished, workoutId]);
 
-  // Timer
   useEffect(() => {
     if (!workout) return;
     const start = workout.date;
     const interval = setInterval(() => {
-      const secs = Math.floor((Date.now() - start) / 1000);
-      const m = Math.floor(secs / 60);
-      const s = secs % 60;
-      setElapsed(`${m}:${s.toString().padStart(2, "0")}`);
+      const secondsTotal = Math.floor((Date.now() - start) / 1000);
+      const minutes = Math.floor(secondsTotal / 60);
+      const seconds = secondsTotal % 60;
+      setElapsed(`${minutes}:${seconds.toString().padStart(2, "0")}`);
     }, 1000);
     return () => clearInterval(interval);
   }, [workout]);
@@ -129,22 +136,15 @@ export function ActiveWorkout({
         })),
       }));
 
-    if (restoredExercises.length > 0) {
-      setExercises(restoredExercises);
-    }
+    if (restoredExercises.length > 0) setExercises(restoredExercises);
   }, [exercises.length, workout]);
 
   async function handleFinish() {
     const loggedSetCount =
-      workout?.exercises.reduce(
-        (sum, exercise) => sum + exercise.sets.length,
-        0
-      ) ?? 0;
+      workout?.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0) ?? 0;
     if (loggedSetCount === 0) return;
 
-    if (notes.trim()) {
-      await updateNotes({ workoutId, notes });
-    }
+    if (notes.trim()) await updateNotes({ workoutId, notes });
     await completeWorkout({ workoutId });
     setActiveRest(null);
     setFinishedWorkoutId(workoutId);
@@ -161,13 +161,13 @@ export function ActiveWorkout({
 
   function handleAddExercise(exercise: SelectedExercise) {
     setExercises((prev) =>
-      prev.some((e) => e.id === exercise.id) ? prev : [...prev, exercise]
+      prev.some((item) => item.id === exercise.id) ? prev : [...prev, exercise]
     );
   }
 
   async function handleRemoveExercise(id: Id<"exercises">) {
     await removeExerciseSets({ workoutId, exerciseId: id });
-    setExercises((prev) => prev.filter((e) => e.id !== id));
+    setExercises((prev) => prev.filter((exercise) => exercise.id !== id));
   }
 
   if (!userId) return null;
@@ -182,54 +182,84 @@ export function ActiveWorkout({
   }
 
   const loggedSetCount =
-    workout?.exercises.reduce(
-      (sum, exercise) => sum + exercise.sets.length,
-      0
-    ) ?? 0;
+    workout?.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0) ?? 0;
   const canFinishWorkout = loggedSetCount > 0;
+  const workoutDate = workout?.date
+    ? new Date(workout.date).toLocaleDateString("de-DE")
+    : "--.--.----";
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      <div className="sticky top-3 z-10 flex items-center justify-between gap-3 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-sm backdrop-blur md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:shadow-none">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Clock className="w-4 h-4" />
-          <span>{elapsed}</span>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="space-y-4 pb-5">
+      <header className="space-y-6 pt-2">
+        <div className="flex items-center justify-between">
           <Button
-            variant="destructive"
-            onClick={() => setShowCancelDialog(true)}
-            disabled={isCanceling}
-            className="h-9 gap-1.5"
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-10 rounded-xl border-border bg-input/20 text-foreground"
+            onClick={() => router.back()}
+            aria-label="Zurueck"
           >
-            <XCircle className="w-4 h-4" />
-            Abbrechen
+            <X className="h-5 w-5" />
           </Button>
           <Button
             onClick={handleFinish}
             disabled={!canFinishWorkout || isCanceling}
-            className="h-9 gap-1.5"
+            className="h-10 rounded-xl px-4 text-sm"
           >
-            <CheckCircle className="w-4 h-4" />
-            {t("workout.finish")}
+            Beenden
           </Button>
         </div>
-      </div>
+
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="min-w-0 flex-1 truncate text-[2rem] font-semibold leading-none">
+              Nachmittags-Workout
+            </h1>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-10 rounded-xl border-border bg-input/20 text-foreground"
+              aria-label="Workout Optionen"
+            >
+              <MoreHorizontal className="h-5 w-5" />
+            </Button>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-4 text-base text-muted-foreground">
+            <span className="inline-flex items-center gap-2">
+              <CalendarDays className="h-5 w-5" />
+              {workoutDate}
+            </span>
+            <span className="h-5 w-px bg-border" />
+            <span className="inline-flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              {elapsed}
+            </span>
+            <span className="h-5 w-px bg-border" />
+            <span className="inline-flex items-center gap-2 text-brand">
+              <span className="size-3 rounded-full bg-brand" />
+              Workout läuft
+            </span>
+          </div>
+        </div>
+      </header>
 
       {exercises.length === 0 && (
-        <div className="rounded-lg border-2 border-dashed border-border px-4 py-14 text-center">
-          <p className="text-muted-foreground mb-4">{t("workout.noExercises")}</p>
+        <div className="premium-panel rounded-xl border-2 border-dashed border-border px-4 py-14 text-center">
+          <p className="mb-4 text-muted-foreground">{t("workout.noExercises")}</p>
           <Button variant="outline" onClick={() => setShowAddExercise(true)}>
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="mr-2 h-4 w-4" />
             {t("workout.addFirst")}
           </Button>
         </div>
       )}
 
       <div className="space-y-3">
-        {exercises.map((exercise) => (
+        {exercises.map((exercise, index) => (
           <ExerciseBlock
             key={exercise.id}
+            exerciseOrder={index + 1}
             workoutId={workoutId}
             exerciseId={exercise.id}
             exerciseName={exercise.name}
@@ -255,24 +285,32 @@ export function ActiveWorkout({
       {exercises.length > 0 && (
         <Button
           variant="outline"
-          className="w-full gap-2"
+          className="h-10 w-full gap-2 rounded-xl border-brand/45 text-sm text-brand hover:bg-brand/10"
           onClick={() => setShowAddExercise(true)}
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="h-4 w-4" />
           {t("workout.addExercise")}
         </Button>
       )}
 
-      <div className="space-y-1.5">
-        <Textarea
-          aria-label={t("workout.notes")}
-          placeholder={t("workout.notes")}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={2}
-          className="resize-none text-sm"
-        />
-      </div>
+      <Textarea
+        aria-label={t("workout.notes")}
+        placeholder="Workout-Notizen (optional)..."
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+        rows={3}
+        className="min-h-[74px] resize-none rounded-xl text-sm"
+      />
+
+      <Button
+        type="button"
+        variant="destructive"
+        onClick={() => setShowCancelDialog(true)}
+        disabled={isCanceling}
+        className="h-12 w-full rounded-xl border border-destructive/50 bg-destructive/15 text-sm text-destructive-foreground hover:bg-destructive/25"
+      >
+        Workout abbrechen
+      </Button>
 
       <AddExerciseModal
         open={showAddExercise}
@@ -328,7 +366,7 @@ function WorkoutFinishedSummary({
 }) {
   if (workout === undefined) {
     return (
-      <div className="mx-auto max-w-2xl rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
+      <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
         Workout wird zusammengefasst...
       </div>
     );
@@ -336,7 +374,7 @@ function WorkoutFinishedSummary({
 
   if (!workout) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4">
+      <div className="space-y-4">
         <p className="text-sm text-muted-foreground">Workout nicht gefunden.</p>
         <Button onClick={onContinue}>Zur Workout-Übersicht</Button>
       </div>
@@ -350,7 +388,7 @@ function WorkoutFinishedSummary({
   );
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="space-y-4">
       <Card className="border-success/30 bg-success/10">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -358,7 +396,7 @@ function WorkoutFinishedSummary({
             <CardTitle>Workout abgeschlossen</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-3">
+        <CardContent className="grid grid-cols-3 gap-3">
           <div>
             <p className="text-2xl font-semibold">{exerciseCount}</p>
             <p className="text-xs text-muted-foreground">Übungen</p>
@@ -388,7 +426,7 @@ function WorkoutFinishedSummary({
               {exercise.sets.map((set, index) => (
                 <div
                   key={set._id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm"
                 >
                   <div>
                     <span className="font-medium">Set {index + 1}</span>
