@@ -51,6 +51,8 @@ interface ActiveWorkoutProps {
   workoutId: Id<"workouts">;
   onFinished?: (workoutId: Id<"workouts">) => void;
   onCanceled?: (workoutId: Id<"workouts">) => void;
+  onRequestClose?: () => void;
+  onContinue?: () => void;
   isFinished?: boolean;
 }
 
@@ -80,6 +82,8 @@ export function ActiveWorkout({
   workoutId,
   onFinished,
   onCanceled,
+  onRequestClose,
+  onContinue,
   isFinished,
 }: ActiveWorkoutProps) {
   const router = useRouter();
@@ -156,6 +160,10 @@ export function ActiveWorkout({
     setActiveRest(null);
     onCanceled?.(workoutId);
     await removeWorkout({ workoutId });
+    if (onRequestClose) {
+      onRequestClose();
+      return;
+    }
     router.replace("/workouts");
   }
 
@@ -176,7 +184,7 @@ export function ActiveWorkout({
     return (
       <WorkoutFinishedSummary
         workout={workout}
-        onContinue={() => router.replace("/workouts")}
+        onContinue={onContinue ?? (() => router.replace("/workouts"))}
       />
     );
   }
@@ -197,7 +205,7 @@ export function ActiveWorkout({
             variant="outline"
             size="icon"
             className="size-10 rounded-xl border-border bg-input/20 text-foreground"
-            onClick={() => router.back()}
+            onClick={onRequestClose ?? (() => router.back())}
             aria-label="Zurueck"
           >
             <X className="h-5 w-5" />

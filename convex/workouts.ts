@@ -301,11 +301,58 @@ export const get = query({
 export const getIncomplete = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const incompleteWorkouts = await ctx.db
       .query("workouts")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .filter((q) => q.eq(q.field("isCompleted"), false))
-      .first();
+      .take(20);
+
+    for (const workout of incompleteWorkouts.sort((a, b) => b.date - a.date)) {
+      const firstSet = await ctx.db
+        .query("sets")
+        .withIndex("by_workout", (q) => q.eq("workoutId", workout._id))
+        .first();
+      if (firstSet) return workout;
+    }
+
+    return null;
+  },
+});
+
+export const getActiveForNav = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const recentEmptyWorkoutWindowMs = 2 * 60 * 60 * 1000;
+    const incompleteWorkouts = await ctx.db
+      .query("workouts")
+      .withIndex("by_user_date", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .filter((q) => q.eq(q.field("isCompleted"), false))
+      .take(20);
+
+    for (const workout of incompleteWorkouts) {
+      const firstSet = await ctx.db
+        .query("sets")
+        .withIndex("by_workout", (q) => q.eq("workoutId", workout._id))
+        .first();
+      const isRecentEmptyWorkout =
+        !firstSet && now - workout.date <= recentEmptyWorkoutWindowMs;
+
+      if (!firstSet && !isRecentEmptyWorkout) continue;
+
+      const template = workout.sourceTemplateId
+        ? await ctx.db.get(workout.sourceTemplateId)
+        : null;
+
+      return {
+        _id: workout._id,
+        startedAt: workout.date,
+        name: template?.name ?? null,
+      };
+    }
+
+    return null;
   },
 });
 

@@ -54,10 +54,6 @@ export default function DashboardPage() {
   const { locale, t } = useAppPreferences();
   const [loadSecondary, setLoadSecondary] = useState(false);
 
-  const incompleteWorkout = useQuery(
-    api.workouts.getIncomplete,
-    userId ? { userId } : "skip"
-  );
   const muscleAnalytics = useQuery(
     api.analytics.getMuscleAnalytics,
     userId && loadSecondary ? { userId } : "skip"
@@ -175,30 +171,6 @@ export default function DashboardPage() {
           <div className="hidden min-h-44 rounded-2xl border border-border/70 bg-[radial-gradient(circle_at_35%_30%,var(--brand-soft),transparent_34%),linear-gradient(135deg,var(--card),var(--background))] sm:block" />
         </div>
       </AppPanel>
-
-      {incompleteWorkout && (
-        <Link
-          href="/workouts/new"
-          className="group block rounded-2xl border border-primary/35 bg-primary/10 px-4 py-3 text-sm transition-colors hover:bg-primary/15"
-        >
-          <span className="flex items-center justify-between gap-3">
-            <span className="flex min-w-0 items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
-                <Dumbbell className="h-5 w-5" />
-              </span>
-              <span className="min-w-0">
-                <span className="block font-bold text-primary">
-                  {t("dashboard.unfinished")}
-                </span>
-                <span className="block truncate text-muted-foreground">
-                  {t("dashboard.resume")}
-                </span>
-              </span>
-            </span>
-            <ArrowRight className="h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
-          </span>
-        </Link>
-      )}
 
       {workoutFrequency === undefined ? (
         <Skeleton className="h-[150px] w-full rounded-2xl" />

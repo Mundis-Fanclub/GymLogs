@@ -298,6 +298,38 @@ export const createStory = mutation({
   },
 });
 
+export const markStoryViewed = mutation({
+  args: {
+    storyId: v.id("social_stories"),
+    viewerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const story = await ctx.db.get(args.storyId);
+    const viewer = await ctx.db.get(args.viewerId);
+    if (!story || !viewer) return null;
+    if (story.authorId === args.viewerId) return null;
+
+    const existing = await ctx.db
+      .query("social_story_views")
+      .withIndex("by_story_and_viewer", (q) =>
+        q.eq("storyId", args.storyId).eq("viewerId", args.viewerId)
+      )
+      .unique();
+
+    const viewedAt = Date.now();
+    if (existing) {
+      await ctx.db.patch(existing._id, { viewedAt });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("social_story_views", {
+      storyId: args.storyId,
+      viewerId: args.viewerId,
+      viewedAt,
+    });
+  },
+});
+
 export const listStories = query({
   args: {
     viewerId: v.optional(v.id("users")),
@@ -308,19 +340,34 @@ export const listStories = query({
     const rows = await ctx.db
       .query("social_stories")
       .withIndex("by_expires_at", (q) => q.gt("expiresAt", now))
-      .order("asc")
+      .order("desc")
       .take(args.limit ?? 40);
 
     const rendered = await Promise.all(
-      rows.map(async (story) => ({
-        ...story,
-        mediaUrl: await storyMediaUrl(ctx, story),
-        author: await userPreview(ctx, await ctx.db.get(story.authorId)),
-        isOwnStory: args.viewerId ? story.authorId === args.viewerId : false,
-      }))
+      rows.map(async (story) => {
+        const view = args.viewerId
+          ? await ctx.db
+              .query("social_story_views")
+              .withIndex("by_story_and_viewer", (q) =>
+                q.eq("storyId", story._id).eq("viewerId", args.viewerId!)
+              )
+              .unique()
+          : null;
+
+        return {
+          ...story,
+          mediaUrl: await storyMediaUrl(ctx, story),
+          author: await userPreview(ctx, await ctx.db.get(story.authorId)),
+          isOwnStory: args.viewerId ? story.authorId === args.viewerId : false,
+          viewedByViewer: Boolean(view),
+        };
+      })
     );
 
-    return rendered.sort((a, b) => b.createdAt - a.createdAt);
+    return rendered.sort((a, b) => {
+      if (a.viewedByViewer !== b.viewedByViewer) return a.viewedByViewer ? 1 : -1;
+      return b.createdAt - a.createdAt;
+    });
   },
 });
 

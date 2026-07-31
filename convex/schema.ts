@@ -344,6 +344,15 @@ export default defineSchema({
     .index("by_expires_at", ["expiresAt"])
     .index("by_author_and_created", ["authorId", "createdAt"]),
 
+  social_story_views: defineTable({
+    storyId: v.id("social_stories"),
+    viewerId: v.id("users"),
+    viewedAt: v.number(),
+  })
+    .index("by_story", ["storyId", "viewedAt"])
+    .index("by_viewer", ["viewerId", "viewedAt"])
+    .index("by_story_and_viewer", ["storyId", "viewerId"]),
+
   social_comments: defineTable({
     postId: v.id("social_posts"),
     parentCommentId: v.optional(v.id("social_comments")),

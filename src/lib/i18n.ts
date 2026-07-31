@@ -44,6 +44,8 @@ export const dictionaries = {
       notFoundExercise: "Exercise not found.",
       signIn: "Sign in",
       startWorkout: "Start workout",
+      activeWorkout: "Active workout",
+      workoutRunning: "Running now",
     },
     topbar: {
       title: "Build the lift tracker people actually want to flex.",
@@ -585,6 +587,8 @@ export const dictionaries = {
       notFoundExercise: "Uebung nicht gefunden.",
       signIn: "Einloggen",
       startWorkout: "Workout starten",
+      activeWorkout: "Aktives Workout",
+      workoutRunning: "Laeuft gerade",
     },
     topbar: {
       title: "Der Lift-Tracker, den Leute wirklich flexen wollen.",

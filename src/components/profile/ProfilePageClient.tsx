@@ -10,6 +10,7 @@ import {
   Ban,
   BadgeCheck,
   Calendar,
+  Camera,
   ChevronDown,
   Crown,
   Dumbbell,
@@ -652,10 +653,12 @@ export function ProfilePageClient() {
         year: "numeric",
       })}`
     : t("profile.meta.sinceRecently");
+  const displayName = form.name || user?.name || t("profile.public.unknownUser");
+  const displayUsername = form.username || user?.username || "";
   const profileMeta = [
+    { icon: Calendar, value: joinedLabel },
     visibleProfile?.location ? { icon: MapPin, value: visibleProfile.location } : null,
     visibleProfile?.heightCm ? { icon: Ruler, value: `${visibleProfile.heightCm} cm` } : null,
-    { icon: Calendar, value: joinedLabel },
   ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
   const profileTabs = [
     { id: "posts", label: t("profile.tabs.posts") },
@@ -1201,14 +1204,14 @@ export function ProfilePageClient() {
   return (
     <div className="-mx-3 -mt-3 bg-background pb-8 text-foreground sm:mx-auto sm:mt-0 sm:max-w-5xl sm:overflow-hidden sm:rounded-lg sm:border sm:border-border">
       <div className="space-y-0">
-        <Card className="overflow-hidden rounded-none border-0 bg-card py-0 text-card-foreground ring-0 shadow-none">
+        <Card className="overflow-hidden rounded-none border-0 bg-background py-0 text-card-foreground ring-0 shadow-none">
           <div
-            className="relative min-h-[28.5rem] overflow-hidden bg-cover bg-center sm:min-h-[32rem]"
+            className="relative min-h-[26rem] overflow-hidden bg-cover bg-center sm:min-h-[31rem]"
             style={profileCoverStyle}
           >
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/15 via-background/45 to-background" />
-            <div className="absolute left-3 right-3 top-3 z-20 flex items-center justify-between sm:left-7 sm:right-7 sm:top-6">
-              <Button size="icon" variant="ghost" className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11" aria-label={t("profile.misc.back")} onClick={() => history.back()}>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_30%,color-mix(in_oklch,var(--brand)_20%,transparent),transparent_34%),linear-gradient(to_bottom,rgba(0,0,0,0.28),rgba(0,0,0,0.58)_48%,var(--background)_98%)]" />
+            <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between sm:left-8 sm:right-8 sm:top-6">
+              <Button size="icon" variant="ghost" className="size-12 rounded-xl border border-white/15 bg-black/20 text-white shadow-lg shadow-black/20 backdrop-blur-xl hover:bg-white/10 sm:size-14" aria-label={t("profile.misc.back")} onClick={() => history.back()}>
                 <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
               </Button>
               <ProfileHeaderActions
@@ -1218,55 +1221,68 @@ export function ProfilePageClient() {
                 onOpenNetwork={() => setNetworkDialogOpen(true)}
               />
             </div>
-            <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-6 sm:px-9 sm:pb-8">
-              <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] items-center gap-5 min-[390px]:gap-6 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-8">
-                <div className="relative size-24 self-start min-[390px]:size-28 sm:size-44">
+            <div className="absolute inset-x-0 bottom-0 z-10 px-4 pb-6 sm:px-9 sm:pb-8">
+              <div className="grid grid-cols-[7.25rem_minmax(0,1fr)] items-end gap-4 min-[390px]:grid-cols-[8rem_minmax(0,1fr)] min-[390px]:gap-5 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-8">
+                <div className="relative self-end">
                   <div className="pointer-events-none absolute -inset-2 rounded-full bg-primary/20 blur-2xl" />
-                  <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="hero" />
+                  <Avatar name={displayName} avatarUrl={displayAvatarUrl} size="hero" />
+                  {isOwnProfile && (
+                    <button
+                      type="button"
+                      className="absolute -bottom-1 -right-1 flex size-10 items-center justify-center rounded-full border border-white/15 bg-background/90 text-foreground shadow-xl shadow-black/30 backdrop-blur transition hover:bg-muted sm:size-12"
+                      aria-label={t("profile.misc.editAvatar")}
+                      onClick={() => setEditProfileOpen(true)}
+                    >
+                      <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </button>
+                  )}
                 </div>
-                <div className="min-w-0">
-                  <Badge className="mb-2 rounded-full border-primary/20 bg-primary/15 px-2.5 py-0.5 text-[0.68rem] text-primary shadow-sm sm:mb-4 sm:px-4 sm:py-1 sm:text-sm">
+                <div className="min-w-0 pb-1 sm:pb-2">
+                  <Badge className="mb-2 gap-1 rounded-full border-primary/35 bg-primary/10 px-2.5 py-1 text-[0.68rem] text-primary shadow-sm backdrop-blur sm:mb-4 sm:px-4 sm:py-1.5 sm:text-sm">
+                    {form.isPublic ? <Eye className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
                     {form.isPublic ? t("profile.status.public") : t("profile.status.private")}
                   </Badge>
-                  <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-none tracking-normal min-[390px]:text-[2.25rem] sm:text-6xl">
-                    <span className="truncate">{form.name || "Steffen"}</span>
-                    <BadgeCheck className="h-7 w-7 shrink-0 fill-sky-400 text-black sm:h-10 sm:w-10" />
+                  <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-[0.95] tracking-normal min-[390px]:text-[2.45rem] sm:text-6xl">
+                    <span className="truncate">{displayName}</span>
+                    {user?.isPro && <BadgeCheck className="h-7 w-7 shrink-0 fill-primary text-primary-foreground sm:h-10 sm:w-10" />}
                   </h1>
-                  <p className="mt-2 text-[1.12rem] leading-tight text-muted-foreground min-[390px]:text-[1.25rem] sm:text-2xl">@{form.username || "username"}</p>
-                  <button
-                    type="button"
-                    className="mt-2 text-left text-sm font-medium text-muted-foreground transition hover:text-foreground sm:text-base"
-                    onClick={() => setFollowDialogOpen(true)}
-                  >
-                    {(followGraph?.followerCount ?? 0).toLocaleString(locale)} {t("profile.follow.followerLine")}
-                  </button>
+                  {displayUsername && <p className="mt-2 truncate text-[1rem] leading-tight text-muted-foreground min-[390px]:text-[1.18rem] sm:text-2xl">@{displayUsername}</p>}
                   {visibleProfile?.bio && (
-                    <p className="mt-4 max-w-[34rem] whitespace-pre-wrap text-[1rem] font-semibold leading-[1.35] text-foreground min-[390px]:text-[1.08rem] sm:mt-8 sm:text-3xl">
+                    <p className="mt-3 line-clamp-2 max-w-[34rem] whitespace-pre-wrap text-[0.92rem] font-semibold leading-[1.35] text-foreground min-[390px]:text-[1rem] sm:mt-6 sm:text-2xl">
                       {visibleProfile.bio}
                     </p>
                   )}
-                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[0.85rem] text-muted-foreground min-[390px]:text-[0.95rem] sm:mt-8 sm:gap-x-8 sm:text-xl">
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[0.78rem] text-muted-foreground min-[390px]:text-[0.88rem] sm:mt-6 sm:gap-x-7 sm:text-lg">
                     {profileMeta.map(({ icon: Icon, value }) => (
-                      <span key={value} className="inline-flex items-center gap-2 sm:gap-3">
-                        <Icon className="h-4 w-4 sm:h-6 sm:w-6" />
+                      <span key={value} className="inline-flex items-center gap-1.5 sm:gap-2.5">
+                        <Icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
                         {value}
                       </span>
                     ))}
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 transition hover:text-foreground sm:gap-2.5"
+                      onClick={() => setFollowDialogOpen(true)}
+                    >
+                      <Users className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
+                      {(followGraph?.followerCount ?? 0).toLocaleString(locale)} {t("profile.follow.followerLine")}
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          <CardContent className="relative z-10 space-y-4 bg-background px-5 pb-7 pt-0 sm:space-y-6 sm:px-7 lg:px-9">
-            <div className="grid gap-2.5 sm:gap-3">
-              <Button type="button" className="h-12 w-full rounded-lg text-base font-semibold transition-all hover:-translate-y-0.5 sm:h-14 sm:text-lg" onClick={() => setEditProfileOpen(true)}>
+          <CardContent className="relative z-10 space-y-5 bg-background px-4 pb-7 pt-0 sm:space-y-6 sm:px-7 lg:px-9">
+            {isOwnProfile && (
+              <Button type="button" variant="outline" className="h-14 w-full rounded-lg border-border/80 bg-card/55 text-base font-extrabold text-primary shadow-sm backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-primary/10 sm:h-14 sm:text-lg" onClick={() => setEditProfileOpen(true)}>
+                <Pencil className="mr-2 h-5 w-5" />
                 {t("profile.edit.title")}
               </Button>
-            </div>
+            )}
             {profileMetricItems.length > 0 && (
               <div
                 className={cn(
-                  "grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-muted/20 shadow-sm",
+                  "grid grid-cols-2 overflow-hidden rounded-lg border border-border/80 bg-card/45 shadow-sm backdrop-blur",
                   profileMetricItems.length > 2 && "min-[420px]:grid-cols-4"
                 )}
               >
@@ -1282,8 +1298,8 @@ export function ProfilePageClient() {
                 ))}
               </div>
             )}
-            <div className="-mx-5 overflow-x-auto border-y border-white/[0.08] bg-[#05090a]/92 px-5 sm:mx-0 sm:rounded-[1.25rem] sm:border sm:px-3">
-              <div className="flex w-max min-w-full gap-4 sm:gap-6">
+            <div className="-mx-4 overflow-x-auto border-y border-border/70 bg-background/85 px-4 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
+              <div className="flex w-max min-w-full gap-3 sm:gap-6">
                 {profileTabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -1293,7 +1309,7 @@ export function ProfilePageClient() {
                     type="button"
                     onClick={() => setActiveProfileTab(tab.id)}
                     className={cn(
-                      "relative min-h-[4rem] shrink-0 whitespace-nowrap px-2 text-base font-extrabold text-muted-foreground transition-colors hover:text-foreground sm:min-h-[4.5rem] sm:text-lg",
+                      "relative min-h-[3.65rem] shrink-0 whitespace-nowrap px-2 text-base font-extrabold text-muted-foreground transition-colors hover:text-foreground sm:min-h-[4.5rem] sm:text-lg",
                       activeProfileTab === tab.id && "text-primary"
                     )}
                   >
@@ -1312,7 +1328,7 @@ export function ProfilePageClient() {
                 error={profilePostError}
                 uploading={uploadingProfilePostMedia}
                 disabled={!userId || uploadingProfilePostMedia || (!profilePostBody.trim() && !profilePostMediaDraft)}
-                profileName={form.name || user?.name || "GymLogs User"}
+                profileName={displayName}
                 avatarUrl={displayAvatarUrl}
                 onBodyChange={setProfilePostBody}
                 onFile={uploadProfilePostMedia}
@@ -1323,8 +1339,8 @@ export function ProfilePageClient() {
             {activeProfileTab === "posts" && (
               <ProfilePostsCard
                 posts={posts}
-                profileName={form.name || "GymLogs User"}
-                username={form.username || "username"}
+                profileName={displayName}
+                username={displayUsername}
                 avatarUrl={displayAvatarUrl}
                 isPro={Boolean(user?.isPro)}
                 userId={userId}
@@ -1372,8 +1388,8 @@ export function ProfilePageClient() {
             {isOwnProfile && activeProfileTab === "saved" && (
               <ProfilePostsCard
                 posts={savedPosts}
-                profileName={form.name || "GymLogs User"}
-                username={form.username || "username"}
+                profileName={displayName}
+                username={displayUsername}
                 avatarUrl={displayAvatarUrl}
                 isPro={Boolean(user?.isPro)}
                 userId={userId}
@@ -1422,8 +1438,8 @@ export function ProfilePageClient() {
             {activeProfileTab === "media" && (
               <ProfileMediaGrid
                 posts={mediaPosts}
-                profileName={form.name || "GymLogs User"}
-                username={form.username || "username"}
+                profileName={displayName}
+                username={displayUsername}
                 avatarUrl={displayAvatarUrl}
                 isPro={Boolean(user?.isPro)}
                 selectedPostId={activeProfileCommentPostId}
@@ -1700,19 +1716,21 @@ export function ProfilePageClient() {
                     )}
                     {profileEditMode === "preview" ? (
                       <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-none tracking-normal min-[390px]:text-[2.25rem] sm:text-6xl">
-                        <span className="truncate">{form.name || "Steffen"}</span>
-                        <BadgeCheck className="h-7 w-7 shrink-0 fill-primary text-primary-foreground sm:h-10 sm:w-10" />
+                        <span className="truncate">{form.name || t("profile.public.unknownUser")}</span>
+                        {user?.isPro && <BadgeCheck className="h-7 w-7 shrink-0 fill-primary text-primary-foreground sm:h-10 sm:w-10" />}
                       </h1>
                     ) : (
                       <h2 className="truncate text-2xl font-black leading-none sm:text-5xl">
-                        {form.name || "GymLogs User"}
+                        {form.name || t("profile.public.unknownUser")}
                       </h2>
                     )}
-                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-                      <p className={cn("truncate text-muted-foreground", profileEditMode === "preview" ? "text-[1.12rem] min-[390px]:text-[1.25rem] sm:text-2xl" : "text-sm sm:text-lg")}>
-                        @{form.username || "username"}
-                      </p>
-                    </div>
+                    {form.username && (
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                        <p className={cn("truncate text-muted-foreground", profileEditMode === "preview" ? "text-[1.12rem] min-[390px]:text-[1.25rem] sm:text-2xl" : "text-sm sm:text-lg")}>
+                          @{form.username}
+                        </p>
+                      </div>
+                    )}
                     {profileEditMode === "preview" && (
                       <>
                         <p className="mt-4 max-w-[34rem] whitespace-pre-wrap text-[1rem] font-semibold leading-[1.35] text-foreground min-[390px]:text-[1.08rem] sm:mt-8 sm:text-3xl">
@@ -1862,8 +1880,8 @@ export function ProfilePageClient() {
                         {previewProfileTab === "posts" && (
                           <ProfilePostsCard
                             posts={posts}
-                            profileName={form.name || "GymLogs User"}
-                            username={form.username || "username"}
+                            profileName={form.name || t("profile.public.unknownUser")}
+                            username={form.username}
                             avatarUrl={displayAvatarUrl}
                             isPro={Boolean(user?.isPro)}
                             userId={null}
@@ -1891,8 +1909,8 @@ export function ProfilePageClient() {
                         {previewProfileTab === "media" && (
                           <ProfileMediaGrid
                             posts={mediaPosts}
-                            profileName={form.name || "GymLogs User"}
-                            username={form.username || "username"}
+                            profileName={form.name || t("profile.public.unknownUser")}
+                            username={form.username}
                             avatarUrl={displayAvatarUrl}
                             isPro={Boolean(user?.isPro)}
                             selectedPostId={null}
@@ -2500,8 +2518,8 @@ function ProfilePostComposer({
   const { t } = useAppPreferences();
 
   return (
-    <section className="border-y border-border bg-background px-6 py-4 sm:px-8" aria-label={t("socialPage.createPost")}>
-      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3">
+    <section className="rounded-lg border border-border/80 bg-card/45 px-4 py-4 shadow-sm backdrop-blur sm:px-5" aria-label={t("socialPage.createPost")}>
+      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3 sm:grid-cols-[3rem_minmax(0,1fr)]">
         <Avatar name={profileName} avatarUrl={avatarUrl} />
         <div className="min-w-0 space-y-3">
           <Textarea
@@ -2511,11 +2529,11 @@ function ProfilePostComposer({
             rows={mediaDraft || body ? 2 : 1}
             maxLength={1200}
             aria-label={t("socialPage.newPost")}
-            className="min-h-10 resize-none border-0 bg-transparent px-0 py-1 text-base text-white placeholder:text-white/45 shadow-none focus-visible:ring-0 dark:bg-transparent"
+            className="min-h-10 resize-none border-0 bg-transparent px-0 py-1 text-base text-foreground placeholder:text-muted-foreground shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
           {mediaDraft && (
-            <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]">
-              <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 text-xs text-white/55">
+            <div className="overflow-hidden rounded-lg border border-border/70 bg-background/40">
+              <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2 text-xs text-muted-foreground">
                 <span className="truncate">{mediaDraft.name}</span>
                 <Button type="button" size="icon-xs" variant="ghost" aria-label={t("socialPage.removeMedia")} onClick={onClearMedia}>
                   <X className="h-3 w-3" />
@@ -2531,12 +2549,12 @@ function ProfilePostComposer({
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center justify-between gap-3">
-            <label className="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-white/55 transition hover:bg-white/10 hover:text-white">
+            <label className="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground">
               <ImagePlus className="h-4 w-4" />
               <span className="sr-only">{uploading ? t("socialPage.uploadRunning") : t("socialPage.attachMedia")}</span>
               <input type="file" accept="image/*,video/*,.gif" className="sr-only" onChange={(event) => onFile(event.target.files?.[0])} />
             </label>
-            <Button type="button" size="sm" disabled={disabled} onClick={onSubmit}>
+            <Button type="button" size="sm" className="min-w-24 rounded-lg font-bold" disabled={disabled} onClick={onSubmit}>
               {t("socialPage.post")}
             </Button>
           </div>
@@ -3714,7 +3732,7 @@ function ProfileHeaderActions({
       <Button
         size="icon"
         variant="ghost"
-        className="size-9 rounded-full text-white hover:bg-white/10 sm:size-11"
+        className="size-12 rounded-xl border border-white/15 bg-black/20 text-white shadow-lg shadow-black/20 backdrop-blur-xl hover:bg-white/10 sm:size-14"
         aria-label={t("profile.actions.share")}
         onClick={onShare}
       >
@@ -3724,13 +3742,13 @@ function ProfileHeaderActions({
         <Button
           size="icon"
           variant="ghost"
-          className="relative size-9 rounded-full text-white hover:bg-white/10 sm:size-11"
+          className="relative size-12 rounded-xl border border-white/15 bg-black/20 text-white shadow-lg shadow-black/20 backdrop-blur-xl hover:bg-white/10 sm:size-14"
           aria-label={t("profile.actions.socialMenu")}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
         >
-          <Users className="h-5 w-5 sm:h-6 sm:w-6" />
+          <MoreHorizontal className="h-5 w-5 sm:h-6 sm:w-6" />
           {unreadTotal > 0 && (
             <span className="absolute -right-1 -top-1 min-w-4 rounded-full border border-background bg-primary px-1 text-[0.6rem] font-bold leading-4 text-primary-foreground sm:min-w-5 sm:leading-5">
               {unreadLabel}
@@ -3741,24 +3759,24 @@ function ProfileHeaderActions({
           <div
             role="menu"
             aria-label={t("profile.actions.socialMenu")}
-            className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-lg border border-white/10 bg-[#0d1115] p-1.5 text-sm text-white shadow-2xl shadow-black/45"
+            className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-lg border border-border/80 bg-popover p-1.5 text-sm text-popover-foreground shadow-2xl shadow-black/45"
           >
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
               onClick={() => choose(onOpenNetwork)}
             >
-              <Users className="h-4 w-4 text-white/58" />
+              <Users className="h-4 w-4 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate">{t("profile.actions.network")}</span>
             </button>
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
               onClick={() => choose(onOpenMessages)}
             >
-              <MessageCircle className="h-4 w-4 text-white/58" />
+              <MessageCircle className="h-4 w-4 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate">{t("profile.actions.messages")}</span>
               {unreadTotal > 0 && (
                 <span className="rounded-full bg-primary px-1.5 text-[0.65rem] font-bold leading-5 text-primary-foreground">
@@ -3769,10 +3787,10 @@ function ProfileHeaderActions({
             <Link
               role="menuitem"
               href="/settings"
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
               onClick={() => setOpen(false)}
             >
-              <Settings className="h-4 w-4 text-white/58" />
+              <Settings className="h-4 w-4 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate">{t("profile.actions.settings")}</span>
             </Link>
           </div>
@@ -3796,11 +3814,11 @@ function ProfileMetric({
   detail?: string;
 }) {
   return (
-    <div className="min-h-[5.75rem] border-r border-border px-1.5 py-3 text-center transition-colors last:border-r-0 hover:bg-muted/40 sm:min-h-28 sm:px-3 sm:py-4" aria-label={`${label}: ${value}${detail ? `, ${detail}` : ""}`}>
-      <Icon aria-hidden="true" className={cn("mx-auto mb-2 h-4 w-4 text-muted-foreground sm:mb-3 sm:h-5 sm:w-5", iconClassName)} />
-      <p className="truncate text-[0.92rem] font-bold leading-tight text-foreground min-[390px]:text-[1rem] sm:text-xl" title={value}>{value}</p>
-      <p className="mt-1.5 text-[0.68rem] leading-tight text-muted-foreground min-[390px]:text-[0.72rem] sm:mt-2 sm:text-sm">{label}</p>
-      {detail && <p className="mt-1 truncate text-[0.66rem] leading-tight text-muted-foreground/80 min-[390px]:text-[0.7rem] sm:text-sm" title={detail}>{detail}</p>}
+    <div className="min-h-[6.4rem] border-r border-border/80 px-1.5 py-4 text-center transition-colors last:border-r-0 hover:bg-muted/30 sm:min-h-32 sm:px-3 sm:py-5" aria-label={`${label}: ${value}${detail ? `, ${detail}` : ""}`}>
+      <Icon aria-hidden="true" className={cn("mx-auto mb-2 h-5 w-5 text-muted-foreground sm:mb-3 sm:h-6 sm:w-6", iconClassName)} />
+      <p className="truncate text-[1.08rem] font-black leading-tight text-foreground min-[390px]:text-[1.18rem] sm:text-2xl" title={value}>{value}</p>
+      <p className="mt-1.5 text-[0.74rem] leading-tight text-muted-foreground min-[390px]:text-[0.8rem] sm:mt-2 sm:text-base">{label}</p>
+      {detail && <p className="mt-1 truncate text-[0.72rem] leading-tight text-muted-foreground/80 min-[390px]:text-[0.78rem] sm:text-sm" title={detail}>{detail}</p>}
     </div>
   );
 }
@@ -3808,7 +3826,7 @@ function ProfileMetric({
 function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "sm" | "md" | "lg" | "hero" }) {
   const classes =
     size === "hero"
-      ? "h-[4.5rem] w-[4.5rem] text-4xl sm:h-28 sm:w-28 sm:text-7xl"
+      ? "h-[7.25rem] w-[7.25rem] text-5xl min-[390px]:h-32 min-[390px]:w-32 sm:h-44 sm:w-44 sm:text-7xl"
       : size === "lg"
         ? "h-20 w-20 text-2xl sm:h-24 sm:w-24 sm:text-3xl"
         : size === "sm"

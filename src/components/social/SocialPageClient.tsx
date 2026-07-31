@@ -79,6 +79,7 @@ export function SocialPageClient() {
   const updatePost = useMutation(api.social.updatePost);
   const deletePost = useMutation(api.social.deletePost);
   const createStory = useMutation(api.social.createStory);
+  const markStoryViewed = useMutation(api.social.markStoryViewed);
   const generateUploadUrl = useMutation(api.social.generateUploadUrl);
   const toggleLike = useMutation(api.social.toggleLike);
   const toggleSave = useMutation(api.social.toggleSave);
@@ -315,6 +316,14 @@ export function SocialPageClient() {
     });
     clearStoryDraft();
     setStoryDialogOpen(false);
+  }
+
+  async function openStory(storyId: Id<"social_stories">) {
+    setSelectedStoryId(storyId);
+    if (!userId) return;
+    const story = stories?.find((entry) => entry._id === storyId);
+    if (!story || story.isOwnStory || story.viewedByViewer) return;
+    await markStoryViewed({ storyId, viewerId: userId });
   }
 
   async function submitComment(postId: Id<"social_posts">) {
@@ -622,7 +631,7 @@ export function SocialPageClient() {
           stories={stories}
           currentUser={currentUser ? { name: currentUser.name, avatarUrl: currentUser.avatarUrl ?? undefined } : null}
           onCreate={() => setStoryDialogOpen(true)}
-          onOpenStory={setSelectedStoryId}
+          onOpenStory={openStory}
         />
         <ActivityRail loading={posts === undefined} />
 
@@ -738,6 +747,7 @@ type SocialStory = {
   expiresAt: number;
   author: null | { _id: Id<"users">; name: string; username?: string; avatarUrl?: string | null; isPro: boolean };
   isOwnStory: boolean;
+  viewedByViewer: boolean;
 };
 
 function StoryRail({
@@ -749,7 +759,7 @@ function StoryRail({
   stories: SocialStory[] | undefined;
   currentUser: { name: string; avatarUrl?: string } | null;
   onCreate: () => void;
-  onOpenStory: (storyId: string) => void;
+  onOpenStory: (storyId: Id<"social_stories">) => void;
 }) {
   return (
     <section className="border-b border-border/60 py-5" aria-label="Storys">
@@ -771,10 +781,15 @@ function StoryRail({
             return (
               <button key={story._id} type="button" className="min-w-[5.25rem] text-center" onClick={() => onOpenStory(story._id)}>
                 <span
-                  className="relative mx-auto flex h-[4.45rem] w-[4.45rem] items-center justify-center rounded-full p-[2px]"
+                  className={cn(
+                    "relative mx-auto flex h-[4.45rem] w-[4.45rem] items-center justify-center rounded-full p-[2px]",
+                    story.viewedByViewer && "opacity-75"
+                  )}
                   style={{
                     background:
-                      "linear-gradient(135deg, var(--primary), color-mix(in oklch, var(--primary) 72%, white), color-mix(in oklch, var(--primary) 45%, transparent))",
+                      story.viewedByViewer
+                        ? "linear-gradient(135deg, color-mix(in oklch, var(--muted-foreground) 46%, transparent), color-mix(in oklch, var(--muted-foreground) 34%, var(--background)), color-mix(in oklch, var(--muted-foreground) 22%, transparent))"
+                        : "linear-gradient(135deg, var(--primary), color-mix(in oklch, var(--primary) 72%, white), color-mix(in oklch, var(--primary) 45%, transparent))",
                   }}
                 >
                   <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-card text-sm font-extrabold text-foreground">
