@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ComponentType } from "react";
-import { Bell, Check, Languages, Moon, Shield, Sun, UserRound } from "lucide-react";
+import { Bell, Check, FileText, Languages, Moon, Scale, Shield, Sun, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppPage, AppPanel } from "@/components/ui/app-surface";
 import {
@@ -92,6 +92,29 @@ export default function SettingsPage() {
               action={t("settings.privacyAction")}
             />
           </div>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <SettingsPanel
+            icon={Scale}
+            title={t("legal.common.impressum")}
+            copy={t("legal.settings.impressumCopy")}
+            href="/impressum"
+            action={t("legal.common.open")}
+          />
+          <SettingsPanel
+            icon={Shield}
+            title={t("legal.common.privacy")}
+            copy={t("legal.settings.privacyCopy")}
+            href="/datenschutz"
+            action={t("legal.common.open")}
+          />
+          <SettingsPanel
+            icon={FileText}
+            title={t("legal.common.notices")}
+            copy={t("legal.settings.noticesCopy")}
+            href="/hinweise"
+            action={t("legal.common.open")}
+          />
         </div>
       </AppPanel>
     </AppPage>

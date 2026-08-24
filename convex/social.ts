@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import { requireUserMatch } from "./authz";
 
 const mediaType = v.union(v.literal("image"), v.literal("video"), v.literal("gif"));
 const mediaSize = v.union(v.literal("sm"), v.literal("md"), v.literal("lg"));
@@ -212,7 +213,8 @@ export const generateUploadUrl = mutation({
     mediaType,
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    const userId = await requireUserMatch(ctx, args.userId);
+    const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found.");
     return await ctx.storage.generateUploadUrl();
   },
@@ -232,6 +234,7 @@ export const createPost = mutation({
     repostOfPostId: v.optional(v.id("social_posts")),
   },
   handler: async (ctx, args) => {
+    const authorId = await requireUserMatch(ctx, args.authorId);
     const body = args.body.trim();
     const bodyAfter = args.bodyAfter?.trim();
     if (
@@ -248,13 +251,13 @@ export const createPost = mutation({
     if (args.repostOfPostId) {
       const repostedPost = await ctx.db.get(args.repostOfPostId);
       if (!repostedPost) throw new Error("Post not found.");
-      if (repostedPost.authorId === args.authorId) throw new Error("You cannot repost your own post.");
-      const existingRepost = await viewerRepost(ctx, args.repostOfPostId, args.authorId);
+      if (repostedPost.authorId === authorId) throw new Error("You cannot repost your own post.");
+      const existingRepost = await viewerRepost(ctx, args.repostOfPostId, authorId);
       if (existingRepost) throw new Error("You already reposted this post.");
     }
 
     return await ctx.db.insert("social_posts", {
-      authorId: args.authorId,
+      authorId,
       body,
       bodyAfter,
       mediaStorageId: args.mediaStorageId,
@@ -278,7 +281,8 @@ export const createStory = mutation({
     mediaType: v.optional(mediaType),
   },
   handler: async (ctx, args) => {
-    const author = await ctx.db.get(args.authorId);
+    const authorId = await requireUserMatch(ctx, args.authorId);
+    const author = await ctx.db.get(authorId);
     if (!author) throw new Error("User not found.");
     const body = args.body?.trim();
     if (!body && !args.mediaStorageId && !args.mediaUrl) {
@@ -287,7 +291,7 @@ export const createStory = mutation({
     if (body && body.length > 280) throw new Error("Story text is too long.");
     const now = Date.now();
     return await ctx.db.insert("social_stories", {
-      authorId: args.authorId,
+      authorId,
       body,
       mediaStorageId: args.mediaStorageId,
       mediaUrl: args.mediaUrl?.trim().slice(0, 500),
@@ -304,15 +308,16 @@ export const markStoryViewed = mutation({
     viewerId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const viewerId = await requireUserMatch(ctx, args.viewerId);
     const story = await ctx.db.get(args.storyId);
-    const viewer = await ctx.db.get(args.viewerId);
+    const viewer = await ctx.db.get(viewerId);
     if (!story || !viewer) return null;
-    if (story.authorId === args.viewerId) return null;
+    if (story.authorId === viewerId) return null;
 
     const existing = await ctx.db
       .query("social_story_views")
       .withIndex("by_story_and_viewer", (q) =>
-        q.eq("storyId", args.storyId).eq("viewerId", args.viewerId)
+        q.eq("storyId", args.storyId).eq("viewerId", viewerId)
       )
       .unique();
 
@@ -324,7 +329,7 @@ export const markStoryViewed = mutation({
 
     return await ctx.db.insert("social_story_views", {
       storyId: args.storyId,
-      viewerId: args.viewerId,
+      viewerId,
       viewedAt,
     });
   },
@@ -336,6 +341,7 @@ export const listStories = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const viewerId = args.viewerId ? await requireUserMatch(ctx, args.viewerId) : undefined;
     const now = Date.now();
     const rows = await ctx.db
       .query("social_stories")
@@ -345,11 +351,11 @@ export const listStories = query({
 
     const rendered = await Promise.all(
       rows.map(async (story) => {
-        const view = args.viewerId
+        const view = viewerId
           ? await ctx.db
               .query("social_story_views")
               .withIndex("by_story_and_viewer", (q) =>
-                q.eq("storyId", story._id).eq("viewerId", args.viewerId!)
+                q.eq("storyId", story._id).eq("viewerId", viewerId)
               )
               .unique()
           : null;
@@ -358,7 +364,7 @@ export const listStories = query({
           ...story,
           mediaUrl: await storyMediaUrl(ctx, story),
           author: await userPreview(ctx, await ctx.db.get(story.authorId)),
-          isOwnStory: args.viewerId ? story.authorId === args.viewerId : false,
+          isOwnStory: viewerId ? story.authorId === viewerId : false,
           viewedByViewer: Boolean(view),
         };
       })
@@ -377,13 +383,14 @@ export const listFeed = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const viewerId = args.viewerId ? await requireUserMatch(ctx, args.viewerId) : undefined;
     const posts = await ctx.db
       .query("social_posts")
       .withIndex("by_created")
       .order("desc")
       .take(args.limit ?? 30);
 
-    return await Promise.all(posts.map((post) => renderPostSummary(ctx, post, args.viewerId)));
+    return await Promise.all(posts.map((post) => renderPostSummary(ctx, post, viewerId)));
   },
 });
 
@@ -393,10 +400,11 @@ export const listFollowingFeed = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const viewerId = await requireUserMatch(ctx, args.viewerId);
     const limit = Math.min(args.limit ?? 30, 50);
     const following = await ctx.db
       .query("follows")
-      .withIndex("by_follower", (q) => q.eq("followerId", args.viewerId))
+      .withIndex("by_follower", (q) => q.eq("followerId", viewerId))
       .order("desc")
       .take(100);
 
@@ -417,7 +425,7 @@ export const listFollowingFeed = query({
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, limit);
 
-    return await Promise.all(posts.map((post) => renderPostSummary(ctx, post, args.viewerId)));
+    return await Promise.all(posts.map((post) => renderPostSummary(ctx, post, viewerId)));
   },
 });
 
@@ -429,6 +437,7 @@ export const getPostThread = query({
     replyLimit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const viewerId = args.viewerId ? await requireUserMatch(ctx, args.viewerId) : undefined;
     const post = await ctx.db.get(args.postId);
     if (!post) return null;
 
@@ -441,7 +450,7 @@ export const getPostThread = query({
 
     const renderedComments = await Promise.all(
       rootComments.map(async (comment) => {
-        const rendered = await renderComment(ctx, comment, args.viewerId, args.replyLimit ?? 12);
+        const rendered = await renderComment(ctx, comment, viewerId, args.replyLimit ?? 12);
         const allReplies = await ctx.db
           .query("social_comments")
           .withIndex("by_post_and_parent_comment", (q) =>
@@ -464,7 +473,7 @@ export const getPostThread = query({
     });
 
     return {
-      post: await renderPostSummary(ctx, post, args.viewerId),
+      post: await renderPostSummary(ctx, post, viewerId),
       comments: renderedComments,
     };
   },
@@ -477,6 +486,7 @@ export const listByAuthor = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const viewerId = args.viewerId ? await requireUserMatch(ctx, args.viewerId) : undefined;
     const author = await ctx.db.get(args.authorId);
     if (!author || author.isPublic === false) return [];
 
@@ -486,7 +496,7 @@ export const listByAuthor = query({
       .order("desc")
       .take(args.limit ?? 30);
 
-    return await Promise.all(posts.map((post) => renderPostSummary(ctx, post, args.viewerId)));
+    return await Promise.all(posts.map((post) => renderPostSummary(ctx, post, viewerId)));
   },
 });
 
@@ -496,16 +506,17 @@ export const listSaved = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const saves = await ctx.db
       .query("social_saves")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .take(args.limit ?? 30);
 
     const posts = await Promise.all(
       saves.map(async (save) => {
         const post = await ctx.db.get(save.postId);
-        return post ? renderPostSummary(ctx, post, args.userId) : null;
+        return post ? renderPostSummary(ctx, post, userId) : null;
       })
     );
 
@@ -519,10 +530,11 @@ export const toggleLike = mutation({
     postId: v.id("social_posts"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const existing = await ctx.db
       .query("social_likes")
       .withIndex("by_post_and_user", (q) =>
-        q.eq("postId", args.postId).eq("userId", args.userId)
+        q.eq("postId", args.postId).eq("userId", userId)
       )
       .unique();
     if (existing) {
@@ -531,7 +543,7 @@ export const toggleLike = mutation({
     }
     await ctx.db.insert("social_likes", {
       postId: args.postId,
-      userId: args.userId,
+      userId,
       createdAt: Date.now(),
     });
     return true;
@@ -544,12 +556,13 @@ export const toggleSave = mutation({
     postId: v.id("social_posts"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const post = await ctx.db.get(args.postId);
     if (!post) throw new Error("Post not found.");
     const existing = await ctx.db
       .query("social_saves")
       .withIndex("by_post_and_user", (q) =>
-        q.eq("postId", args.postId).eq("userId", args.userId)
+        q.eq("postId", args.postId).eq("userId", userId)
       )
       .unique();
     if (existing) {
@@ -558,7 +571,7 @@ export const toggleSave = mutation({
     }
     await ctx.db.insert("social_saves", {
       postId: args.postId,
-      userId: args.userId,
+      userId,
       createdAt: Date.now(),
     });
     return true;
@@ -575,9 +588,10 @@ export const updatePost = mutation({
     mediaScale: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const post = await ctx.db.get(args.postId);
     if (!post) throw new Error("Post not found.");
-    if (post.authorId !== args.userId) throw new Error("Not allowed.");
+    if (post.authorId !== userId) throw new Error("Not allowed.");
     const body = args.body.trim();
     const bodyAfter = args.bodyAfter?.trim();
     if (!body && !bodyAfter && !post.mediaStorageId && !post.mediaUrl && !post.linkedSubmissionId) {
@@ -602,9 +616,10 @@ export const deletePost = mutation({
     postId: v.id("social_posts"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const post = await ctx.db.get(args.postId);
     if (!post) throw new Error("Post not found.");
-    if (post.authorId !== args.userId) throw new Error("Not allowed.");
+    if (post.authorId !== userId) throw new Error("Not allowed.");
 
     const [postLikes, comments] = await Promise.all([
       ctx.db
@@ -647,6 +662,7 @@ export const addComment = mutation({
     mediaType: v.optional(commentMediaType),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const body = args.body.trim();
     if (body.length === 0 && !args.mediaStorageId && !args.mediaUrl) {
       throw new Error("Comment cannot be empty.");
@@ -663,7 +679,7 @@ export const addComment = mutation({
     return await ctx.db.insert("social_comments", {
       postId: args.postId,
       parentCommentId: args.parentCommentId,
-      authorId: args.userId,
+      authorId: userId,
       body,
       mediaStorageId: args.mediaStorageId,
       mediaUrl: args.mediaUrl?.trim().slice(0, 500),
@@ -679,12 +695,13 @@ export const toggleCommentLike = mutation({
     commentId: v.id("social_comments"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const comment = await ctx.db.get(args.commentId);
     if (!comment) throw new Error("Comment not found.");
     const existing = await ctx.db
       .query("social_comment_likes")
       .withIndex("by_comment_and_user", (q) =>
-        q.eq("commentId", args.commentId).eq("userId", args.userId)
+        q.eq("commentId", args.commentId).eq("userId", userId)
       )
       .unique();
     if (existing) {
@@ -693,7 +710,7 @@ export const toggleCommentLike = mutation({
     }
     await ctx.db.insert("social_comment_likes", {
       commentId: args.commentId,
-      userId: args.userId,
+      userId,
       createdAt: Date.now(),
     });
     return true;
@@ -707,9 +724,10 @@ export const updateComment = mutation({
     body: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const comment = await ctx.db.get(args.commentId);
     if (!comment) throw new Error("Comment not found.");
-    if (comment.authorId !== args.userId) throw new Error("Not allowed.");
+    if (comment.authorId !== userId) throw new Error("Not allowed.");
     const body = args.body.trim();
     if (body.length === 0) throw new Error("Comment cannot be empty.");
     if (body.length > 500) throw new Error("Comment is too long.");
@@ -727,9 +745,10 @@ export const deleteComment = mutation({
     commentId: v.id("social_comments"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const comment = await ctx.db.get(args.commentId);
     if (!comment) throw new Error("Comment not found.");
-    if (comment.authorId !== args.userId) throw new Error("Not allowed.");
+    if (comment.authorId !== userId) throw new Error("Not allowed.");
 
     const replies = await ctx.db
       .query("social_comments")
@@ -769,6 +788,7 @@ export const shareToUsername = mutation({
     username: v.string(),
   },
   handler: async (ctx, args) => {
+    const senderId = await requireUserMatch(ctx, args.senderId);
     const username = normalizeUsername(args.username);
     const recipient = await ctx.db
       .query("users")
@@ -777,10 +797,13 @@ export const shareToUsername = mutation({
     const post = await ctx.db.get(args.postId);
     if (!recipient) throw new Error("User not found.");
     if (!post) throw new Error("Post not found.");
-    if (recipient._id === args.senderId) throw new Error("You cannot send this to yourself.");
+    if (recipient._id === senderId) throw new Error("You cannot send this to yourself.");
+    if (recipient.isPublic === false || recipient.allowMessages === false) {
+      throw new Error("This user does not accept messages.");
+    }
 
     const body = `Shared a post with you: /social?post=${post._id}`;
-    const pair = orderedPair(args.senderId, recipient._id);
+    const pair = orderedPair(senderId, recipient._id);
     const existingConversation = await ctx.db
       .query("conversations")
       .withIndex("by_pair", (q) => q.eq("userAId", pair.userAId).eq("userBId", pair.userBId))
@@ -796,7 +819,7 @@ export const shareToUsername = mutation({
 
     const messageId = await ctx.db.insert("messages", {
       conversationId,
-      senderId: args.senderId,
+      senderId,
       recipientId: recipient._id,
       body,
       type: "post_share",
@@ -805,7 +828,7 @@ export const shareToUsername = mutation({
     });
     await ctx.db.patch(conversationId, {
       lastMessagePreview: "Beitrag geteilt",
-      lastSenderId: args.senderId,
+      lastSenderId: senderId,
       updatedAt: now,
     });
     return messageId;

@@ -9,6 +9,7 @@
  */
 
 import type * as analytics from "../analytics.js";
+import type * as authz from "../authz.js";
 import type * as exercises from "../exercises.js";
 import type * as follows from "../follows.js";
 import type * as friends from "../friends.js";
@@ -20,6 +21,7 @@ import type * as seed from "../seed.js";
 import type * as sets from "../sets.js";
 import type * as social from "../social.js";
 import type * as users from "../users.js";
+import type * as workoutExerciseNotes from "../workoutExerciseNotes.js";
 import type * as workouts from "../workouts.js";
 
 import type {
@@ -30,6 +32,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
+  authz: typeof authz;
   exercises: typeof exercises;
   follows: typeof follows;
   friends: typeof friends;
@@ -41,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   sets: typeof sets;
   social: typeof social;
   users: typeof users;
+  workoutExerciseNotes: typeof workoutExerciseNotes;
   workouts: typeof workouts;
 }>;
 

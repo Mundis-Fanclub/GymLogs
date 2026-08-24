@@ -2,6 +2,10 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import {
+  getAuthenticatedUser,
+  requireUserMatch,
+} from "./authz";
 
 function normalizeUsername(value: string): string {
   return value
@@ -17,6 +21,23 @@ function profileSearchText(name: string, username: string | undefined, email?: s
     .join(" ")
     .toLowerCase()
     .slice(0, 500);
+}
+
+function defaultPublicFields() {
+  return {
+    bio: true,
+    location: true,
+    favoriteLift: true,
+    trainingGoal: true,
+    heightCm: false,
+    weightKg: false,
+    birthDate: false,
+    trainingSummary: true,
+    trainingStreak: true,
+    trainingBestSet: true,
+    trainingActivity: true,
+    trainingVolume: true,
+  };
 }
 
 async function profileMedia(ctx: QueryCtx, user: Doc<"users">) {
@@ -76,6 +97,103 @@ async function reserveUsername(
     });
   }
 }
+
+export const me = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) return null;
+    const media = await profileMedia(ctx, user);
+    return { ...user, ...media };
+  },
+});
+
+export const getOrCreateMe = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated.");
+
+    const existing = await getAuthenticatedUser(ctx);
+    if (existing) {
+      const updates: {
+        name?: string;
+        email?: string;
+        username?: string;
+        searchText?: string;
+        tokenIdentifier?: string;
+        role?: "user";
+        isPublic?: boolean;
+        allowMessages?: boolean;
+        showTrainingSummary?: boolean;
+        profileAccent?: string;
+        publicFields?: ReturnType<typeof defaultPublicFields>;
+      } = {};
+
+      if (!existing.tokenIdentifier) {
+        updates.tokenIdentifier = identity.tokenIdentifier;
+      }
+      if (!existing.role) updates.role = "user";
+      if (!existing.name && identity.name) updates.name = identity.name;
+      if (!existing.email && identity.email) updates.email = identity.email;
+      if (!existing.username) {
+        const fallback = normalizeUsername(
+          identity.name ?? identity.email?.split("@")[0] ?? "user"
+        );
+        updates.username = fallback
+          ? `${fallback}_${existing._id.slice(-4)}`
+          : `user_${existing._id.slice(-4)}`;
+      }
+      if (existing.isPublic === undefined) updates.isPublic = true;
+      if (existing.allowMessages === undefined) updates.allowMessages = true;
+      if (existing.showTrainingSummary === undefined) {
+        updates.showTrainingSummary = true;
+      }
+      if (!existing.profileAccent) updates.profileAccent = "emerald";
+      if (!existing.publicFields) updates.publicFields = defaultPublicFields();
+      if (!existing.searchText || updates.name || updates.email || updates.username) {
+        updates.searchText = profileSearchText(
+          updates.name ?? existing.name,
+          updates.username ?? existing.username,
+          updates.email ?? existing.email
+        );
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(existing._id, updates);
+      }
+      if (existing.username || updates.username) {
+        await reserveUsername(ctx, updates.username ?? existing.username!, existing._id);
+      }
+      return existing._id;
+    }
+
+    const name = identity.name ?? identity.email?.split("@")[0] ?? "GymLogs User";
+    const email = identity.email ?? "";
+    const inserted = await ctx.db.insert("users", {
+      clerkId: identity.subject,
+      tokenIdentifier: identity.tokenIdentifier,
+      name,
+      email,
+      role: "user",
+      isPublic: true,
+      allowMessages: true,
+      showTrainingSummary: true,
+      profileAccent: "emerald",
+      publicFields: defaultPublicFields(),
+    });
+
+    const fallback = normalizeUsername(name || email.split("@")[0] || "user");
+    const username = fallback ? `${fallback}_${inserted.slice(-4)}` : `user_${inserted.slice(-4)}`;
+    await reserveUsername(ctx, username, inserted);
+    await ctx.db.patch(inserted, {
+      username,
+      searchText: profileSearchText(name, username, email),
+    });
+
+    return inserted;
+  },
+});
 
 export const getOrCreate = mutation({
   args: {
@@ -430,7 +548,8 @@ export const generateProfileUploadUrl = mutation({
     kind: v.union(v.literal("avatar"), v.literal("cover")),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    const userId = await requireUserMatch(ctx, args.userId);
+    const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found.");
     return await ctx.storage.generateUploadUrl();
   },
@@ -472,6 +591,7 @@ export const updateProfile = mutation({
     }),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const username = normalizeUsername(args.username);
     if (username.length < 3) {
       throw new Error("Username must contain at least 3 letters or numbers.");
@@ -482,11 +602,11 @@ export const updateProfile = mutation({
       .withIndex("by_username", (q) => q.eq("username", username))
       .first();
 
-    if (existingUsername && existingUsername._id !== args.userId) {
+    if (existingUsername && existingUsername._id !== userId) {
       throw new Error("Username is already taken.");
     }
 
-    const currentUser = await ctx.db.get(args.userId);
+    const currentUser = await ctx.db.get(userId);
     if (!currentUser) throw new Error("User not found.");
     const favoriteLift = args.favoriteLift?.trim().slice(0, 60);
     if (favoriteLift) {
@@ -499,19 +619,19 @@ export const updateProfile = mutation({
         throw new Error("Favorite lift must match an exercise from the catalog.");
       }
     }
-    await reserveUsername(ctx, username, args.userId);
+    await reserveUsername(ctx, username, userId);
     const oldUsername = currentUser.username;
     if (oldUsername && oldUsername !== username) {
       const oldReservation = await ctx.db
         .query("username_reservations")
         .withIndex("by_username", (q) => q.eq("username", oldUsername))
         .first();
-      if (oldReservation?.userId === args.userId) {
+      if (oldReservation?.userId === userId) {
         await ctx.db.delete(oldReservation._id);
       }
     }
 
-    await ctx.db.patch(args.userId, {
+    await ctx.db.patch(userId, {
       name: args.name.trim() || "GymLogs User",
       username,
       searchText: profileSearchText(args.name.trim() || "GymLogs User", username, currentUser.email),

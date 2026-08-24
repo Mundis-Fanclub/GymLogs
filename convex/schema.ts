@@ -28,6 +28,11 @@ export const leaderboardLiftTypes = [
 
 export const verificationStatuses = [
   "draft",
+  "awaiting_upload",
+  "uploaded",
+  "queued",
+  "processing",
+  "needs_review",
   "submitted",
   "pending_review",
   "verified",
@@ -62,8 +67,10 @@ const workoutTemplateChange = v.object({
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
+    tokenIdentifier: v.optional(v.string()),
     name: v.string(),
     email: v.string(),
+    role: v.optional(v.union(v.literal("user"), v.literal("moderator"), v.literal("admin"))),
     username: v.optional(v.string()),
     searchText: v.optional(v.string()),
     bio: v.optional(v.string()),
@@ -102,6 +109,7 @@ export default defineSchema({
     updatedAt: v.optional(v.number()),
   })
     .index("by_clerk_id", ["clerkId"])
+    .index("by_token_identifier", ["tokenIdentifier"])
     .index("by_username", ["username"])
     .index("by_is_public", ["isPublic"])
     .searchIndex("search_profile", {
@@ -201,7 +209,8 @@ export default defineSchema({
     isCompleted: v.boolean(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_date", ["userId", "date"]),
+    .index("by_user_date", ["userId", "date"])
+    .index("by_user_completed_date", ["userId", "isCompleted", "date"]),
 
   workout_templates: defineTable({
     userId: v.id("users"),
@@ -245,10 +254,25 @@ export default defineSchema({
     restSeconds: v.optional(v.number()),
     setOrder: v.number(),
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
   })
     .index("by_workout", ["workoutId"])
+    .index("by_workout_and_exercise", ["workoutId", "exerciseId"])
     .index("by_user_exercise", ["userId", "exerciseId"])
     .index("by_user_created", ["userId", "createdAt"]),
+
+  workout_exercise_notes: defineTable({
+    workoutId: v.id("workouts"),
+    exerciseId: v.id("exercises"),
+    userId: v.id("users"),
+    body: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_workout", ["workoutId"])
+    .index("by_workout_and_exercise", ["workoutId", "exerciseId"])
+    .index("by_user", ["userId", "updatedAt"]),
 
   rest_preferences: defineTable({
     userId: v.id("users"),
@@ -429,6 +453,11 @@ export default defineSchema({
     ),
     status: v.union(
       v.literal("draft"),
+      v.literal("awaiting_upload"),
+      v.literal("uploaded"),
+      v.literal("queued"),
+      v.literal("processing"),
+      v.literal("needs_review"),
       v.literal("submitted"),
       v.literal("pending_review"),
       v.literal("verified"),
@@ -449,6 +478,16 @@ export default defineSchema({
     videoUrl: v.optional(v.string()),
     videoDurationSeconds: v.optional(v.number()),
     videoMimeType: v.optional(v.string()),
+    validationSource: v.optional(
+      v.union(
+        v.literal("manual_review"),
+        v.literal("ai_pattern"),
+        v.literal("hybrid")
+      )
+    ),
+    validationScore: v.optional(v.number()),
+    validationNotes: v.optional(v.string()),
+    validatedAt: v.optional(v.number()),
     bracketKey: v.string(),
     score: v.optional(v.number()),
     submittedAt: v.number(),
@@ -473,6 +512,11 @@ export default defineSchema({
     fromStatus: v.optional(
       v.union(
         v.literal("draft"),
+        v.literal("awaiting_upload"),
+        v.literal("uploaded"),
+        v.literal("queued"),
+        v.literal("processing"),
+        v.literal("needs_review"),
         v.literal("submitted"),
         v.literal("pending_review"),
         v.literal("verified"),
@@ -481,6 +525,11 @@ export default defineSchema({
     ),
     toStatus: v.union(
       v.literal("draft"),
+      v.literal("awaiting_upload"),
+      v.literal("uploaded"),
+      v.literal("queued"),
+      v.literal("processing"),
+      v.literal("needs_review"),
       v.literal("submitted"),
       v.literal("pending_review"),
       v.literal("verified"),

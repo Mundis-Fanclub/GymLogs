@@ -380,6 +380,7 @@ export function ProfilePageClient() {
   const [messageTarget, setMessageTarget] = useState<Id<"users"> | null>(null);
   const [activeConversation, setActiveConversation] =
     useState<Id<"conversations"> | null>(null);
+  const [messageSearch, setMessageSearch] = useState("");
   const thread = useQuery(
     api.messages.thread,
     userId && activeConversation ? { userId, conversationId: activeConversation } : "skip"
@@ -603,6 +604,23 @@ export function ProfilePageClient() {
     () => conversations?.reduce((sum, item) => sum + item.unreadCount, 0) ?? 0,
     [conversations]
   );
+  const filteredConversations = useMemo(() => {
+    const needle = messageSearch.trim().toLowerCase();
+    if (!conversations || !needle) return conversations;
+
+    return conversations.filter((conversation) => {
+      const searchable = [
+        conversation.otherUser?.name,
+        conversation.otherUser?.username,
+        conversation.lastMessagePreview,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(needle);
+    });
+  }, [conversations, messageSearch]);
   const mediaPosts = useMemo(() => posts?.filter((post) => Boolean(post.mediaUrl)), [posts]);
   const displayAvatarUrl = avatarPreviewUrl || form.avatarUrl;
   const displayCoverUrl = coverPreviewUrl || form.coverUrl;
@@ -659,6 +677,13 @@ export function ProfilePageClient() {
     { icon: Calendar, value: joinedLabel },
     visibleProfile?.location ? { icon: MapPin, value: visibleProfile.location } : null,
     visibleProfile?.heightCm ? { icon: Ruler, value: `${visibleProfile.heightCm} cm` } : null,
+    visibleProfile?.weightKg ? { icon: Dumbbell, value: `${visibleProfile.weightKg} kg` } : null,
+    visibleProfile?.birthDate
+      ? {
+          icon: User,
+          value: new Date(visibleProfile.birthDate).toLocaleDateString(locale),
+        }
+      : null,
   ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
   const profileTabs = [
     { id: "posts", label: t("profile.tabs.posts") },
@@ -764,9 +789,16 @@ export function ProfilePageClient() {
     Boolean(previewTrainingSummary) && previewMetricItems.length > 0;
   const previewVisibleProfile: VisibleProfile = publicVisibleProfile;
   const previewMeta = [
+    { icon: Calendar, value: joinedLabel },
     previewVisibleProfile.location ? { icon: MapPin, value: previewVisibleProfile.location } : null,
     previewVisibleProfile.heightCm ? { icon: Ruler, value: `${previewVisibleProfile.heightCm} cm` } : null,
-    { icon: Calendar, value: joinedLabel },
+    previewVisibleProfile.weightKg ? { icon: Dumbbell, value: `${previewVisibleProfile.weightKg} kg` } : null,
+    previewVisibleProfile.birthDate
+      ? {
+          icon: User,
+          value: new Date(previewVisibleProfile.birthDate).toLocaleDateString(locale),
+        }
+      : null,
   ].filter(Boolean) as Array<{ icon: ComponentType<{ className?: string }>; value: string }>;
   const previewTemplates = form.isPublic ? workoutTemplates?.filter((template) => template.visibility === "public") : [];
   const previewTabs = [
@@ -1597,7 +1629,7 @@ export function ProfilePageClient() {
               <div
                 className={cn(
                   "relative overflow-visible bg-muted bg-cover bg-center",
-                  profileEditMode === "preview" ? "min-h-[28.5rem] sm:min-h-[32rem]" : "min-h-[17rem] sm:min-h-52",
+                  profileEditMode === "preview" ? "min-h-[26rem] sm:min-h-[31rem]" : "min-h-[16rem] sm:min-h-52",
                 )}
                 style={profileCoverStyle}
               >
@@ -1605,7 +1637,7 @@ export function ProfilePageClient() {
                   className={cn(
                     "pointer-events-none absolute inset-0",
                     profileEditMode === "preview"
-                      ? "bg-gradient-to-b from-background/20 via-background/55 to-background"
+                      ? "bg-[radial-gradient(circle_at_18%_30%,color-mix(in_oklch,var(--brand)_20%,transparent),transparent_34%),linear-gradient(to_bottom,rgba(0,0,0,0.28),rgba(0,0,0,0.58)_48%,var(--background)_98%)]"
                       : "bg-gradient-to-b from-background/10 via-background/45 to-background",
                   )}
                 />
@@ -1622,16 +1654,13 @@ export function ProfilePageClient() {
                   </Button>
                 )}
                 {profileEditMode === "preview" && (
-                  <div className="absolute left-3 right-3 top-3 z-20 flex items-center justify-between sm:left-7 sm:right-7 sm:top-6">
-                    <Button size="icon" variant="ghost" className="size-9 rounded-full bg-background/70 text-foreground backdrop-blur hover:bg-muted sm:size-11" aria-label={t("profile.misc.back")} onClick={() => setProfileEditMode("edit")}>
+                  <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between sm:left-8 sm:right-8 sm:top-6">
+                    <Button size="icon" variant="ghost" className="size-12 rounded-xl border border-white/15 bg-black/20 text-white shadow-lg shadow-black/20 backdrop-blur-xl hover:bg-white/10 sm:size-14" aria-label={t("profile.misc.back")} onClick={() => setProfileEditMode("edit")}>
                       <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                     </Button>
-                    <ProfileHeaderActions
-                      unreadTotal={unreadTotal}
-                      onShare={shareProfile}
-                      onOpenMessages={() => setMessagesDialogOpen(true)}
-                      onOpenNetwork={() => setNetworkDialogOpen(true)}
-                    />
+                    <Button size="icon" variant="ghost" className="size-12 rounded-xl border border-white/15 bg-black/20 text-white shadow-lg shadow-black/20 backdrop-blur-xl hover:bg-white/10 sm:size-14" aria-label={t("profile.misc.closeEditor")} onClick={closeProfileEditor}>
+                      <X className="h-5 w-5 sm:h-6 sm:w-6" />
+                    </Button>
                   </div>
                 )}
                 {profileEditMode === "edit" && (
@@ -1673,11 +1702,11 @@ export function ProfilePageClient() {
                   className={cn(
                     "relative z-10 grid items-end",
                     profileEditMode === "preview"
-                      ? "absolute inset-x-0 bottom-0 grid-cols-[6.25rem_minmax(0,1fr)] gap-5 px-5 pb-6 min-[390px]:gap-6 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-8 sm:px-9 sm:pb-8"
-                      : "grid-cols-[4.5rem_minmax(0,1fr)] gap-3 px-4 pb-4 pt-16 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4 sm:px-7 sm:pb-5 sm:pt-0",
+                      ? "absolute inset-x-0 bottom-0 grid-cols-[7.25rem_minmax(0,1fr)] gap-4 px-4 pb-6 min-[390px]:grid-cols-[8rem_minmax(0,1fr)] min-[390px]:gap-5 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-8 sm:px-9 sm:pb-8"
+                      : "grid-cols-[5.25rem_minmax(0,1fr)] gap-3 px-4 pb-4 pt-14 sm:grid-cols-[6.5rem_minmax(0,1fr)] sm:gap-4 sm:px-7 sm:pb-5 sm:pt-0",
                   )}
                 >
-                  <div className={cn("relative", profileEditMode === "preview" && "size-24 self-start min-[390px]:size-28 sm:size-44")}>
+                  <div className="relative self-end">
                     {profileEditMode === "preview" && <div className="pointer-events-none absolute -inset-2 rounded-full bg-primary/20 blur-2xl" />}
                     <button
                       type="button"
@@ -1685,7 +1714,7 @@ export function ProfilePageClient() {
                       aria-label={t("profile.misc.editAvatar")}
                       onClick={() => profileEditMode === "edit" && setAvatarMenuOpen((open) => !open)}
                     >
-                      <Avatar name={form.name} avatarUrl={displayAvatarUrl} size="hero" />
+                      <Avatar name={form.name} avatarUrl={displayAvatarUrl} size={profileEditMode === "preview" ? "hero" : "lg"} />
                     </button>
                     {profileEditMode === "edit" && avatarMenuOpen && (
                       <div className="absolute left-0 top-[calc(100%+0.5rem)] z-40 min-w-56 overflow-hidden rounded-lg border border-border bg-popover p-1 text-sm text-popover-foreground shadow-2xl shadow-black/20">
@@ -1710,42 +1739,50 @@ export function ProfilePageClient() {
                   </div>
                   <div className="min-w-0 pb-1">
                     {profileEditMode === "preview" && (
-                      <Badge className="mb-2 rounded-full px-2.5 py-0.5 text-[0.68rem] shadow-lg sm:mb-4 sm:px-4 sm:py-1 sm:text-sm">
+                      <Badge className="mb-2 gap-1 rounded-full border-primary/35 bg-primary/10 px-2.5 py-1 text-[0.68rem] text-primary shadow-sm backdrop-blur sm:mb-4 sm:px-4 sm:py-1.5 sm:text-sm">
+                        {form.isPublic ? <Eye className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
                         {form.isPublic ? t("profile.status.public") : t("profile.status.private")}
                       </Badge>
                     )}
                     {profileEditMode === "preview" ? (
-                      <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-none tracking-normal min-[390px]:text-[2.25rem] sm:text-6xl">
+                      <h1 className="flex min-w-0 items-center gap-2 text-[2rem] font-black leading-[0.95] tracking-normal min-[390px]:text-[2.45rem] sm:text-6xl">
                         <span className="truncate">{form.name || t("profile.public.unknownUser")}</span>
                         {user?.isPro && <BadgeCheck className="h-7 w-7 shrink-0 fill-primary text-primary-foreground sm:h-10 sm:w-10" />}
                       </h1>
                     ) : (
-                      <h2 className="truncate text-2xl font-black leading-none sm:text-5xl">
+                      <h2 className="truncate text-2xl font-black leading-tight sm:text-3xl">
                         {form.name || t("profile.public.unknownUser")}
                       </h2>
                     )}
                     {form.username && (
                       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-                        <p className={cn("truncate text-muted-foreground", profileEditMode === "preview" ? "text-[1.12rem] min-[390px]:text-[1.25rem] sm:text-2xl" : "text-sm sm:text-lg")}>
+                        <p className={cn("truncate text-muted-foreground", profileEditMode === "preview" ? "text-[1rem] leading-tight min-[390px]:text-[1.18rem] sm:text-2xl" : "text-sm")}>
                           @{form.username}
                         </p>
                       </div>
                     )}
                     {profileEditMode === "preview" && (
                       <>
-                        <p className="mt-4 max-w-[34rem] whitespace-pre-wrap text-[1rem] font-semibold leading-[1.35] text-foreground min-[390px]:text-[1.08rem] sm:mt-8 sm:text-3xl">
-                          {previewVisibleProfile.bio || t("profile.misc.emptyPublicBio")}
-                        </p>
-                        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[0.85rem] text-muted-foreground min-[390px]:text-[0.95rem] sm:mt-8 sm:gap-x-8 sm:text-xl">
-                          {previewMeta.map((meta) => {
-                            const Icon = meta.icon;
-                            return (
-                              <span key={meta.value} className="inline-flex items-center gap-2 sm:gap-3">
-                                <Icon className="h-4 w-4 sm:h-6 sm:w-6" />
-                                {meta.value}
-                              </span>
-                            );
-                          })}
+                        {previewVisibleProfile.bio && (
+                          <p className="mt-3 line-clamp-2 max-w-[34rem] whitespace-pre-wrap text-[0.92rem] font-semibold leading-[1.35] text-foreground min-[390px]:text-[1rem] sm:mt-6 sm:text-2xl">
+                            {previewVisibleProfile.bio}
+                          </p>
+                        )}
+                        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[0.78rem] text-muted-foreground min-[390px]:text-[0.88rem] sm:mt-6 sm:gap-x-7 sm:text-lg">
+                          {previewMeta.map(({ icon: Icon, value }) => (
+                            <span key={value} className="inline-flex items-center gap-1.5 sm:gap-2.5">
+                              <Icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
+                              {value}
+                            </span>
+                          ))}
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 transition hover:text-foreground sm:gap-2.5"
+                            onClick={() => setFollowDialogOpen(true)}
+                          >
+                            <Users className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
+                            {(followGraph?.followerCount ?? 0).toLocaleString(locale)} {t("profile.follow.followerLine")}
+                          </button>
                         </div>
                       </>
                     )}
@@ -1773,7 +1810,7 @@ export function ProfilePageClient() {
                 className={cn(
                   "w-full max-w-full space-y-4",
                   profileEditMode === "preview"
-                    ? "px-5 pb-[calc(env(safe-area-inset-bottom)+8.5rem)] sm:px-9 sm:pb-7"
+                    ? "space-y-5 bg-background px-4 pb-[calc(env(safe-area-inset-bottom)+8.5rem)] pt-0 sm:space-y-6 sm:px-7 sm:pb-7 lg:px-9"
                     : "px-4 pb-[calc(env(safe-area-inset-bottom)+7.75rem)] sm:px-7 sm:pb-7",
                 )}
               >
@@ -1807,31 +1844,23 @@ export function ProfilePageClient() {
                   </div>
                 )}
                 {profileEditMode === "preview" ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2.5 sm:max-w-xl sm:gap-3">
+                  <div className="space-y-5">
+                    <div className={cn("grid w-full gap-2", form.allowMessages ? "grid-cols-2" : "grid-cols-1")}>
                       {form.allowMessages && (
-                        <Button type="button" className="h-12 rounded-lg text-base font-semibold sm:h-14 sm:text-lg">
+                        <Button type="button" className="h-14 w-full rounded-lg text-base font-extrabold shadow-sm transition-all hover:-translate-y-0.5 sm:h-14 sm:text-lg">
+                          <MessageCircle className="h-4 w-4" />
                           {t("profile.misc.message")}
                         </Button>
                       )}
-                      <Button type="button" variant="outline" className="h-12 rounded-lg text-base font-semibold sm:h-14 sm:text-lg">
+                      <Button type="button" variant="outline" className="h-14 w-full rounded-lg border-border/80 bg-card/55 text-base font-extrabold shadow-sm backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-primary/10 sm:h-14 sm:text-lg">
+                        <User className="h-4 w-4" />
                         {t("profile.misc.addFriend")}
                       </Button>
-                    </div>
-                    <div className="hidden">
-                      <p className="whitespace-pre-wrap text-lg font-semibold leading-7 text-white">
-                        {form.bio || t("profile.misc.emptyBio")}
-                      </p>
-                      <div className="mt-4 flex flex-wrap gap-2 text-sm text-white/62">
-                        {form.location && <Badge variant="secondary" className="bg-white/10 text-white"><MapPin className="h-3 w-3" />{form.location}</Badge>}
-                        {form.favoriteLift && <Badge variant="secondary" className="bg-white/10 text-white"><Dumbbell className="h-3 w-3" />{form.favoriteLift}</Badge>}
-                        {form.heightCm && <Badge variant="secondary" className="bg-white/10 text-white"><Ruler className="h-3 w-3" />{form.heightCm} cm</Badge>}
-                      </div>
                     </div>
                     {previewTrainingSummary && hasVisiblePreviewMetric && (
                       <div
                         className={cn(
-                        "grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-muted/20 shadow-sm",
+                          "grid grid-cols-2 overflow-hidden rounded-lg border border-border/80 bg-card/45 shadow-sm backdrop-blur",
                           previewMetricItems.length > 2 && "min-[420px]:grid-cols-4"
                         )}
                       >
@@ -1854,8 +1883,8 @@ export function ProfilePageClient() {
                     )}
                     {form.isPublic && (
                       <>
-                        <div className="-mx-5 overflow-x-auto border-y border-white/[0.08] bg-[#05090a]/92 px-5 sm:mx-0 sm:rounded-[1.25rem] sm:border sm:px-3">
-                          <div className="flex w-max min-w-full gap-4 sm:gap-6">
+                        <div className="-mx-4 overflow-x-auto border-y border-border/70 bg-background/85 px-4 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
+                          <div className="flex w-max min-w-full gap-3 sm:gap-6">
                             {previewTabs.map((tab) => (
                               <button
                                 key={tab.id}
@@ -1865,7 +1894,7 @@ export function ProfilePageClient() {
                                 type="button"
                                 onClick={() => setPreviewProfileTab(tab.id)}
                                 className={cn(
-                                  "relative min-h-[4rem] shrink-0 whitespace-nowrap px-2 text-base font-extrabold text-muted-foreground transition-colors hover:text-foreground sm:min-h-[4.5rem] sm:text-lg",
+                                  "relative min-h-[3.65rem] shrink-0 whitespace-nowrap px-2 text-base font-extrabold text-muted-foreground transition-colors hover:text-foreground sm:min-h-[4.5rem] sm:text-lg",
                                   previewProfileTab === tab.id && "text-primary"
                                 )}
                               >
@@ -2092,7 +2121,10 @@ export function ProfilePageClient() {
 
 
         <Dialog open={messagesDialogOpen} onOpenChange={setMessagesOpen}>
-          <DialogContent className="z-[100] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden rounded-none border-border bg-[#090b0d] p-0 text-foreground sm:h-[86dvh] sm:max-w-6xl sm:rounded-xl">
+          <DialogContent
+            overlayClassName="z-30 md:z-50"
+            className="inset-0 z-30 h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] translate-x-0 translate-y-0 overflow-hidden rounded-none border-border bg-[#090b0d] p-0 text-foreground sm:inset-auto sm:left-1/2 sm:top-1/2 sm:z-[100] sm:h-[86dvh] sm:max-w-6xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl"
+          >
             <div id="messages" className="grid h-full min-h-0 bg-[#090b0d] md:grid-cols-[22rem_minmax(0,1fr)]">
               <aside className={cn("min-h-0 border-r border-white/10 bg-[#0d1013]", thread && "hidden md:flex", "flex flex-col")}>
                 <div className="shrink-0 border-b border-white/10 px-4 pb-4 pt-5">
@@ -2100,16 +2132,34 @@ export function ProfilePageClient() {
                     <div>
                       <p className="text-xl font-bold tracking-normal">{t("profile.messagesPanel.title")}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {unreadTotal > 0 ? `${unreadTotal} ${t("profile.messagesPanel.unread")}` : t("profile.messagesPanel.emptyTitle")}
+                        {conversations === undefined
+                          ? t("profile.messagesPanel.loading")
+                          : conversations.length === 0
+                            ? t("profile.messagesPanel.emptyTitle")
+                            : unreadTotal > 0
+                              ? `${unreadTotal} ${t("profile.messagesPanel.unread")}`
+                              : t("profile.messagesPanel.noUnread")}
                       </p>
                     </div>
-                    <Button type="button" size="icon-sm" variant="ghost" aria-label={t("profile.networkPanel.newMessage")} onClick={() => setNetworkDialogOpen(true)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
                   </div>
-                  <div className="mt-4 flex h-10 items-center gap-2 rounded-full bg-white/[0.08] px-3 text-sm text-muted-foreground">
+                  <div className="mt-4 flex h-10 items-center gap-2 rounded-full bg-white/[0.08] px-3 text-sm text-muted-foreground focus-within:bg-white/[0.11] focus-within:ring-1 focus-within:ring-primary/40">
                     <Search className="h-4 w-4" />
-                    <span>{t("profile.networkPanel.searchPlaceholder")}</span>
+                    <input
+                      value={messageSearch}
+                      onChange={(event) => setMessageSearch(event.target.value)}
+                      placeholder={t("profile.networkPanel.searchPlaceholder")}
+                      className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    />
+                    {messageSearch && (
+                      <button
+                        type="button"
+                        className="rounded-full p-1 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+                        aria-label={t("profile.messagesPanel.clearSearch")}
+                        onClick={() => setMessageSearch("")}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-auto px-2 py-3">
@@ -2123,8 +2173,12 @@ export function ProfilePageClient() {
                       <p className="font-semibold">{t("profile.messagesPanel.emptyTitle")}</p>
                       <p className="mt-2 text-sm leading-5 text-muted-foreground">{t("profile.messagesPanel.emptyCopy")}</p>
                     </div>
+                  ) : filteredConversations?.length === 0 ? (
+                    <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+                      {t("profile.messagesPanel.noSearchResults")}
+                    </div>
                   ) : (
-                    conversations.map((conversation) => (
+                    filteredConversations?.map((conversation) => (
                       <button
                         key={conversation._id}
                         type="button"
@@ -2218,7 +2272,7 @@ export function ProfilePageClient() {
                     <div
                       ref={messagesScrollRef}
                       onScroll={handleMessagesScroll}
-                      className="relative min-h-0 flex-1 overflow-auto px-4 py-5 font-[var(--font-outfit)] sm:px-8"
+                      className="relative min-h-0 flex-1 overflow-auto px-4 py-5 font-[var(--font-roboto)] sm:px-8"
                     >
                       {showJumpToLatest && (
                         <button
@@ -2297,7 +2351,7 @@ export function ProfilePageClient() {
                       </div>
                     )}
 
-                    <div className="shrink-0 border-t border-white/10 bg-[#0b0d10]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-16px_40px_rgba(0,0,0,0.22)] backdrop-blur sm:px-5 sm:pb-4">
+                    <div className="shrink-0 border-t border-white/10 bg-[#0b0d10]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+5.75rem)] pt-3 shadow-[0_-16px_40px_rgba(0,0,0,0.22)] backdrop-blur sm:px-5 sm:pb-4">
                       {messageImageDraft && (
                         <div className="mb-3 flex max-w-md items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-2">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -3615,16 +3669,16 @@ function PostShareCard({ message, mine }: { message: ChatMessageView; mine: bool
     <Link
       href={href}
       className={cn(
-        "group block overflow-hidden rounded-3xl border text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group block overflow-hidden rounded-2xl border text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         mine
-          ? "border-primary/40 bg-[#11160d] hover:bg-[#151d0f]"
+          ? "border-primary/35 bg-[#101215] hover:bg-[#14171b]"
           : "border-white/10 bg-white/[0.055] hover:bg-white/[0.08]"
       )}
     >
-      <div className="p-3">
-        <div className="mb-2 flex items-center justify-between gap-3">
+      <div className="p-3.5">
+        <div className="mb-3 flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold", mine ? "border-primary text-primary" : "border-white/20 text-foreground")}>
+            <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold", mine ? "border-primary/70 text-primary" : "border-white/20 text-foreground")}>
               {authorName.slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -3632,13 +3686,13 @@ function PostShareCard({ message, mine }: { message: ChatMessageView; mine: bool
               <p className="truncate text-xs text-muted-foreground">{authorLabel}</p>
             </div>
           </div>
-          <span className={cn("shrink-0 rounded-full px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wide", mine ? "bg-primary/20 text-primary" : "bg-white/[0.08] text-muted-foreground")}>
+          <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wide", mine ? "border-primary/25 bg-primary/10 text-primary" : "border-white/10 bg-white/[0.06] text-muted-foreground")}>
             {t("profile.public.sharedPost")}
           </span>
         </div>
 
         {message.postPreview?.mediaUrl ? (
-          <div className="mb-3 overflow-hidden rounded-2xl bg-black/40">
+          <div className="mb-3 overflow-hidden rounded-xl bg-black/40">
             {message.postPreview.mediaType === "video" ? (
               <video src={message.postPreview.mediaUrl} className="aspect-video w-full object-cover" muted />
             ) : (
@@ -3646,18 +3700,13 @@ function PostShareCard({ message, mine }: { message: ChatMessageView; mine: bool
               <img src={message.postPreview.mediaUrl} alt="" className="aspect-video w-full object-cover" />
             )}
           </div>
-        ) : (
-          <div className="mb-3 flex aspect-[2.2/1] items-center justify-center rounded-2xl bg-black/35">
-            <MessageCircle className="h-6 w-6 text-muted-foreground" />
-          </div>
-        )}
+        ) : null}
 
-        <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm leading-5 text-foreground">
+        <p className="line-clamp-4 whitespace-pre-wrap break-words text-sm leading-5 text-foreground">
           {excerpt}
         </p>
-        <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
-          <span className="text-xs text-muted-foreground">GymLogs</span>
-          <span className={cn("inline-flex items-center gap-1 text-xs font-semibold transition-colors", mine ? "text-primary" : "text-primary group-hover:text-primary/90")}>
+        <div className="mt-3 flex items-center justify-end border-t border-white/10 pt-3">
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors group-hover:text-primary/90">
             {t("profile.public.viewPost")}
             <ExternalLink className="h-3 w-3" />
           </span>

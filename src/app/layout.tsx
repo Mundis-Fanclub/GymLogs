@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Audiowide, Outfit } from "next/font/google";
+import { Audiowide, Roboto } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ConvexClientProvider } from "@/components/providers/ConvexClientProvider";
 import { AppPreferencesProvider } from "@/components/providers/AppPreferencesProvider";
@@ -13,8 +13,9 @@ const audiowide = Audiowide({
   subsets: ["latin"],
 });
 
-const outfit = Outfit({
-  variable: "--font-outfit",
+const roboto = Roboto({
+  variable: "--font-roboto",
+  weight: ["400", "500", "700", "900"],
   subsets: ["latin"],
 });
 
@@ -32,7 +33,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" className="dark" suppressHydrationWarning>
         <body
-          className={`${audiowide.variable} ${outfit.variable} antialiased`}
+          className={`${audiowide.variable} ${roboto.variable} antialiased`}
         >
           <AppPreferencesProvider>
             <ConvexClientProvider>

@@ -112,6 +112,7 @@ export function SocialPageClient() {
   const [storyUploading, setStoryUploading] = useState(false);
   const [storyError, setStoryError] = useState("");
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
+  const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(() => new Set());
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [openPostMenuId, setOpenPostMenuId] = useState<string | null>(null);
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(null);
@@ -168,11 +169,11 @@ export function SocialPageClient() {
           ? "image"
           : null;
     if (!kind) {
-      setError("Bitte Bild oder Video auswählen.");
+      setError(t("socialPage.chooseImageOrVideo"));
       return;
     }
     if (file.size > 30 * 1024 * 1024) {
-      setError("Medien dürfen maximal 30 MB groß sein.");
+      setError(t("socialPage.mediaTooLarge"));
       return;
     }
     setUploading(true);
@@ -183,13 +184,13 @@ export function SocialPageClient() {
         headers: { "Content-Type": file.type },
         body: file,
       });
-      if (!response.ok) throw new Error("Upload fehlgeschlagen.");
+      if (!response.ok) throw new Error(t("socialPage.uploadFailed"));
       const result = (await response.json()) as { storageId: Id<"_storage"> };
       setMediaStorageId(result.storageId);
       setMediaType(kind);
       setMediaPreviewUrl(URL.createObjectURL(file));
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Upload fehlgeschlagen.");
+      setError(uploadError instanceof Error ? uploadError.message : t("socialPage.uploadFailed"));
     } finally {
       setUploading(false);
     }
@@ -199,11 +200,11 @@ export function SocialPageClient() {
     if (!userId || !file) return;
     setError("");
     if (file.type !== "image/gif") {
-      setError("Bitte eine GIF-Datei auswählen.");
+      setError(t("socialPage.chooseGif"));
       return;
     }
     if (file.size > 15 * 1024 * 1024) {
-      setError("GIFs dürfen maximal 15 MB groß sein.");
+      setError(t("socialPage.gifTooLarge"));
       return;
     }
     try {
@@ -213,7 +214,7 @@ export function SocialPageClient() {
         headers: { "Content-Type": file.type },
         body: file,
       });
-      if (!response.ok) throw new Error("Upload fehlgeschlagen.");
+      if (!response.ok) throw new Error(t("socialPage.uploadFailed"));
       const result = (await response.json()) as { storageId: Id<"_storage"> };
       setCommentMediaDrafts({
         ...commentMediaDrafts,
@@ -224,7 +225,7 @@ export function SocialPageClient() {
         },
       });
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Upload fehlgeschlagen.");
+      setError(uploadError instanceof Error ? uploadError.message : t("socialPage.uploadFailed"));
     }
   }
 
@@ -259,11 +260,11 @@ export function SocialPageClient() {
           ? "image"
           : null;
     if (!kind) {
-      setStoryError("Bitte Bild oder Video auswählen.");
+      setStoryError(t("socialPage.chooseImageOrVideo"));
       return;
     }
     if (file.size > 30 * 1024 * 1024) {
-      setStoryError("Story-Medien dürfen maximal 30 MB groß sein.");
+      setStoryError(t("socialPage.storyMediaTooLarge"));
       return;
     }
     setStoryUploading(true);
@@ -274,13 +275,13 @@ export function SocialPageClient() {
         headers: { "Content-Type": file.type },
         body: file,
       });
-      if (!response.ok) throw new Error("Upload fehlgeschlagen.");
+      if (!response.ok) throw new Error(t("socialPage.uploadFailed"));
       const result = (await response.json()) as { storageId: Id<"_storage"> };
       setStoryMediaStorageId(result.storageId);
       setStoryMediaType(kind);
       setStoryPreviewUrl(URL.createObjectURL(file));
     } catch (uploadError) {
-      setStoryError(uploadError instanceof Error ? uploadError.message : "Upload fehlgeschlagen.");
+      setStoryError(uploadError instanceof Error ? uploadError.message : t("socialPage.uploadFailed"));
     } finally {
       setStoryUploading(false);
     }
@@ -323,7 +324,16 @@ export function SocialPageClient() {
     if (!userId) return;
     const story = stories?.find((entry) => entry._id === storyId);
     if (!story || story.isOwnStory || story.viewedByViewer) return;
-    await markStoryViewed({ storyId, viewerId: userId });
+    setViewedStoryIds((current) => new Set(current).add(storyId));
+    try {
+      await markStoryViewed({ storyId, viewerId: userId });
+    } catch {
+      setViewedStoryIds((current) => {
+        const next = new Set(current);
+        next.delete(storyId);
+        return next;
+      });
+    }
   }
 
   async function submitComment(postId: Id<"social_posts">) {
@@ -362,14 +372,14 @@ export function SocialPageClient() {
     try {
       await createPost({ authorId: userId, body: "", repostOfPostId: postId });
     } catch (repostError) {
-      setError(repostError instanceof Error ? repostError.message : "Repost fehlgeschlagen.");
+      setError(repostError instanceof Error ? repostError.message : t("socialPage.repostFailed"));
     }
   }
 
   async function sendPostToFriend(friend: { username?: string; name: string } | null) {
     if (!userId || !shareDialogPostId || !friend?.username) return;
     await shareToUsername({ senderId: userId, postId: shareDialogPostId, username: friend.username });
-    setShareMessage(`Gesendet an ${friend.name}`);
+    setShareMessage(t("socialPage.sentTo").replace("{name}", friend.name));
   }
 
   async function confirmDelete() {
@@ -502,7 +512,7 @@ export function SocialPageClient() {
                     <div className="min-w-0 flex-1 space-y-2">
                       <Input
                         id={`comment-input-${thread.post._id}`}
-                        placeholder={`Antwort an ${thread.post.author?.username ?? thread.post.author?.name ?? "User"} ...`}
+                        placeholder={t("socialPage.replyTo").replace("{name}", thread.post.author?.username ?? thread.post.author?.name ?? "User")}
                         value={commentBodies[thread.post._id] ?? ""}
                         onChange={(event) => setCommentBodies({ ...commentBodies, [thread.post._id]: event.target.value })}
                       />
@@ -630,6 +640,7 @@ export function SocialPageClient() {
         <StoryRail
           stories={stories}
           currentUser={currentUser ? { name: currentUser.name, avatarUrl: currentUser.avatarUrl ?? undefined } : null}
+          viewedStoryIds={viewedStoryIds}
           onCreate={() => setStoryDialogOpen(true)}
           onOpenStory={openStory}
         />
@@ -753,46 +764,50 @@ type SocialStory = {
 function StoryRail({
   stories,
   currentUser,
+  viewedStoryIds,
   onCreate,
   onOpenStory,
 }: {
   stories: SocialStory[] | undefined;
   currentUser: { name: string; avatarUrl?: string } | null;
+  viewedStoryIds: Set<string>;
   onCreate: () => void;
   onOpenStory: (storyId: Id<"social_stories">) => void;
 }) {
+  const { t } = useAppPreferences();
   return (
-    <section className="border-b border-border/60 py-5" aria-label="Storys">
+    <section className="border-b border-border/60 py-5" aria-label={t("socialPage.storiesLoading")}>
       <div className="flex gap-5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button type="button" className="min-w-[5.25rem] text-center" onClick={onCreate}>
           <span className="relative mx-auto flex h-[4.45rem] w-[4.45rem] items-center justify-center rounded-full border border-primary/45 bg-primary/10 text-primary">
             <ImagePlus className="h-6 w-6" />
           </span>
-          <span className="mt-2 block truncate text-sm font-semibold text-muted-foreground">Story erstellen</span>
+          <span className="mt-2 block truncate text-sm font-semibold text-muted-foreground">{t("socialPage.createStory")}</span>
         </button>
 
         {stories === undefined ? (
-          <div className="flex min-w-[12rem] items-center text-sm text-muted-foreground">Storys werden geladen...</div>
+          <div className="flex min-w-[12rem] items-center text-sm text-muted-foreground">{t("socialPage.storiesLoading")}</div>
         ) : stories.length === 0 ? (
-          <div className="flex min-w-[12rem] items-center text-sm text-muted-foreground">Noch keine Storys</div>
+          <div className="flex min-w-[12rem] items-center text-sm text-muted-foreground">{t("socialPage.storiesEmpty")}</div>
         ) : (
           stories.map((story) => {
             const authorName = story.author?.username ?? story.author?.name ?? "User";
+            const viewed = story.viewedByViewer || viewedStoryIds.has(story._id);
             return (
               <button key={story._id} type="button" className="min-w-[5.25rem] text-center" onClick={() => onOpenStory(story._id)}>
                 <span
                   className={cn(
-                    "relative mx-auto flex h-[4.45rem] w-[4.45rem] items-center justify-center rounded-full p-[2px]",
-                    story.viewedByViewer && "opacity-75"
+                    "relative mx-auto flex h-[4.45rem] w-[4.45rem] items-center justify-center rounded-full p-[2px] transition-[opacity,filter]",
+                    viewed && "opacity-80"
                   )}
                   style={{
                     background:
-                      story.viewedByViewer
-                        ? "linear-gradient(135deg, color-mix(in oklch, var(--muted-foreground) 46%, transparent), color-mix(in oklch, var(--muted-foreground) 34%, var(--background)), color-mix(in oklch, var(--muted-foreground) 22%, transparent))"
+                      viewed
+                        ? "linear-gradient(135deg, color-mix(in oklch, var(--muted-foreground) 50%, transparent), color-mix(in oklch, var(--muted-foreground) 38%, var(--background)), color-mix(in oklch, var(--muted-foreground) 28%, transparent))"
                         : "linear-gradient(135deg, var(--primary), color-mix(in oklch, var(--primary) 72%, white), color-mix(in oklch, var(--primary) 45%, transparent))",
                   }}
                 >
-                  <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-card text-sm font-extrabold text-foreground">
+                  <span className={cn("flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-card text-sm font-extrabold text-foreground transition-[filter,opacity]", viewed && "grayscale opacity-70")}>
                     {story.mediaUrl && story.mediaType !== "video" ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={story.mediaUrl} alt="" className="h-full w-full object-cover" />
@@ -802,7 +817,7 @@ function StoryRail({
                   </span>
                   {story.isOwnStory && (
                     <span className="absolute -bottom-1 -right-1 rounded-full border-2 border-background bg-primary px-1.5 text-[0.62rem] font-bold text-primary-foreground">
-                      Du
+                      {t("socialPage.you")}
                     </span>
                   )}
                 </span>
@@ -843,12 +858,13 @@ function StoryComposerDialog({
   onClearMedia: () => void;
   onSubmit: () => void;
 }) {
+  const { t } = useAppPreferences();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md overflow-hidden rounded-[1.35rem] border-border bg-popover p-0" showCloseButton={false}>
         <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
-          <DialogTitle className="text-base font-extrabold">Story erstellen</DialogTitle>
-          <Button size="icon-sm" variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)} aria-label="Schließen">
+          <DialogTitle className="text-base font-extrabold">{t("socialPage.createStory")}</DialogTitle>
+          <Button size="icon-sm" variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)} aria-label={t("socialPage.close")}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -856,14 +872,14 @@ function StoryComposerDialog({
           <Textarea
             value={body}
             onChange={(event) => onBodyChange(event.target.value)}
-            placeholder="Was passiert gerade?"
+            placeholder={t("socialPage.storyPlaceholder")}
             maxLength={280}
             rows={3}
             className="border-border/80 bg-card/55 text-base"
           />
           {previewUrl && (
             <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-background/40">
-              <button type="button" className="absolute right-2 top-2 z-10 rounded-full bg-black/70 p-2 text-white" onClick={onClearMedia} aria-label="Medium entfernen">
+              <button type="button" className="absolute right-2 top-2 z-10 rounded-full bg-black/70 p-2 text-white" onClick={onClearMedia} aria-label={t("socialPage.removeMedia")}>
                 <X className="h-4 w-4" />
               </button>
               {mediaType === "video" ? (
@@ -878,11 +894,11 @@ function StoryComposerDialog({
           <div className="flex items-center justify-between gap-3">
             <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-border/80 bg-card/55 px-3 text-sm font-semibold text-muted-foreground transition hover:text-foreground">
               <ImagePlus className="h-4 w-4" />
-              {uploading ? "Upload..." : "Medium"}
+              {uploading ? t("socialPage.upload") : t("socialPage.media")}
               <input type="file" accept="image/*,video/*,.gif" className="sr-only" onChange={(event) => onFile(event.target.files?.[0])} />
             </label>
             <Button className="rounded-xl" disabled={disabled} onClick={onSubmit}>
-              Posten
+              {t("socialPage.post")}
             </Button>
           </div>
         </div>
@@ -892,6 +908,7 @@ function StoryComposerDialog({
 }
 
 function StoryViewerDialog({ story, onClose }: { story: SocialStory | null; onClose: () => void }) {
+  const { t } = useAppPreferences();
   return (
     <Dialog open={Boolean(story)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md overflow-hidden rounded-[1.35rem] border-border bg-popover p-0" showCloseButton={false}>
@@ -901,11 +918,11 @@ function StoryViewerDialog({ story, onClose }: { story: SocialStory | null; onCl
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar name={story.author?.name ?? "?"} avatarUrl={story.author?.avatarUrl ?? undefined} size="sm" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-extrabold">{story.author?.username ?? story.author?.name ?? "Unbekannt"}</p>
+                  <p className="truncate text-sm font-extrabold">{story.author?.username ?? story.author?.name ?? t("socialPage.unknownUser")}</p>
                   <p className="text-xs text-muted-foreground">{formatRelativeTime(story.createdAt)}</p>
                 </div>
               </div>
-              <Button size="icon-sm" variant="ghost" className="rounded-full" onClick={onClose} aria-label="Schließen">
+              <Button size="icon-sm" variant="ghost" className="rounded-full" onClick={onClose} aria-label={t("socialPage.close")}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -934,11 +951,12 @@ function ActivityRail({
 }: {
   loading?: boolean;
 }) {
+  const { t } = useAppPreferences();
   return (
-    <section className="border-b border-border/60 py-4" aria-label="Neue Aktivitäten">
+    <section className="border-b border-border/60 py-4" aria-label={t("socialPage.newActivities")}>
       <h2 className="mb-3 flex items-center gap-2 px-4 text-lg font-extrabold">
         <Sparkles className="h-4 w-4 fill-primary text-primary" />
-        Neue Aktivitäten
+        {t("socialPage.newActivities")}
       </h2>
       <div className="flex gap-3 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {loading ? (
@@ -948,7 +966,7 @@ function ActivityRail({
           </>
         ) : (
           <div className="flex min-h-[6.35rem] min-w-[15rem] items-center rounded-2xl border border-border/70 bg-card/55 px-4 text-sm text-muted-foreground">
-            Noch keine Aktivitäten
+            {t("socialPage.activitiesEmpty")}
           </div>
         )}
       </div>
@@ -1053,7 +1071,7 @@ export function SocialPostCard({
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-base leading-5">
                 <Link href={post.author ? `/profile/${post.author._id}` : "/social"} className="min-w-0 truncate font-extrabold hover:underline">
-                  {post.author?.username ?? post.author?.name ?? "Unbekannt"}
+                  {post.author?.username ?? post.author?.name ?? t("socialPage.unknownUser")}
                 </Link>
                 {post.author?.isPro && <CheckCircle2 className="h-4 w-4 shrink-0 fill-primary text-background" />}
                 {post.repostOfPostId && <span className="text-muted-foreground">reposted</span>}
@@ -1063,7 +1081,7 @@ export function SocialPostCard({
                 </time>
                 {edited && <span className="text-sm text-muted-foreground">{t("socialPage.edited")}</span>}
               </div>
-              <p className="mt-1 truncate text-sm text-muted-foreground">Öffentlich</p>
+              <p className="mt-1 truncate text-sm text-muted-foreground">{t("socialPage.public")}</p>
             </div>
           </div>
             {isOwnPost && (
@@ -1081,11 +1099,11 @@ export function SocialPostCard({
                   <div className="absolute right-0 z-10 mt-1 w-40 overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl shadow-background/30">
                     <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition hover:bg-muted" onClick={() => onEditPost(post)}>
                       <Pencil className="h-3.5 w-3.5" />
-                      Bearbeiten
+                      {t("socialPage.edit")}
                     </button>
                     <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-destructive transition hover:bg-destructive/10" onClick={() => onDeletePost(post._id)}>
                       <Trash2 className="h-3.5 w-3.5" />
-                      Löschen
+                      {t("socialPage.delete")}
                     </button>
                   </div>
                 )}
@@ -1097,9 +1115,9 @@ export function SocialPostCard({
             <div className="space-y-2">
               <Textarea value={editingBody} onChange={(event) => onEditingBodyChange(event.target.value)} rows={3} maxLength={1200} className="min-h-24 text-[0.95rem]" />
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={onCancelEdit}>Abbrechen</Button>
+                <Button variant="ghost" onClick={onCancelEdit}>{t("socialPage.cancel")}</Button>
                 <Button onClick={onSaveEdit} disabled={!editingBody.trim() && !post.mediaStorageId && !post.mediaUrl && !post.linkedSubmissionId && !post.repostOfPostId}>
-                  Speichern
+                  {t("socialPage.save")}
                 </Button>
               </div>
             </div>
@@ -1121,11 +1139,11 @@ export function SocialPostCard({
           {post.repostOf && <QuotedPost post={post.repostOf} onOpen={() => onComment(post.repostOf!._id)} />}
 
           <div className="grid grid-cols-5 items-center pt-1 text-muted-foreground">
-            <ActionButton active={post.likedByViewer} activeClass="text-rose-500 hover:text-rose-500" onClick={() => onLike(post._id)} ariaLabel={post.likedByViewer ? "Like entfernen" : "Liken"}>
+            <ActionButton active={post.likedByViewer} activeClass="text-rose-500 hover:text-rose-500" onClick={() => onLike(post._id)} ariaLabel={post.likedByViewer ? t("socialPage.removeLike") : t("socialPage.like")}>
               <Heart className={cn("h-5 w-5", post.likedByViewer && "fill-current")} />
               <span>{post.likeCount}</span>
             </ActionButton>
-            <ActionButton onClick={() => onComment(post._id)} ariaLabel="Kommentare öffnen">
+            <ActionButton onClick={() => onComment(post._id)} ariaLabel={t("socialPage.openComments")}>
               <MessageCircle className="h-5 w-5" />
               <span>{post.commentCount}</span>
             </ActionButton>
@@ -1136,10 +1154,10 @@ export function SocialPostCard({
               onClick={() => onRepost(post._id)}
               ariaLabel={
                 isOwnPost
-                  ? "Eigene Posts können nicht repostet werden"
+                  ? t("socialPage.cannotRepostOwn")
                   : post.repostedByViewer
-                    ? "Bereits repostet"
-                    : "Reposten"
+                    ? t("socialPage.alreadyReposted")
+                    : t("socialPage.repost")
               }
             >
               <Repeat2 className="h-5 w-5" />
@@ -1150,17 +1168,17 @@ export function SocialPostCard({
               activeClass="text-primary hover:text-primary"
               disabled={!userId}
               onClick={() => onSave(post._id)}
-              ariaLabel={post.savedByViewer ? "Gespeicherten Beitrag entfernen" : "Post speichern"}
+              ariaLabel={post.savedByViewer ? t("socialPage.removeSavedPost") : t("socialPage.savePost")}
             >
               <Bookmark className={cn("h-5 w-5", post.savedByViewer && "fill-current")} />
             </ActionButton>
-            <ActionButton onClick={() => onShare(post._id)} ariaLabel="Teilen">
+            <ActionButton onClick={() => onShare(post._id)} ariaLabel={t("socialPage.share")}>
               <Share2 className="h-5 w-5" />
             </ActionButton>
           </div>
           {!isThreadHeader && post.commentCount > 0 && (
             <button type="button" className="text-left text-sm text-muted-foreground transition hover:text-foreground" onClick={() => onComment(post._id)}>
-              Alle {post.commentCount} Kommentare anzeigen
+              {t("socialPage.showAllComments").replace("{count}", String(post.commentCount))}
             </button>
           )}
         </div>
@@ -1239,6 +1257,7 @@ function CommentThread({
   onCancelEdit: () => void;
   onSaveEdit: (commentId: Id<"social_comments">, body: string) => void;
 }) {
+  const { t } = useAppPreferences();
   const shownReplies = expanded ? comment.replies : comment.replies.slice(0, 1);
   const hiddenReplyCount = Math.max(0, comment.replyCount - shownReplies.length);
 
@@ -1286,14 +1305,14 @@ function CommentThread({
       {hiddenReplyCount > 0 && (
         <button type="button" className="ml-9 mt-3 inline-flex items-center gap-2 text-xs font-medium text-muted-foreground transition hover:text-foreground" onClick={onToggleExpanded}>
           <MessageCircle className="h-3.5 w-3.5" />
-          {expanded ? "Antworten einklappen" : `${hiddenReplyCount} Antworten anzeigen`}
+          {expanded ? t("socialPage.collapseReplies") : t("socialPage.showReplies").replace("{count}", String(hiddenReplyCount))}
         </button>
       )}
 
       {replying && (
         <div className="ml-9 mt-3 flex gap-2">
           <div className="min-w-0 flex-1 space-y-2">
-            <Input value={replyBody} onChange={(event) => onReplyBodyChange(event.target.value)} placeholder="Antwort schreiben..." />
+            <Input value={replyBody} onChange={(event) => onReplyBodyChange(event.target.value)} placeholder={t("socialPage.replyPlaceholder")} />
             {replyMedia?.previewUrl && (
               <MediaPreview mediaUrl={replyMedia.previewUrl} mediaType="gif" compact onRemove={onClearReplyGif} />
             )}
@@ -1353,25 +1372,25 @@ function CommentItem({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate font-semibold leading-5">
-              {comment.author?.username ?? comment.author?.name ?? "Unbekannt"}
+              {comment.author?.username ?? comment.author?.name ?? t("socialPage.unknownUser")}
               <span className="ml-2 font-normal text-muted-foreground">{formatRelativeTime(comment.createdAt)}</span>
               {edited && <span className="ml-2 font-normal text-muted-foreground">{t("socialPage.edited")}</span>}
             </p>
           </div>
           {isOwnComment && (
             <div className="relative">
-              <button type="button" className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground" onClick={() => onOpenCommentMenu(openCommentMenuId === comment._id ? null : comment._id)} aria-label="Kommentar-Optionen">
+              <button type="button" className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground" onClick={() => onOpenCommentMenu(openCommentMenuId === comment._id ? null : comment._id)} aria-label={t("socialPage.commentOptions")}>
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
               {openCommentMenuId === comment._id && (
                 <div className="absolute right-0 z-10 mt-1 w-36 overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-sm">
                   <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs transition hover:bg-muted" onClick={onEditComment}>
                     <Pencil className="h-3.5 w-3.5" />
-                    Bearbeiten
+                    {t("socialPage.edit")}
                   </button>
                   <button type="button" className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-destructive transition hover:bg-destructive/10" onClick={onDeleteComment}>
                     <Trash2 className="h-3.5 w-3.5" />
-                    Löschen
+                    {t("socialPage.delete")}
                   </button>
                 </div>
               )}
@@ -1383,8 +1402,8 @@ function CommentItem({
           <div className="mt-2 space-y-2">
             <Textarea value={editingBody} onChange={(event) => onEditingBodyChange(event.target.value)} rows={2} maxLength={500} className="min-h-16 text-sm" />
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={onCancelEdit}>Abbrechen</Button>
-              <Button size="sm" disabled={!editingBody.trim()} onClick={onSaveEdit}>Speichern</Button>
+              <Button variant="ghost" size="sm" onClick={onCancelEdit}>{t("socialPage.cancel")}</Button>
+              <Button size="sm" disabled={!editingBody.trim()} onClick={onSaveEdit}>{t("socialPage.save")}</Button>
             </div>
           </div>
         ) : (
@@ -1404,10 +1423,10 @@ function CommentItem({
           </button>
           {!isReply && (
             <button type="button" className="transition hover:text-foreground" onClick={onReply}>
-              Antworten
+              {t("socialPage.reply")}
             </button>
           )}
-          <button type="button" className="transition hover:text-foreground" aria-label="Kommentar teilen">
+          <button type="button" className="transition hover:text-foreground" aria-label={t("socialPage.shareComment")}>
             <Send className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -1474,16 +1493,17 @@ function QuotedPost({
   };
   onOpen: () => void;
 }) {
+  const { t } = useAppPreferences();
   return (
     <button
       type="button"
       className="block w-full rounded-lg border border-border bg-muted/20 p-3 text-left transition hover:bg-muted/35"
       onClick={onOpen}
-      aria-label="Originalen Beitrag öffnen"
+      aria-label={t("socialPage.openOriginalPost")}
     >
       <div className="mb-2 flex items-center gap-2 text-sm">
         <Avatar name={post.author?.name ?? "?"} avatarUrl={post.author?.avatarUrl ?? undefined} size="sm" />
-        <span className="font-medium">{post.author?.username ?? post.author?.name ?? "Unbekannt"}</span>
+        <span className="font-medium">{post.author?.username ?? post.author?.name ?? t("socialPage.unknownUser")}</span>
       </div>
       {post.body && <p className="whitespace-pre-wrap text-sm leading-5">{post.body}</p>}
       {post.linkedLog && <LinkedLogCard linkedLog={post.linkedLog} compact />}
@@ -1510,11 +1530,12 @@ function LinkedLogCard({
   linkedLog: { exerciseName: string | null; weightKg: number; reps: number; score?: number };
   compact?: boolean;
 }) {
+  const { t } = useAppPreferences();
   return (
     <div className={`rounded-2xl border border-primary/35 bg-primary/[0.06] ${compact ? "mt-2 p-2 text-xs" : "p-4 text-sm"}`}>
       <Badge className="mb-2 gap-1 border-primary/40 bg-primary/15 text-primary">
         <Video className="h-3 w-3" />
-        Top Log
+        {t("socialPage.topLog")}
       </Badge>
       <p className="font-medium">{linkedLog.exerciseName}</p>
       <p className="text-muted-foreground">
@@ -1617,7 +1638,7 @@ function MediaPreview({
             type="button"
             className="absolute -right-3 top-1/2 z-20 flex size-7 -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center"
             onPointerDown={startResize}
-            aria-label="Bildgröße ziehen"
+            aria-label={t("socialPage.resizeImage")}
           >
             <span className="size-3 border border-foreground bg-background" />
           </button>
@@ -1627,7 +1648,7 @@ function MediaPreview({
             type="button"
             className="absolute -bottom-3 -right-3 z-20 flex size-8 cursor-nwse-resize touch-none items-center justify-center"
             onPointerDown={startResize}
-            aria-label="Bildgröße ziehen"
+            aria-label={t("socialPage.resizeImage")}
           >
             <span className="size-3 border border-foreground bg-background" />
           </button>
@@ -1644,6 +1665,7 @@ function DeprecatedMediaSizeControl({
   value: MediaSize;
   onChange: (value: MediaSize) => void;
 }) {
+  const { t } = useAppPreferences();
   const sliderValue = value === "sm" ? 0 : value === "md" ? 1 : 2;
   const fromSliderValue = (nextValue: number): MediaSize =>
     nextValue === 0 ? "sm" : nextValue === 1 ? "md" : "lg";
@@ -1658,12 +1680,12 @@ function DeprecatedMediaSizeControl({
         value={sliderValue}
         onChange={(event) => onChange(fromSliderValue(Number(event.target.value)))}
         className="h-2 w-full cursor-pointer accent-foreground"
-        aria-label="Bildgröße"
+        aria-label={t("socialPage.imageSize")}
       />
       <div className="mt-2 grid grid-cols-3 text-xs text-muted-foreground">
-        <span>Klein</span>
-        <span className="text-center">Mittel</span>
-        <span className="text-right">Groß</span>
+        <span>{t("socialPage.small")}</span>
+        <span className="text-center">{t("socialPage.medium")}</span>
+        <span className="text-right">{t("socialPage.large")}</span>
       </div>
     </div>
   );
@@ -1680,16 +1702,17 @@ function DeleteDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useAppPreferences();
   return (
     <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="max-w-xs gap-3 rounded-lg p-4" showCloseButton={false}>
         <DialogHeader className="gap-1">
-          <DialogTitle className="text-sm">{pendingDelete?.kind === "post" ? "Post löschen?" : "Kommentar löschen?"}</DialogTitle>
-          <DialogDescription className="text-xs">Diese Aktion kann nicht rückgängig gemacht werden.</DialogDescription>
+          <DialogTitle className="text-sm">{pendingDelete?.kind === "post" ? t("socialPage.deletePostTitle") : t("socialPage.deleteCommentTitle")}</DialogTitle>
+          <DialogDescription className="text-xs">{t("socialPage.deleteConfirmCopy")}</DialogDescription>
         </DialogHeader>
         <DialogFooter className="-mx-4 -mb-4 flex-row justify-end gap-2 p-3">
-          <Button variant="ghost" size="sm" onClick={onCancel}>Abbrechen</Button>
-          <Button variant="destructive" size="sm" onClick={onConfirm}>Löschen</Button>
+          <Button variant="ghost" size="sm" onClick={onCancel}>{t("socialPage.cancel")}</Button>
+          <Button variant="destructive" size="sm" onClick={onConfirm}>{t("socialPage.delete")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1724,6 +1747,7 @@ function ShareDialog({
   onClose: () => void;
   onSend: (friend: { username?: string; name: string } | null) => void;
 }) {
+  const { t } = useAppPreferences();
   const normalizedQuery = query.trim().toLowerCase();
   const filteredFriends =
     friends?.filter((entry) => {
@@ -1741,9 +1765,9 @@ function ShareDialog({
       <DialogContent className="max-h-[82vh] max-w-xl overflow-hidden rounded-xl p-0" showCloseButton={false}>
         <div className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-border px-4 py-3">
           <button type="button" className="justify-self-start text-sm text-muted-foreground transition hover:text-foreground" onClick={onClose}>
-            Abbrechen
+            {t("socialPage.cancel")}
           </button>
-          <DialogTitle className="text-sm font-semibold">Senden an</DialogTitle>
+          <DialogTitle className="text-sm font-semibold">{t("socialPage.sendTo")}</DialogTitle>
           <span />
         </div>
 
@@ -1753,14 +1777,14 @@ function ShareDialog({
             <Input
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Nach Freunden suchen"
+              placeholder={t("socialPage.searchFriends")}
               className="h-9 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
             />
           </label>
 
           <div className="flex items-center justify-between rounded-lg bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
-            <span>Du kannst Beiträge direkt an Freunde senden.</span>
-            <button type="button" aria-label="Hinweis schließen" className="text-muted-foreground hover:text-foreground">
+            <span>{t("socialPage.shareHint")}</span>
+            <button type="button" aria-label={t("socialPage.closeNotice")} className="text-muted-foreground hover:text-foreground">
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -1768,9 +1792,9 @@ function ShareDialog({
           {message && <p className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">{message}</p>}
 
           {friends === undefined ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Freunde werden geladen...</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t("socialPage.friendsLoading")}</p>
           ) : filteredFriends.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Keine Freunde gefunden.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t("socialPage.friendsEmpty")}</p>
           ) : (
             <div className="grid max-h-[48vh] grid-cols-3 gap-3 overflow-y-auto pb-2 sm:grid-cols-4">
               {filteredFriends.map((entry) => (
@@ -1782,7 +1806,7 @@ function ShareDialog({
                   disabled={!entry.friend?.username}
                 >
                   <Avatar name={entry.friend?.name ?? "?"} avatarUrl={entry.friend?.avatarUrl ?? undefined} size="share" />
-                  <p className="mt-2 w-full truncate text-xs font-semibold leading-tight">{entry.friend?.username ?? entry.friend?.name ?? "Unbekannt"}</p>
+                  <p className="mt-2 w-full truncate text-xs font-semibold leading-tight">{entry.friend?.username ?? entry.friend?.name ?? t("socialPage.unknownUser")}</p>
                   <p className="mt-0.5 w-full truncate text-[0.7rem] leading-tight text-muted-foreground">{entry.friend?.name ?? ""}</p>
                 </button>
               ))}

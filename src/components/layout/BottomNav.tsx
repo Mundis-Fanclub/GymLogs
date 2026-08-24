@@ -77,6 +77,11 @@ export function BottomNav() {
     }
   }, [activeWorkout, isWorkoutScene]);
 
+  useEffect(() => {
+    setWorkoutOverlayOpen(false);
+    setOverlayDragY(0);
+  }, [pathname]);
+
   function handleActiveWorkoutPointerUp(clientY: number) {
     const startY = barPointerStartY.current;
     barPointerStartY.current = null;

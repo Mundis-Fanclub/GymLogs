@@ -78,6 +78,18 @@ type ActiveRest = {
   durationSeconds: number;
 };
 
+function formatWorkoutTitle(startedAt?: number, sourceTemplateName?: string | null) {
+  if (sourceTemplateName?.trim()) return sourceTemplateName.trim();
+  if (!startedAt) return "Workout";
+
+  const time = new Date(startedAt).toLocaleTimeString("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return `Workout ${time}`;
+}
+
 export function ActiveWorkout({
   workoutId,
   onFinished,
@@ -195,6 +207,10 @@ export function ActiveWorkout({
   const workoutDate = workout?.date
     ? new Date(workout.date).toLocaleDateString("de-DE")
     : "--.--.----";
+  const workoutTitle = formatWorkoutTitle(
+    workout?.date,
+    workout?.sourceTemplateName
+  );
 
   return (
     <div className="space-y-4 pb-5">
@@ -206,7 +222,7 @@ export function ActiveWorkout({
             size="icon"
             className="size-10 rounded-xl border-border bg-input/20 text-foreground"
             onClick={onRequestClose ?? (() => router.back())}
-            aria-label="Zurueck"
+            aria-label="Zurück"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -222,7 +238,7 @@ export function ActiveWorkout({
         <div>
           <div className="flex items-center gap-3">
             <h1 className="min-w-0 flex-1 truncate text-[2rem] font-semibold leading-none">
-              Nachmittags-Workout
+              {workoutTitle}
             </h1>
             <Button
               type="button"

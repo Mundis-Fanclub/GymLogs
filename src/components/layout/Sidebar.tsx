@@ -6,7 +6,10 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   BarChart2,
+  FileText,
   MessageSquareText,
+  Scale,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppPreferences } from "@/components/providers/AppPreferencesProvider";
@@ -22,6 +25,12 @@ const NAV_ITEMS = [
   { href: "/dashboard", labelKey: "common.dashboard", icon: LayoutDashboard },
   { href: "/analytics", labelKey: "common.analytics", icon: BarChart2 },
   { href: "/social", labelKey: "common.social", icon: MessageSquareText },
+];
+
+const LEGAL_ITEMS = [
+  { href: "/impressum", labelKey: "legal.common.impressum", icon: Scale },
+  { href: "/datenschutz", labelKey: "legal.common.privacy", icon: Shield },
+  { href: "/hinweise", labelKey: "legal.common.notices", icon: FileText },
 ];
 
 export function Sidebar() {
@@ -54,6 +63,26 @@ export function Sidebar() {
             >
               {active && <span className="absolute left-2 top-2 bottom-2 w-0.5 rounded-full bg-primary shadow-[0_0_16px_var(--brand)]" />}
               <Icon className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+              <span className="truncate">{t(labelKey)}</span>
+            </AppNavLink>
+          );
+        })}
+      </nav>
+      <nav className="border-t border-sidebar-border px-3 py-3" aria-label={t("legal.common.legalNav")}>
+        {LEGAL_ITEMS.map(({ href, labelKey, icon: Icon }) => {
+          const active = pathname === href;
+          return (
+            <AppNavLink
+              key={href}
+              href={href}
+              active={active}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex h-9 items-center gap-2 rounded-xl px-3 text-xs font-medium transition-colors",
+                active ? "bg-brand/12 text-foreground" : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground"
+              )}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{t(labelKey)}</span>
             </AppNavLink>
           );

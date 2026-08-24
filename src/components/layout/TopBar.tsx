@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Bell, Crown, LogOut, MessageCircle, Settings, User } from "lucide-react";
+import { Bell, Crown, FileText, LogOut, MessageCircle, Scale, Settings, Shield, User } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
@@ -212,6 +212,11 @@ export function TopBar() {
                   onClick={openMessages}
                 />
                 <ProfileMenuItem icon={Settings} label={t("topbar.settings")} onClick={() => goToProfileMenuItem("/settings")} />
+                <div className="my-1 h-px bg-border" />
+                <ProfileMenuItem icon={Scale} label={t("legal.common.impressum")} onClick={() => goToProfileMenuItem("/impressum")} />
+                <ProfileMenuItem icon={Shield} label={t("legal.common.privacy")} onClick={() => goToProfileMenuItem("/datenschutz")} />
+                <ProfileMenuItem icon={FileText} label={t("legal.common.notices")} onClick={() => goToProfileMenuItem("/hinweise")} />
+                <div className="my-1 h-px bg-border" />
                 <ProfileMenuItem
                   icon={LogOut}
                   label={t("topbar.signOut")}

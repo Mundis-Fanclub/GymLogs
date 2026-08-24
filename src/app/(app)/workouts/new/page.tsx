@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowLeft,
   Bookmark,
   ChevronRight,
@@ -71,9 +72,14 @@ function NewWorkoutPageContent() {
   const [canceledWorkoutId, setCanceledWorkoutId] =
     useState<Id<"workouts"> | null>(null);
   const [startingEmpty, setStartingEmpty] = useState(false);
+  const [startNotice, setStartNotice] = useState("");
   const createWorkout = useMutation(api.workouts.create);
   const resetEmptyWorkoutStart = useMutation(api.workouts.resetEmptyStart);
   const startFromTemplate = useMutation(api.workouts.startFromTemplate);
+  const activeWorkoutForStart = useQuery(
+    api.workouts.getActiveForNav,
+    userId ? { userId } : "skip"
+  );
   const incompleteWorkout = useQuery(
     api.workouts.getIncomplete,
     userId && !templateId && !workoutIdParam ? { userId } : "skip"
@@ -90,9 +96,20 @@ function NewWorkoutPageContent() {
     api.workouts.listStartOptions,
     userId && !templateId && !workoutIdParam ? { userId, limit: 8 } : "skip"
   );
+  const activeWorkoutId = activeWorkoutForStart?._id as Id<"workouts"> | undefined;
+
+  function showActiveWorkoutNotice() {
+    setStartNotice(t("workouts.activeStartBlockedCopy"));
+  }
 
   async function beginEmptyWorkout() {
     if (!userId) return;
+    if (activeWorkoutForStart === undefined) return;
+    if (activeWorkoutForStart) {
+      showActiveWorkoutNotice();
+      return;
+    }
+
     setStartingEmpty(true);
     try {
       if (incompleteWorkout) {
@@ -102,6 +119,12 @@ function NewWorkoutPageContent() {
       }
       const id = await createWorkout({ userId });
       router.replace(`/workouts/new?id=${id}`);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("ACTIVE_WORKOUT_EXISTS")) {
+        showActiveWorkoutNotice();
+        return;
+      }
+      throw error;
     } finally {
       setStartingEmpty(false);
     }
@@ -109,8 +132,22 @@ function NewWorkoutPageContent() {
 
   async function confirmTemplateStart() {
     if (!userId || !templateId) return;
-    const workoutId = await startFromTemplate({ userId, templateId });
-    router.replace(`/workouts/new?id=${workoutId}`);
+    if (activeWorkoutForStart === undefined) return;
+    if (activeWorkoutForStart) {
+      showActiveWorkoutNotice();
+      return;
+    }
+
+    try {
+      const workoutId = await startFromTemplate({ userId, templateId });
+      router.replace(`/workouts/new?id=${workoutId}`);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("ACTIVE_WORKOUT_EXISTS")) {
+        showActiveWorkoutNotice();
+        return;
+      }
+      throw error;
+    }
   }
 
   if (isLoaded && !isSignedIn) {
@@ -140,7 +177,7 @@ function NewWorkoutPageContent() {
   }
 
   if (templateId) {
-    if (!userId || startTemplate === undefined) {
+    if (!userId || startTemplate === undefined || activeWorkoutForStart === undefined) {
       return (
         <div className="max-w-2xl mx-auto space-y-4">
           <Skeleton className="h-10 w-full" />
@@ -200,6 +237,12 @@ function NewWorkoutPageContent() {
             <p className="text-sm leading-6 text-muted-foreground">
               {t("workouts.confirmTemplateStartCopy")}
             </p>
+            {startNotice && activeWorkoutId && (
+              <ActiveWorkoutNotice
+                message={startNotice}
+                onContinue={() => router.replace(`/workouts/new?id=${activeWorkoutId}`)}
+              />
+            )}
             <div className="grid gap-2 sm:grid-cols-2">
               <Button className="gap-2" onClick={confirmTemplateStart}>
                 <Play className="h-4 w-4" />
@@ -258,7 +301,12 @@ function NewWorkoutPageContent() {
     );
   }
 
-  if (!isLoaded || incompleteWorkout === undefined || startOptions === undefined) {
+  if (
+    !isLoaded ||
+    incompleteWorkout === undefined ||
+    startOptions === undefined ||
+    activeWorkoutForStart === undefined
+  ) {
     return (
       <div className="mx-auto max-w-5xl space-y-4">
         <Skeleton className="h-10 w-full" />
@@ -273,9 +321,39 @@ function NewWorkoutPageContent() {
       options={startOptions}
       startingEmpty={startingEmpty}
       hasIncompleteWorkout={Boolean(incompleteWorkout)}
+      activeWorkoutId={activeWorkoutId}
+      startNotice={startNotice}
       onBeginEmpty={beginEmptyWorkout}
+      onContinueActive={() => {
+        if (activeWorkoutId) router.replace(`/workouts/new?id=${activeWorkoutId}`);
+      }}
       onClose={() => router.back()}
     />
+  );
+}
+
+function ActiveWorkoutNotice({
+  message,
+  onContinue,
+}: {
+  message: string;
+  onContinue: () => void;
+}) {
+  const { t } = useAppPreferences();
+
+  return (
+    <div role="status" className="rounded-xl border border-primary/35 bg-primary/10 p-3 text-sm text-foreground">
+      <div className="flex items-start gap-2.5">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{t("workouts.activeStartBlockedTitle")}</p>
+          <p className="mt-1 leading-5 text-muted-foreground">{message}</p>
+        </div>
+      </div>
+      <Button type="button" size="sm" className="mt-3 w-full" onClick={onContinue}>
+        {t("workouts.continueActiveWorkout")}
+      </Button>
+    </div>
   );
 }
 
@@ -309,13 +387,19 @@ function WorkoutStartHome({
   options,
   startingEmpty,
   hasIncompleteWorkout,
+  activeWorkoutId,
+  startNotice,
   onBeginEmpty,
+  onContinueActive,
   onClose,
 }: {
   options: WorkoutStartOptions;
   startingEmpty: boolean;
   hasIncompleteWorkout: boolean;
+  activeWorkoutId?: Id<"workouts">;
+  startNotice: string;
   onBeginEmpty: () => void;
+  onContinueActive: () => void;
   onClose: () => void;
 }) {
   const [suggestionTab, setSuggestionTab] = useState<"activity" | "gymlogs">("activity");
@@ -341,6 +425,12 @@ function WorkoutStartHome({
             <X className="h-4 w-4 sm:h-6 sm:w-6" />
           </Button>
         </div>
+
+        {startNotice && activeWorkoutId && (
+          <div className="mb-4 sm:mb-6">
+            <ActiveWorkoutNotice message={startNotice} onContinue={onContinueActive} />
+          </div>
+        )}
 
         <button
           type="button"

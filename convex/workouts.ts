@@ -2,6 +2,11 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import {
+  requireUserMatch,
+  requireWorkoutOwner,
+  sanitizeText,
+} from "./authz";
 
 const templateVisibility = v.union(
   v.literal("private"),
@@ -31,6 +36,38 @@ type TemplateChange = {
   beforeSets?: number;
   afterSets?: number;
 };
+
+const recentEmptyWorkoutWindowMs = 2 * 60 * 60 * 1000;
+
+async function findActiveWorkoutForUser(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  excludeWorkoutId?: Id<"workouts">
+) {
+  const now = Date.now();
+  const incompleteWorkouts = await ctx.db
+    .query("workouts")
+    .withIndex("by_user_completed_date", (q) =>
+      q.eq("userId", userId).eq("isCompleted", false)
+    )
+    .order("desc")
+    .take(20);
+
+  for (const workout of incompleteWorkouts) {
+    if (excludeWorkoutId && workout._id === excludeWorkoutId) continue;
+
+    const firstSet = await ctx.db
+      .query("sets")
+      .withIndex("by_workout", (q) => q.eq("workoutId", workout._id))
+      .first();
+    const isRecentEmptyWorkout =
+      !firstSet && now - workout.date <= recentEmptyWorkoutWindowMs;
+
+    if (firstSet || isRecentEmptyWorkout) return workout;
+  }
+
+  return null;
+}
 
 function estimated1RM(weight: number, reps: number): number {
   return weight * (1 + reps / 30);
@@ -164,19 +201,22 @@ export const list = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
+    const limit = Math.min(Math.max(args.limit ?? 20, 1), 50);
     const workouts = await ctx.db
       .query("workouts")
-      .withIndex("by_user_date", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user_completed_date", (q) =>
+        q.eq("userId", userId).eq("isCompleted", true)
+      )
       .order("desc")
-      .filter((q) => q.eq(q.field("isCompleted"), true))
-      .take(args.limit ?? 20);
+      .take(limit);
 
     return await Promise.all(
       workouts.map(async (workout) => {
         const sets = await ctx.db
           .query("sets")
           .withIndex("by_workout", (q) => q.eq("workoutId", workout._id))
-          .collect();
+          .take(300);
 
         const muscleGroups = new Set<string>();
         for (const set of sets) {
@@ -201,25 +241,32 @@ export const getRecent = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
+    const limit = Math.min(Math.max(args.limit ?? 5, 1), 20);
     return await ctx.db
       .query("workouts")
-      .withIndex("by_user_date", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user_completed_date", (q) =>
+        q.eq("userId", userId).eq("isCompleted", true)
+      )
       .order("desc")
-      .filter((q) => q.eq(q.field("isCompleted"), true))
-      .take(args.limit ?? 5);
+      .take(limit);
   },
 });
 
 export const get = query({
   args: { workoutId: v.id("workouts") },
   handler: async (ctx, args) => {
-    const workout = await ctx.db.get(args.workoutId);
-    if (!workout) return null;
+    let workout: Doc<"workouts">;
+    try {
+      workout = await requireWorkoutOwner(ctx, args.workoutId);
+    } catch {
+      return null;
+    }
 
     const sets = await ctx.db
       .query("sets")
       .withIndex("by_workout", (q) => q.eq("workoutId", args.workoutId))
-      .collect();
+      .take(400);
 
     // Group sets by exercise
     const exerciseMap = new Map<
@@ -293,21 +340,32 @@ export const get = query({
     }
 
     const totalVolume = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
+    const sourceTemplate = workout.sourceTemplateId
+      ? await ctx.db.get(workout.sourceTemplateId)
+      : null;
 
-    return { ...workout, exercises, totalVolume };
+    return {
+      ...workout,
+      exercises,
+      totalVolume,
+      sourceTemplateName: sourceTemplate?.name ?? null,
+    };
   },
 });
 
 export const getIncomplete = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const incompleteWorkouts = await ctx.db
       .query("workouts")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .filter((q) => q.eq(q.field("isCompleted"), false))
+      .withIndex("by_user_completed_date", (q) =>
+        q.eq("userId", userId).eq("isCompleted", false)
+      )
+      .order("desc")
       .take(20);
 
-    for (const workout of incompleteWorkouts.sort((a, b) => b.date - a.date)) {
+    for (const workout of incompleteWorkouts) {
       const firstSet = await ctx.db
         .query("sets")
         .withIndex("by_workout", (q) => q.eq("workoutId", workout._id))
@@ -322,45 +380,31 @@ export const getIncomplete = query({
 export const getActiveForNav = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const now = Date.now();
-    const recentEmptyWorkoutWindowMs = 2 * 60 * 60 * 1000;
-    const incompleteWorkouts = await ctx.db
-      .query("workouts")
-      .withIndex("by_user_date", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .filter((q) => q.eq(q.field("isCompleted"), false))
-      .take(20);
+    const userId = await requireUserMatch(ctx, args.userId);
+    const workout = await findActiveWorkoutForUser(ctx, userId);
+    if (!workout) return null;
 
-    for (const workout of incompleteWorkouts) {
-      const firstSet = await ctx.db
-        .query("sets")
-        .withIndex("by_workout", (q) => q.eq("workoutId", workout._id))
-        .first();
-      const isRecentEmptyWorkout =
-        !firstSet && now - workout.date <= recentEmptyWorkoutWindowMs;
+    const template = workout.sourceTemplateId
+      ? await ctx.db.get(workout.sourceTemplateId)
+      : null;
 
-      if (!firstSet && !isRecentEmptyWorkout) continue;
-
-      const template = workout.sourceTemplateId
-        ? await ctx.db.get(workout.sourceTemplateId)
-        : null;
-
-      return {
-        _id: workout._id,
-        startedAt: workout.date,
-        name: template?.name ?? null,
-      };
-    }
-
-    return null;
+    return {
+      _id: workout._id,
+      startedAt: workout.date,
+      name: template?.name ?? null,
+    };
   },
 });
 
 export const create = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
+    const activeWorkout = await findActiveWorkoutForUser(ctx, userId);
+    if (activeWorkout) throw new Error("ACTIVE_WORKOUT_EXISTS");
+
     return await ctx.db.insert("workouts", {
-      userId: args.userId,
+      userId,
       date: Date.now(),
       isCompleted: false,
     });
@@ -370,8 +414,8 @@ export const create = mutation({
 export const resetEmptyStart = mutation({
   args: { workoutId: v.id("workouts") },
   handler: async (ctx, args) => {
-    const workout = await ctx.db.get(args.workoutId);
-    if (!workout || workout.isCompleted) return null;
+    const workout = await requireWorkoutOwner(ctx, args.workoutId);
+    if (workout.isCompleted) return null;
 
     const existingSet = await ctx.db
       .query("sets")
@@ -388,8 +432,13 @@ export const resetEmptyStart = mutation({
 export const complete = mutation({
   args: { workoutId: v.id("workouts") },
   handler: async (ctx, args) => {
-    const workout = await ctx.db.get(args.workoutId);
-    if (!workout) return;
+    const workout = await requireWorkoutOwner(ctx, args.workoutId);
+    const firstSet = await ctx.db
+      .query("sets")
+      .withIndex("by_workout", (q) => q.eq("workoutId", args.workoutId))
+      .first();
+    if (!firstSet) throw new Error("WORKOUT_EMPTY");
+
     if (!workout.isCompleted && workout.sourceTemplateId) {
       const template = await ctx.db.get(workout.sourceTemplateId);
       if (template) {
@@ -411,8 +460,7 @@ export const saveAsTemplate = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const workout = await ctx.db.get(args.workoutId);
-    if (!workout) throw new Error("Workout not found.");
+    const workout = await requireWorkoutOwner(ctx, args.workoutId);
     if (!workout.isCompleted) {
       throw new Error("Only completed workouts can be saved as templates.");
     }
@@ -420,7 +468,7 @@ export const saveAsTemplate = mutation({
     const sets = await ctx.db
       .query("sets")
       .withIndex("by_workout", (q) => q.eq("workoutId", args.workoutId))
-      .collect();
+      .take(400);
 
     const exerciseMap = new Map<
       string,
@@ -491,8 +539,9 @@ export const updateTemplateVisibility = mutation({
     exercises: v.optional(v.array(templateExerciseValidator)),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const template = await ctx.db.get(args.templateId);
-    if (!template || template.userId !== args.userId) {
+    if (!template || template.userId !== userId) {
       throw new Error("Template not found.");
     }
 
@@ -555,8 +604,9 @@ export const acceptTemplateUpdate = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const template = await ctx.db.get(args.templateId);
-    if (!template || template.userId !== args.userId) {
+    if (!template || template.userId !== userId) {
       throw new Error("Template not found.");
     }
     const pending = template.pendingSourceUpdate;
@@ -584,8 +634,9 @@ export const keepTemplateVersion = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const template = await ctx.db.get(args.templateId);
-    if (!template || template.userId !== args.userId) {
+    if (!template || template.userId !== userId) {
       throw new Error("Template not found.");
     }
     const pending = template.pendingSourceUpdate;
@@ -606,8 +657,9 @@ export const deleteTemplate = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const template = await ctx.db.get(args.templateId);
-    if (!template || template.userId !== args.userId) {
+    if (!template || template.userId !== userId) {
       throw new Error("Template not found.");
     }
 
@@ -700,9 +752,12 @@ export const listProfileTemplates = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const isSelf = args.viewerId === args.userId;
-    const canSeeFriends = args.viewerId
-      ? isSelf || (await areFriends(ctx, args.userId, args.viewerId))
+    const viewerId = args.viewerId
+      ? await requireUserMatch(ctx, args.viewerId)
+      : undefined;
+    const isSelf = viewerId === args.userId;
+    const canSeeFriends = viewerId
+      ? isSelf || (await areFriends(ctx, args.userId, viewerId))
       : false;
 
     const templates = await ctx.db
@@ -762,23 +817,24 @@ export const listStartOptions = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const limit = Math.min(args.limit ?? 8, 12);
     const ownTemplates = await ctx.db
       .query("workout_templates")
-      .withIndex("by_user_created", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user_created", (q) => q.eq("userId", userId))
       .order("desc")
       .take(limit);
 
     const followingRows = await ctx.db
       .query("follows")
-      .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
+      .withIndex("by_follower", (q) => q.eq("followerId", userId))
       .order("desc")
       .take(20);
 
     const followedCandidates = (
       await Promise.all(
         followingRows.slice(0, 8).map(async (row) => {
-          const canSeeFriends = await areFriends(ctx, row.followingId, args.userId);
+          const canSeeFriends = await areFriends(ctx, row.followingId, userId);
           const templates = await ctx.db
             .query("workout_templates")
             .withIndex("by_user_created", (q) => q.eq("userId", row.followingId))
@@ -812,7 +868,7 @@ export const listStartOptions = query({
       .slice(0, limit);
 
     const publicSuggestions = publicTemplates
-      .filter((template) => template.userId !== args.userId)
+      .filter((template) => template.userId !== userId)
       .sort((a, b) => {
         const executionDiff = (b.executionCount ?? 0) - (a.executionCount ?? 0);
         return executionDiff !== 0 ? executionDiff : b.createdAt - a.createdAt;
@@ -821,25 +877,25 @@ export const listStartOptions = query({
 
     return {
       ownTemplates: await Promise.all(
-        ownTemplates.map((template) => renderTemplateStartCard(ctx, template, args.userId))
+        ownTemplates.map((template) => renderTemplateStartCard(ctx, template, userId))
       ),
       followedTemplates: await Promise.all(
         followedCandidates
           .sort((a, b) => b.createdAt - a.createdAt)
           .slice(0, limit)
-          .map((template) => renderTemplateStartCard(ctx, template, args.userId))
+          .map((template) => renderTemplateStartCard(ctx, template, userId))
       ),
       activitySuggestions: await Promise.all(
-        ownActivitySuggestions.map((template) => renderTemplateStartCard(ctx, template, args.userId))
+        ownActivitySuggestions.map((template) => renderTemplateStartCard(ctx, template, userId))
       ),
       publicSuggestions: await Promise.all(
-        publicSuggestions.map((template) => renderTemplateStartCard(ctx, template, args.userId))
+        publicSuggestions.map((template) => renderTemplateStartCard(ctx, template, userId))
       ),
       gymLogsSuggestions: await Promise.all(
         gymLogsTemplates
           .sort((a, b) => b.createdAt - a.createdAt)
           .slice(0, limit)
-          .map((template) => renderTemplateStartCard(ctx, template, args.userId))
+          .map((template) => renderTemplateStartCard(ctx, template, userId))
       ),
     };
   },
@@ -851,16 +907,17 @@ export const getTemplateForStart = query({
     viewerId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const viewerId = await requireUserMatch(ctx, args.viewerId);
     const template = await ctx.db.get(args.templateId);
     if (!template) return null;
 
     const visibility = template.visibility ?? "private";
-    const isSelf = template.userId === args.viewerId;
+    const isSelf = template.userId === viewerId;
     const canSee =
       isSelf ||
       visibility === "public" ||
       (visibility === "friends" &&
-        (await canUseTemplate(ctx, template.userId, args.viewerId)));
+        (await canUseTemplate(ctx, template.userId, viewerId)));
 
     if (!canSee) return null;
 
@@ -908,22 +965,26 @@ export const startFromTemplate = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const template = await ctx.db.get(args.templateId);
     if (!template) throw new Error("Template not found.");
 
+    const activeWorkout = await findActiveWorkoutForUser(ctx, userId);
+    if (activeWorkout) throw new Error("ACTIVE_WORKOUT_EXISTS");
+
     const visibility = template.visibility ?? "private";
     const canStart =
-      template.userId === args.userId ||
+      template.userId === userId ||
       visibility === "public" ||
       (visibility === "friends" &&
-        (await canUseTemplate(ctx, template.userId, args.userId)));
+        (await canUseTemplate(ctx, template.userId, userId)));
 
     if (!canStart) throw new Error("Template not available.");
 
     const includeWeights =
-      template.userId === args.userId || template.showWeights === true;
+      template.userId === userId || template.showWeights === true;
     const workoutId = await ctx.db.insert("workouts", {
-      userId: args.userId,
+      userId,
       date: Date.now(),
       notes: `From template: ${template.name}`,
       sourceTemplateId: template._id,
@@ -936,11 +997,13 @@ export const startFromTemplate = mutation({
         await ctx.db.insert("sets", {
           workoutId,
           exerciseId: exercise.exerciseId,
-          userId: args.userId,
+          userId,
           weight: includeWeights ? set.weight : 0,
           reps: set.reps,
           setOrder,
           createdAt: Date.now(),
+          updatedAt: Date.now(),
+          completedAt: Date.now(),
         });
         setOrder += 1;
       }
@@ -953,18 +1016,21 @@ export const startFromTemplate = mutation({
 export const updateNotes = mutation({
   args: { workoutId: v.id("workouts"), notes: v.string() },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.workoutId, { notes: args.notes });
+    await requireWorkoutOwner(ctx, args.workoutId);
+    await ctx.db.patch(args.workoutId, {
+      notes: sanitizeText(args.notes, 1000),
+    });
   },
 });
 
 export const remove = mutation({
   args: { workoutId: v.id("workouts") },
   handler: async (ctx, args) => {
-    // Delete all sets in this workout
+    await requireWorkoutOwner(ctx, args.workoutId);
     const sets = await ctx.db
       .query("sets")
       .withIndex("by_workout", (q) => q.eq("workoutId", args.workoutId))
-      .collect();
+      .take(500);
     for (const set of sets) {
       await ctx.db.delete(set._id);
     }

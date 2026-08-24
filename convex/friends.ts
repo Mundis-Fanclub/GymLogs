@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import { requireUserMatch } from "./authz";
 
 function normalizeUsername(value: string): string {
   return value
@@ -33,6 +34,7 @@ export const addByUsername = mutation({
     username: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const username = normalizeUsername(args.username);
     if (username.length < 3) throw new Error("Username must contain at least 3 letters or numbers.");
 
@@ -41,9 +43,9 @@ export const addByUsername = mutation({
       .withIndex("by_username", (q) => q.eq("username", username))
       .unique();
     if (!target) throw new Error("User not found.");
-    if (target._id === args.userId) throw new Error("You cannot add yourself.");
+    if (target._id === userId) throw new Error("You cannot add yourself.");
 
-    const pair = orderedPair(args.userId, target._id);
+    const pair = orderedPair(userId, target._id);
     const existing = await ctx.db
       .query("friends")
       .withIndex("by_pair", (q) =>
@@ -66,7 +68,8 @@ export const remove = mutation({
     friendId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const pair = orderedPair(args.userId, args.friendId);
+    const userId = await requireUserMatch(ctx, args.userId);
+    const pair = orderedPair(userId, args.friendId);
     const existing = await ctx.db
       .query("friends")
       .withIndex("by_pair", (q) =>
@@ -80,15 +83,16 @@ export const remove = mutation({
 export const list = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const [asRequester, asAddressee] = await Promise.all([
       ctx.db
         .query("friends")
-        .withIndex("by_requester", (q) => q.eq("requesterId", args.userId))
+        .withIndex("by_requester", (q) => q.eq("requesterId", userId))
         .order("desc")
         .take(50),
       ctx.db
         .query("friends")
-        .withIndex("by_addressee", (q) => q.eq("addresseeId", args.userId))
+        .withIndex("by_addressee", (q) => q.eq("addresseeId", userId))
         .order("desc")
         .take(50),
     ]);
@@ -100,7 +104,7 @@ export const list = query({
 
     return await Promise.all(
       rows.map(async (row) => {
-        const friendId = row.requesterId === args.userId ? row.addresseeId : row.requesterId;
+        const friendId = row.requesterId === userId ? row.addresseeId : row.requesterId;
         return {
           friendshipId: row._id,
           friend: await userPreview(ctx, await ctx.db.get(friendId)),

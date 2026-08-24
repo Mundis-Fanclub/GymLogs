@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireUserMatch } from "./authz";
 
 export const get = query({
   args: {
@@ -7,10 +8,11 @@ export const get = query({
     exerciseId: v.id("exercises"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     return await ctx.db
       .query("rest_preferences")
       .withIndex("by_user_and_exercise", (q) =>
-        q.eq("userId", args.userId).eq("exerciseId", args.exerciseId)
+        q.eq("userId", userId).eq("exerciseId", args.exerciseId)
       )
       .first();
   },
@@ -23,10 +25,11 @@ export const set = mutation({
     restSeconds: v.number(),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const existing = await ctx.db
       .query("rest_preferences")
       .withIndex("by_user_and_exercise", (q) =>
-        q.eq("userId", args.userId).eq("exerciseId", args.exerciseId)
+        q.eq("userId", userId).eq("exerciseId", args.exerciseId)
       )
       .first();
 
@@ -40,7 +43,7 @@ export const set = mutation({
     }
 
     return await ctx.db.insert("rest_preferences", {
-      userId: args.userId,
+      userId,
       exerciseId: args.exerciseId,
       restSeconds,
       updatedAt: Date.now(),

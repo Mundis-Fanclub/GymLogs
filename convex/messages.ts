@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { requireUserMatch } from "./authz";
 
 const MAX_MESSAGE_LENGTH = 600;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -108,6 +109,7 @@ export const send = mutation({
     mediaType: v.optional(v.literal("image")),
   },
   handler: async (ctx, args) => {
+    const senderId = await requireUserMatch(ctx, args.senderId);
     const type = args.type ?? "text";
     const body = args.body.trim().replace(/\s+/g, " ");
     if (body.length === 0 && type === "text") throw new Error("Message cannot be empty.");
@@ -117,7 +119,7 @@ export const send = mutation({
     if (type === "post_share" && !args.postId) {
       throw new Error("Shared post messages need a post.");
     }
-    if (args.senderId === args.recipientId) {
+    if (senderId === args.recipientId) {
       throw new Error("You cannot message yourself.");
     }
     if (body.length > MAX_MESSAGE_LENGTH) {
@@ -125,7 +127,7 @@ export const send = mutation({
     }
 
     const [sender, recipient] = await Promise.all([
-      ctx.db.get(args.senderId),
+      ctx.db.get(senderId),
       ctx.db.get(args.recipientId),
     ]);
     if (!sender) throw new Error("Sender not found.");
@@ -133,17 +135,17 @@ export const send = mutation({
       throw new Error("This user does not accept messages.");
     }
 
-    if (await isBlocked(ctx, args.recipientId, args.senderId)) {
+    if (await isBlocked(ctx, args.recipientId, senderId)) {
       throw new Error("This user does not accept messages from you.");
     }
-    if (await isBlocked(ctx, args.senderId, args.recipientId)) {
+    if (await isBlocked(ctx, senderId, args.recipientId)) {
       throw new Error("Unblock this user before sending a message.");
     }
 
     const since = Date.now() - RATE_WINDOW_MS;
     const recentMessages = await ctx.db
       .query("messages")
-      .withIndex("by_sender", (q) => q.eq("senderId", args.senderId).gte("createdAt", since))
+      .withIndex("by_sender", (q) => q.eq("senderId", senderId).gte("createdAt", since))
       .order("desc")
       .take(MAX_MESSAGES_PER_WINDOW + 1);
 
@@ -158,7 +160,7 @@ export const send = mutation({
       throw new Error("Messages can include at most two links.");
     }
 
-    const pair = orderedPair(args.senderId, args.recipientId);
+    const pair = orderedPair(senderId, args.recipientId);
     const existingConversation = await ctx.db
       .query("conversations")
       .withIndex("by_pair", (q) => q.eq("userAId", pair.userAId).eq("userBId", pair.userBId))
@@ -175,7 +177,7 @@ export const send = mutation({
 
     const message = {
       conversationId,
-      senderId: args.senderId,
+      senderId,
       recipientId: args.recipientId,
       body,
       type,
@@ -190,7 +192,7 @@ export const send = mutation({
 
     await ctx.db.patch(conversationId, {
       lastMessagePreview: messagePreview({ type, body }),
-      lastSenderId: args.senderId,
+      lastSenderId: senderId,
       updatedAt: now,
     });
 
@@ -201,15 +203,16 @@ export const send = mutation({
 export const conversations = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const [asA, asB] = await Promise.all([
       ctx.db
         .query("conversations")
-        .withIndex("by_user_a_and_updated", (q) => q.eq("userAId", args.userId))
+        .withIndex("by_user_a_and_updated", (q) => q.eq("userAId", userId))
         .order("desc")
         .take(25),
       ctx.db
         .query("conversations")
-        .withIndex("by_user_b_and_updated", (q) => q.eq("userBId", args.userId))
+        .withIndex("by_user_b_and_updated", (q) => q.eq("userBId", userId))
         .order("desc")
         .take(25),
     ]);
@@ -219,10 +222,10 @@ export const conversations = query({
     return await Promise.all(
       conversations.map(async (conversation) => {
         const otherUserId =
-          conversation.userAId === args.userId ? conversation.userBId : conversation.userAId;
+          conversation.userAId === userId ? conversation.userBId : conversation.userAId;
         const [otherUser, block, unreadMessages] = await Promise.all([
           ctx.db.get(otherUserId),
-          isBlocked(ctx, args.userId, otherUserId),
+          isBlocked(ctx, userId, otherUserId),
           ctx.db
             .query("messages")
             .withIndex("by_conversation_id", (q) => q.eq("conversationId", conversation._id))
@@ -231,7 +234,7 @@ export const conversations = query({
         ]);
 
         const unreadCount = unreadMessages.filter(
-          (message) => message.recipientId === args.userId && !message.readAt
+          (message) => message.recipientId === userId && !message.readAt
         ).length;
 
         return {
@@ -251,17 +254,18 @@ export const thread = query({
     conversationId: v.id("conversations"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) return null;
-    if (conversation.userAId !== args.userId && conversation.userBId !== args.userId) {
+    if (conversation.userAId !== userId && conversation.userBId !== userId) {
       throw new Error("Conversation not found.");
     }
 
     const otherUserId =
-      conversation.userAId === args.userId ? conversation.userBId : conversation.userAId;
+      conversation.userAId === userId ? conversation.userBId : conversation.userAId;
     const [otherUser, block] = await Promise.all([
       ctx.db.get(otherUserId),
-      isBlocked(ctx, args.userId, otherUserId),
+      isBlocked(ctx, userId, otherUserId),
     ]);
     const messages = await ctx.db
       .query("messages")
@@ -276,7 +280,7 @@ export const thread = query({
       messages: await Promise.all(
         messages
           .filter((message) =>
-            message.senderId === args.userId ? !message.hiddenForSender : !message.hiddenForRecipient
+            message.senderId === userId ? !message.hiddenForSender : !message.hiddenForRecipient
           )
           .map((message) => renderMessage(ctx, message))
       ),
@@ -287,7 +291,8 @@ export const thread = query({
 export const generateUploadUrl = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    const userId = await requireUserMatch(ctx, args.userId);
+    const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found.");
     return await ctx.storage.generateUploadUrl();
   },
@@ -296,9 +301,10 @@ export const generateUploadUrl = mutation({
 export const inbox = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_recipient", (q) => q.eq("recipientId", args.userId))
+      .withIndex("by_recipient", (q) => q.eq("recipientId", userId))
       .order("desc")
       .take(30);
 
@@ -322,9 +328,10 @@ export const markConversationRead = mutation({
     conversationId: v.id("conversations"),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserMatch(ctx, args.userId);
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) return;
-    if (conversation.userAId !== args.userId && conversation.userBId !== args.userId) return;
+    if (conversation.userAId !== userId && conversation.userBId !== userId) return;
 
     const messages = await ctx.db
       .query("messages")
@@ -335,7 +342,7 @@ export const markConversationRead = mutation({
     const now = Date.now();
     await Promise.all(
       messages
-        .filter((message) => message.recipientId === args.userId && !message.readAt)
+        .filter((message) => message.recipientId === userId && !message.readAt)
         .map((message) => ctx.db.patch(message._id, { readAt: now }))
     );
   },
@@ -348,11 +355,12 @@ export const blockUser = mutation({
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    if (args.blockerId === args.blockedId) throw new Error("You cannot block yourself.");
-    const existing = await isBlocked(ctx, args.blockerId, args.blockedId);
+    const blockerId = await requireUserMatch(ctx, args.blockerId);
+    if (blockerId === args.blockedId) throw new Error("You cannot block yourself.");
+    const existing = await isBlocked(ctx, blockerId, args.blockedId);
     if (existing) return existing._id;
     return await ctx.db.insert("message_blocks", {
-      blockerId: args.blockerId,
+      blockerId,
       blockedId: args.blockedId,
       reason: args.reason?.trim().slice(0, 160),
       createdAt: Date.now(),
@@ -366,7 +374,8 @@ export const unblockUser = mutation({
     blockedId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const existing = await isBlocked(ctx, args.blockerId, args.blockedId);
+    const blockerId = await requireUserMatch(ctx, args.blockerId);
+    const existing = await isBlocked(ctx, blockerId, args.blockedId);
     if (existing) await ctx.db.delete(existing._id);
   },
 });
@@ -379,17 +388,18 @@ export const reportMessage = mutation({
     details: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const reporterId = await requireUserMatch(ctx, args.reporterId);
     const message = await ctx.db.get(args.messageId);
     if (!message) throw new Error("Message not found.");
-    if (message.senderId !== args.reporterId && message.recipientId !== args.reporterId) {
+    if (message.senderId !== reporterId && message.recipientId !== reporterId) {
       throw new Error("Message not found.");
     }
 
     const reportedUserId =
-      message.senderId === args.reporterId ? message.recipientId : message.senderId;
+      message.senderId === reporterId ? message.recipientId : message.senderId;
 
     const reportId = await ctx.db.insert("message_reports", {
-      reporterId: args.reporterId,
+      reporterId,
       reportedUserId,
       messageId: args.messageId,
       reason: args.reason.trim().slice(0, 80) || "other",
@@ -414,14 +424,15 @@ export const reportUser = mutation({
     details: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    if (args.reporterId === args.reportedUserId) {
+    const reporterId = await requireUserMatch(ctx, args.reporterId);
+    if (reporterId === args.reportedUserId) {
       throw new Error("You cannot report yourself.");
     }
     const reportedUser = await ctx.db.get(args.reportedUserId);
     if (!reportedUser) throw new Error("User not found.");
 
     return await ctx.db.insert("message_reports", {
-      reporterId: args.reporterId,
+      reporterId,
       reportedUserId: args.reportedUserId,
       reason: args.reason.trim().slice(0, 80) || "profile",
       details: args.details?.trim().slice(0, 500),
